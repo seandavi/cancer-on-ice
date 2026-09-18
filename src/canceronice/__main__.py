@@ -1,6 +1,6 @@
 import argparse
 
-from . import catalog, ers_rucc, schemas
+from . import catalog, schemas
 
 
 def _print(counts):
@@ -23,6 +23,7 @@ def main():
     # A parallel agent adds an `ingest-*` subparser here.
 
     # --- raw: usda ers rucc ---
+    from . import ers_rucc
     rc = sub.add_parser("rucc", help="land the USDA ERS Rural-Urban Continuum Codes, then derive")
     rc.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
     rc.add_argument("--url", help="an already-downloaded CSV file or alternate URL")
