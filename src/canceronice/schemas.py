@@ -1,0 +1,362 @@
+"""Declared Iceberg schemas — the single source of table structure and meaning.
+
+Tables are never created from an inferred Arrow schema. Two things required by
+SPEC.md cannot be expressed that way: identifier fields, which are the merge
+key, and per-column `doc`, which is what makes the catalog self-describing.
+
+A column exists here only once something populates it. Columns whose source has
+not landed yet are added by schema evolution when it does, rather than shipped
+as permanent NULLs that read as "we have this" when we do not.
+"""
+
+import time
+from dataclasses import dataclass, field
+
+from pyiceberg.exceptions import RESTError
+from pyiceberg.partitioning import PartitionField, PartitionSpec
+from pyiceberg.schema import Schema
+from pyiceberg.transforms import IdentityTransform
+from pyiceberg.types import DoubleType, IntegerType, NestedField, StringType
+
+VALID_FROM = (
+    "The cancerOnIce release from which this version of the record is valid. "
+    "A row is one *version*: any change to any attribute closes the previous "
+    "row and opens a new one, so the value here is not necessarily when the "
+    "record first existed. It is when cancerOnIce first carried this version, "
+    "not when the source published it."
+)
+VALID_TO = (
+    "The cancerOnIce release at which this version stopped being current, "
+    "exclusive. NULL means this is the current version — it does not mean "
+    "unknown. Queries wanting current data must filter on valid_to IS NULL; "
+    "queries wanting release R want "
+    "valid_from <= R AND (valid_to IS NULL OR valid_to > R). This is a "
+    "cancerOnIce release, not the date the source changed the record."
+)
+
+
+@dataclass(frozen=True)
+class TableDef:
+    """A declared table.
+
+    `business_key` is what identifies a *record* — what a merge joins on to
+    decide whether a row is new, changed or retired. The Iceberg identifier
+    fields are the *row* key, which is the business key plus `valid_from`,
+    because every change opens a new version row. Declaring only the business
+    key to Iceberg would assert a uniqueness this model does not have; deriving
+    one from the other keeps them from drifting. A table with no `valid_from`
+    column (a plain lookup, replaced wholesale via `merge.write`) is keyed by
+    its business key alone.
+    """
+
+    schema: Schema
+    comment: str
+    business_key: tuple = ()
+    # Identity-partition columns, for pruning only: merge-scope containment, not
+    # partitioning, is the correctness mechanism.
+    partition_by: tuple = ()
+    properties: dict = field(default_factory=dict)
+
+    def iceberg_schema(self):
+        if not self.business_key:
+            return self.schema
+        names = list(self.business_key)
+        if any(f.name == "valid_from" for f in self.schema.fields):
+            names.append("valid_from")
+        ids = [self.schema.find_field(n).field_id for n in names]
+        return Schema(*self.schema.fields, identifier_field_ids=ids)
+
+
+NAMESPACES = {
+    "raw": "Sources as landed, verbatim, per source release.",
+    "geography": "Units, vintages, crosswalks, aliases — the spine every fact joins through.",
+    "population": "Denominators (SEER county/tract population, ACS universes).",
+    "measure": "Every published number, in one stacked long table, plus its definitions.",
+    "facility": "Places care happens (mammography, FQHC, providers, screening).",
+    "catchment": "Cancer centers and the geographies they claim.",
+    "resource": "Pointers to large or non-redistributable data (NaNDA, geometries).",
+    "provenance": "What each cancerOnIce release was built from, and how we know.",
+}
+
+VALUE_STATUSES = (
+    "reported", "suppressed_small_count", "suppressed_complementary",
+    "suppressed_reliability", "not_available", "not_applicable",
+)
+
+TABLES = {
+    "provenance.release": TableDef(
+        schema=Schema(
+            NestedField(1, "release", StringType(), required=True,
+                        doc="cancerOnIce release, YYYY.MM with zero-padded corrections "
+                            "YYYY.MM.NN. Zero-padded because '2026.10.10' sorts before "
+                            "'2026.10.2' and release ordering would otherwise invert."),
+            NestedField(2, "source", StringType(), required=True,
+                        doc="Source key, e.g. scp, places, acs."),
+            NestedField(3, "source_version", StringType(),
+                        doc="The upstream version in the SOURCE'S OWN vocabulary, never "
+                            "normalised. NULL only where nothing at all is knowable."),
+            NestedField(4, "version_method", StringType(), required=True,
+                        doc="How the version was determined: release_number, "
+                            "http_last_modified, etag, ftp_index_probe, retrieval_date, "
+                            "unavailable. 'unavailable' is a legitimate value — a source that "
+                            "publishes no version is recorded as such, never given a "
+                            "fabricated one."),
+            NestedField(5, "retrieved_at", StringType(), required=True,
+                        doc="UTC timestamp at which the source was fetched."),
+            NestedField(6, "url", StringType(), doc="Canonical URL fetched."),
+            NestedField(7, "checksum", StringType(), doc="SHA-256 of the retrieved bytes, where computed."),
+            NestedField(8, "row_count", IntegerType(),
+                        doc="Rows landed from this source, as a cheap integrity check."),
+        ),
+        business_key=("release", "source"),
+        comment="One row per (cancerOnIce release, source): what this release was built from. "
+                "This is what makes a release reproducible — resolve it here to each "
+                "source's own version, then query each table at that release. Durable "
+                "by design: unlike Iceberg snapshot summaries it does not expire.",
+        properties={},
+    ),
+
+    "geography.unit": TableDef(
+        schema=Schema(
+            NestedField(1, "geo_id", StringType(), required=True,
+                        doc="Canonical id: '<level>:<fips>', e.g. 'county:08031'. Part of the "
+                            "business key together with vintage."),
+            NestedField(2, "level", StringType(), required=True,
+                        doc="One of: nation, state, county, tract, block_group, zcta, place, "
+                            "custom."),
+            NestedField(3, "fips", StringType(), doc="The bare code, without the level prefix."),
+            NestedField(4, "vintage", IntegerType(), required=True,
+                        doc="Boundary vintage year, e.g. 2020. Part of the business key: a FIPS "
+                            "code without a vintage is an assembly name without a patch level — "
+                            "boundaries move (Connecticut's 2022 move from counties to planning "
+                            "regions, tract redraws each decennial census)."),
+            NestedField(5, "name", StringType(), doc="Human-readable name."),
+            NestedField(6, "parent_geo_id", StringType(),
+                        doc="Containing unit's geo_id, in the same vintage."),
+            NestedField(7, "aland_m2", DoubleType(), doc="Land area, square meters."),
+            NestedField(8, "awater_m2", DoubleType(), doc="Water area, square meters."),
+            NestedField(9, "centroid_lat", DoubleType(), doc="Centroid latitude, WGS84."),
+            NestedField(10, "centroid_lon", DoubleType(), doc="Centroid longitude, WGS84."),
+            NestedField(11, "geometry_uri", StringType(),
+                        doc="Pointer to the boundary geometry (GeoParquet / PMTiles on R2), not "
+                            "the geometry itself — geometry is referenced, never the primary "
+                            "artifact (SPEC.md Non-goals). NULL where no geometry is pointed to "
+                            "yet."),
+            NestedField(12, "valid_from", StringType(), required=True, doc=VALID_FROM),
+            NestedField(13, "valid_to", StringType(), doc=VALID_TO),
+        ),
+        business_key=("geo_id", "vintage"),
+        comment="Geography — the spine every fact joins through (SPEC.md § Geography). Every "
+                "level and vintage Census has ever drawn, one row per unit per vintage, with "
+                "full Type-2 history via valid_from/valid_to.",
+    ),
+
+    "measure.definition": TableDef(
+        schema=Schema(
+            NestedField(1, "measure_id", StringType(), required=True, doc="Business key."),
+            NestedField(2, "source", StringType(), required=True,
+                        doc="The asserting provider that defines this measure, e.g. 'SCP', "
+                            "'PLACES', 'ACS'."),
+            NestedField(3, "label", StringType(), doc="Human-readable measure name."),
+            NestedField(4, "units", StringType(), doc="Unit of the published value."),
+            NestedField(5, "universe", StringType(), doc="Population the rate is computed over."),
+            NestedField(6, "rate_basis", StringType(),
+                        doc="One of: per_100000, percent, count, index."),
+            NestedField(7, "age_adjustment", StringType(),
+                        doc="Standard population used for age adjustment (e.g. '2000 US "
+                            "standard'), or NULL when the measure is not age-adjusted."),
+            NestedField(8, "method", StringType(),
+                        doc="One of: direct, model_based, survey_direct, derived."),
+            NestedField(9, "cancer_site_code", StringType(),
+                        doc="FK into measure.cancer_site when this measure is cancer-specific; "
+                            "NULL otherwise."),
+            NestedField(10, "doc", StringType(), doc="Prose description of the measure."),
+        ),
+        business_key=("measure_id",),
+        comment="One row per published measure definition (SPEC.md § Measures). A lookup "
+                "table, not versioned in place — replaced wholesale per source via merge.write.",
+    ),
+
+    "measure.stratum": TableDef(
+        schema=Schema(
+            NestedField(1, "stratum_id", StringType(), required=True, doc="Business key."),
+            NestedField(2, "source", StringType(), required=True,
+                        doc="The provider whose native categories this stratum uses."),
+            NestedField(3, "sex", StringType(), doc="Source-native sex category, or NULL."),
+            NestedField(4, "age_group", StringType(), doc="Source-native age group, or NULL."),
+            NestedField(5, "race_ethnicity", StringType(),
+                        doc="Source-native race/ethnicity category, or NULL. Never harmonized "
+                            "in place — mappings live in measure.stratum_map instead "
+                            "(SPEC.md § Measures)."),
+            NestedField(6, "stage", StringType(), doc="Source-native disease stage, or NULL."),
+            NestedField(7, "other", StringType(), doc="Any other source-native stratifier."),
+            NestedField(8, "scheme", StringType(), required=True,
+                        doc="The classification scheme this stratum's categories come from, "
+                            "e.g. 'SCP_RACE_2024', 'OMB_1997', 'OMB_SPD15_2024'. Schemes diverge "
+                            "across releases of the same source; this is expected."),
+        ),
+        business_key=("stratum_id",),
+        comment="Source-native stratification, one row per distinct combination a source "
+                "publishes (SPEC.md § Measures). A lookup table, replaced wholesale per source "
+                "via merge.write.",
+    ),
+
+    "measure.observation": TableDef(
+        schema=Schema(
+            NestedField(1, "source", StringType(), required=True,
+                        doc="Asserting provider: 'SCP' | 'PLACES' | 'ACS' | 'SVI' | ... . Part "
+                            "of the business key and of every writer's merge scope, so "
+                            "providers stack in one table and none can retire another's rows."),
+            NestedField(2, "source_release", StringType(), required=True,
+                        doc="The upstream edition that published this value — a vintage or "
+                            "release label (SPEC.md § Versioning model), distinct from the "
+                            "period the value describes and from valid_from/valid_to."),
+            NestedField(3, "measure_id", StringType(), required=True,
+                        doc="FK measure.definition."),
+            NestedField(4, "geo_id", StringType(), required=True, doc="FK geography.unit."),
+            NestedField(5, "geo_vintage", IntegerType(), required=True,
+                        doc="FK geography.unit's vintage, together with geo_id."),
+            NestedField(6, "period_start", StringType(), required=True,
+                        doc="Start of the time period this estimate describes, e.g. '2018' for "
+                            "a five-year pooled 2018-2022 rate. The time the estimate is ABOUT, "
+                            "distinct from source_release (when it was published) and "
+                            "valid_from (when cancerOnIce first served it)."),
+            NestedField(7, "period_end", StringType(), required=True,
+                        doc="End of the time period this estimate describes, e.g. '2022'."),
+            NestedField(8, "stratum_id", StringType(), required=True,
+                        doc="FK measure.stratum."),
+            NestedField(9, "value", DoubleType(),
+                        doc="The published value. NULL whenever value_status != 'reported' — "
+                            "no suppressed cell ever reads as a number (SPEC.md Acceptance C)."),
+            NestedField(10, "lower", DoubleType(), doc="Interval lower bound, when published."),
+            NestedField(11, "upper", DoubleType(), doc="Interval upper bound, when published."),
+            NestedField(12, "interval_level", DoubleType(),
+                        doc="Confidence/margin level of lower/upper: 0.90 (ACS MOE), 0.95 "
+                            "(SCP CI), or NULL when no interval is published."),
+            NestedField(13, "numerator", DoubleType(), doc="Numerator, when published."),
+            NestedField(14, "denominator", DoubleType(), doc="Denominator, when published."),
+            NestedField(15, "value_status", StringType(), required=True,
+                        doc="Closed enum, never NULL: 'reported', 'suppressed_small_count', "
+                            "'suppressed_complementary', 'suppressed_reliability', "
+                            "'not_available', 'not_applicable' (SPEC.md § Suppression is a "
+                            "value, not a NULL). Enforced before write by "
+                            "merge.check_observations."),
+            NestedField(16, "reliability_flag", StringType(),
+                        doc="Published separately from suppression, e.g. an unstable RSE flag."),
+            NestedField(17, "trend", StringType(), doc="Source-published trend call, if any."),
+            NestedField(18, "valid_from", StringType(), required=True, doc=VALID_FROM),
+            NestedField(19, "valid_to", StringType(), doc=VALID_TO),
+        ),
+        business_key=("source", "source_release", "measure_id", "geo_id", "geo_vintage",
+                      "period_start", "period_end", "stratum_id"),
+        partition_by=("source",),
+        comment="Every published number, one stacked long table across sources (SPEC.md § "
+                "Measures). Merge scope is (source, source_release) — a new SCP vintage never "
+                "retires a PLACES row. Full Type-2 history via valid_from/valid_to.",
+    ),
+
+    # --- raw: census gazetteer ---
+    # Census Gazetteer Files (one row per geographic unit: GEOID, name, land/water
+    # area, internal-point lat/lon) are the lightweight companion to TIGER/Line —
+    # they populate geography.unit's non-geometry columns without pulling in
+    # shapefiles. Public domain. One raw table per (level, vintage) file.
+    #
+    # A parallel agent fills this in; leave this marker and the surrounding
+    # blank space untouched so independent branches merge cleanly.
+
+    # --- raw: cdc places ---
+    # CDC PLACES: model-based tract/county small-area estimates for chronic
+    # disease, screening and behaviors, published as one annual release
+    # (SPEC.md § Sources — first tranche). Public domain; measure.definition rows
+    # for PLACES set method = 'model_based'.
+    #
+    # A parallel agent fills this in; leave this marker and the surrounding
+    # blank space untouched so independent branches merge cleanly.
+
+    # --- raw: usda ers rucc ---
+    # USDA ERS Rural-Urban Continuum Codes: county-level rurality classification,
+    # published per edition (SPEC.md § Sources — first tranche). Public domain;
+    # feeds facility/access-gap recipes as a rurality covariate.
+    #
+    # A parallel agent fills this in; leave this marker and the surrounding
+    # blank space untouched so independent branches merge cleanly.
+}
+
+
+def is_rate_limit(err):
+    """R2 Data Catalog's catalog-wide write limit, however pyiceberg surfaces it.
+
+    The REST error's *message* is 'TooManyRequestsException: Rate limit
+    exceeded…' — the class is a plain RESTError and the text has no '429', so
+    matching on either alone misses it (biocOnIce hit this in production).
+    """
+    text = f"{type(err).__name__}: {err}"
+    return "429" in text or "TooManyRequests" in text
+
+
+def rate_limited(call):
+    """Run one catalog write, waiting out R2 Data Catalog's catalog-wide 429.
+
+    Creating a namespace or a table is a write request like any other, so with
+    two loads running it can be refused for rate alone; the retrying commit
+    paths (merge.overwrite) never see it because it fails before them.
+    Anything but a 429 is raised as it is.
+    """
+    for _ in range(8):
+        try:
+            return call()
+        except RESTError as err:
+            if not is_rate_limit(err):
+                raise
+            time.sleep(65)
+    return call()
+
+
+def create(cat, identifier):
+    """Create the table if absent, with its declared schema, comment and properties."""
+    ns = identifier.split(".")[0]
+    # Remembered on the catalog object itself, not in a module-level set keyed by
+    # id(cat): ids are recycled once a catalog is garbage-collected, so a fresh
+    # catalog (every test, or a second one in a process) inherited a dead
+    # catalog's "already ensured" and then hit NoSuchNamespaceError.
+    ensured = cat.__dict__.setdefault("_canceronice_namespaces", set())
+    if ns not in ensured:
+        rate_limited(lambda: cat.create_namespace_if_not_exists(
+            ns, properties={"comment": NAMESPACES[ns]}))
+        ensured.add(ns)
+    d = TABLES[identifier]
+    # An empty PartitionSpec() is Iceberg's unpartitioned spec, so this is
+    # uniform whether or not the table declares partition_by.
+    spec = PartitionSpec(*[
+        PartitionField(source_id=d.schema.find_field(n).field_id, field_id=1000 + i,
+                       transform=IdentityTransform(), name=n)
+        for i, n in enumerate(d.partition_by)])
+    table = rate_limited(lambda: cat.create_table_if_not_exists(
+        identifier, schema=d.iceberg_schema(), partition_spec=spec,
+        properties={"comment": d.comment, **d.properties}))
+    return _evolve(table, d, identifier)
+
+
+def _evolve(table, d, identifier):
+    """Add columns the declaration has gained since the table was created.
+
+    Without this a new column in a TableDef never reaches a live table, and the
+    cast in merge.write fails on it. Only optional columns can be added: existing
+    rows read NULL for them. A new *required* column has no value for the rows
+    already there, so that is a rebuild and this refuses it rather than guessing.
+
+    ponytail: additions only. A changed type, a dropped column or a changed doc
+    string is left alone — handle those when one actually happens.
+    """
+    live = {f.name for f in table.schema().fields}
+    missing = [f for f in d.schema.fields if f.name not in live]
+    if not missing:
+        return table
+    required = [f.name for f in missing if f.required]
+    if required:
+        raise ValueError(f"{identifier}: declared required column(s) {required} are not in the "
+                         "live table; Iceberg cannot add a required column to existing rows — "
+                         "rebuild the table")
+    with table.update_schema() as update:
+        for f in missing:
+            update.add_column(f.name, f.field_type, doc=f.doc)
