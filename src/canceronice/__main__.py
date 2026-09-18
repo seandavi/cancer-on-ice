@@ -20,7 +20,11 @@ def main():
     # A parallel agent adds an `ingest-*` subparser here.
 
     # --- raw: cdc places ---
-    # A parallel agent adds an `ingest-*` subparser here.
+    from . import places
+    pl = sub.add_parser("places", help="land a CDC PLACES county-data release, then derive")
+    pl.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    pl.add_argument("--places-release", dest="places_release", choices=sorted(places.RELEASES),
+                    help="PLACES county-data release year (default: latest known)")
 
     # --- raw: usda ers rucc ---
     # A parallel agent adds an `ingest-*` subparser here.
@@ -37,7 +41,8 @@ def main():
     # A parallel agent adds its dispatch branch here.
 
     # --- raw: cdc places ---
-    # A parallel agent adds its dispatch branch here.
+    elif args.cmd == "places":
+        _print(places.ingest(cat, args.release, args.places_release))
 
     # --- raw: usda ers rucc ---
     # A parallel agent adds its dispatch branch here.
