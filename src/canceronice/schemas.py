@@ -280,6 +280,34 @@ TABLES = {
     #
     # A parallel agent fills this in; leave this marker and the surrounding
     # blank space untouched so independent branches merge cleanly.
+    "raw.ers__rucc": TableDef(
+        schema=Schema(
+            NestedField(1, "FIPS", StringType(), required=True,
+                        doc="5-digit county (or county-equivalent) FIPS code, as published — "
+                            "zero-padded string, e.g. '01001'."),
+            NestedField(2, "State", StringType(), required=True, doc="USPS state abbreviation."),
+            NestedField(3, "County_Name", StringType(), required=True,
+                        doc="County (or equivalent) name, as published."),
+            NestedField(4, "Attribute", StringType(), required=True,
+                        doc="Which fact this row carries: 'Population_2020', "
+                            "'RUCC_<edition>' (e.g. 'RUCC_2023'), or 'Description'. Long "
+                            "format — one row per (FIPS, Attribute)."),
+            NestedField(5, "Value", StringType(),
+                        doc="The value for Attribute, unparsed. NULL only where the source "
+                            "cell itself is blank; a FIPS entirely missing an Attribute row "
+                            "(e.g. no RUCC_2023 for a zero-population entity) is absent from "
+                            "this table rather than present with a NULL Value."),
+            NestedField(6, "rucc_edition", StringType(), required=True,
+                        doc="The RUCC edition this row was published in, e.g. '2023' — the "
+                            "version axis for this source. Raw is replaced wholesale per "
+                            "value of this column."),
+            NestedField(7, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="USDA ERS Rural-Urban Continuum Codes landed verbatim and whole, long format: "
+                "one row per (county, attribute) exactly as published. Public domain (U.S. "
+                "Government work, 17 U.S.C. Sec 105).",
+    ),
 }
 
 

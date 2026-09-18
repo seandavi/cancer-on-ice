@@ -1,0 +1,12 @@
+FIPS,State,County_Name,Attribute,Value
+01001,AL,Autauga County,Population_2020,58805
+01001,AL,Autauga County,RUCC_2023,2
+01001,AL,Autauga County,Description,"Metro - Counties in metro areas of 250,000 to 1 million population"
+09110,CT,Capitol Planning Region,Population_2020,976248
+09110,CT,Capitol Planning Region,RUCC_2023,1
+09110,CT,Capitol Planning Region,Description,Metro - Counties in metro areas of 1 million population or more
+02063,AK,Chugach Census Area,Population_2020,7102
+02063,AK,Chugach Census Area,RUCC_2023,9
+02063,AK,Chugach Census Area,Description,"Nonmetro - Urban population of fewer than 5,000, not adjacent to a metro area"
+60030,AS,Rose Island,Population_2020,0
+60030,AS,Rose Island,Description,Not Applicable
