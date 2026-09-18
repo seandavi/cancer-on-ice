@@ -1,6 +1,6 @@
 import argparse
 
-from . import catalog, schemas
+from . import catalog, census_gazetteer, schemas
 
 
 def _print(counts):
@@ -17,7 +17,13 @@ def main():
     sub.add_parser("tables", help="list catalog tables")
 
     # --- raw: census gazetteer ---
-    # A parallel agent adds an `ingest-*` subparser here.
+    gz = sub.add_parser("gazetteer", help="land one Census Gazetteer vintage's county + "
+                        "tract files, then derive geography.unit")
+    gz.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    gz.add_argument("--year", required=True, type=int, help="gazetteer vintage year, e.g. 2024")
+    gz.add_argument("--county-url", help="an already-downloaded counties zip/txt; skips download")
+    gz.add_argument("--tract-url", help="an already-downloaded tracts zip/txt; skips download")
+    gz.add_argument("--state-url", help="an already-downloaded state.txt; skips download")
 
     # --- raw: cdc places ---
     # A parallel agent adds an `ingest-*` subparser here.
@@ -34,7 +40,9 @@ def main():
         print(f"created {len(schemas.TABLES)} tables across {len(schemas.NAMESPACES)} namespaces")
 
     # --- raw: census gazetteer ---
-    # A parallel agent adds its dispatch branch here.
+    elif args.cmd == "gazetteer":
+        _print(census_gazetteer.ingest(cat, args.release, args.year,
+                                       args.county_url, args.tract_url, args.state_url))
 
     # --- raw: cdc places ---
     # A parallel agent adds its dispatch branch here.

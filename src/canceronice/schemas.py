@@ -260,9 +260,96 @@ TABLES = {
     # area, internal-point lat/lon) are the lightweight companion to TIGER/Line —
     # they populate geography.unit's non-geometry columns without pulling in
     # shapefiles. Public domain. One raw table per (level, vintage) file.
-    #
-    # A parallel agent fills this in; leave this marker and the surrounding
-    # blank space untouched so independent branches merge cleanly.
+    "raw.census__gazetteer_counties": TableDef(
+        schema=Schema(
+            NestedField(1, "usps", StringType(), doc="Two-letter USPS state/territory abbreviation."),
+            NestedField(2, "geoid", StringType(), required=True,
+                        doc="5-digit state+county FIPS code, e.g. '08031'. Unique per row within "
+                            "one gazetteer_year."),
+            NestedField(3, "geoidfq", StringType(),
+                        doc="Fully qualified GEOID used to join data.census.gov tables, e.g. "
+                            "'0500000US08031'. Only present from the 2025 gazetteer layout; NULL "
+                            "in earlier vintages."),
+            NestedField(4, "ansicode", StringType(), doc="ANSI feature code for the unit."),
+            NestedField(5, "name", StringType(), doc="County (or state-equivalent) name."),
+            NestedField(6, "pop10", StringType(),
+                        doc="2010 Census population count. Only the 2010 gazetteer layout carries "
+                            "this column; NULL in every other vintage."),
+            NestedField(7, "hu10", StringType(),
+                        doc="2010 Census housing unit count. Only the 2010 gazetteer layout "
+                            "carries this column; NULL in every other vintage."),
+            NestedField(8, "aland", StringType(), doc="Land area, square meters, as published."),
+            NestedField(9, "awater", StringType(), doc="Water area, square meters, as published."),
+            NestedField(10, "aland_sqmi", StringType(), doc="Land area, square miles, as published."),
+            NestedField(11, "awater_sqmi", StringType(), doc="Water area, square miles, as published."),
+            NestedField(12, "intptlat", StringType(), doc="Internal point latitude, as published."),
+            NestedField(13, "intptlong", StringType(), doc="Internal point longitude, as published."),
+            NestedField(14, "gazetteer_year", IntegerType(), required=True,
+                        doc="The gazetteer vintage year this row was published under, e.g. 2024. "
+                            "Version column: raw is replaced wholesale per value of this column, "
+                            "so every landed vintage accumulates rather than overwrites the last."),
+            NestedField(15, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="Census Gazetteer county file landed verbatim and whole, every column, one row "
+                "per county-equivalent per vintage year. Three real upstream layouts (2010 with "
+                "POP10/HU10, 2011-2024 without them, 2025+ with GEOIDFQ and a pipe delimiter) "
+                "land into this one union schema; absent columns are NULL. Licence: U.S. "
+                "government work, public domain (17 U.S.C. § 105).",
+    ),
+
+    "raw.census__gazetteer_tracts": TableDef(
+        schema=Schema(
+            NestedField(1, "usps", StringType(), doc="Two-letter USPS state/territory abbreviation."),
+            NestedField(2, "geoid", StringType(), required=True,
+                        doc="11-digit state+county+tract FIPS code, e.g. '08031000100'. Unique "
+                            "per row within one gazetteer_year."),
+            NestedField(3, "geoidfq", StringType(),
+                        doc="Fully qualified GEOID used to join data.census.gov tables, e.g. "
+                            "'1400000US08031000100'. Only present from the 2025 gazetteer layout; "
+                            "NULL in earlier vintages."),
+            NestedField(4, "pop10", StringType(),
+                        doc="2010 Census population count. Only the 2010 gazetteer layout carries "
+                            "this column; NULL in every other vintage."),
+            NestedField(5, "hu10", StringType(),
+                        doc="2010 Census housing unit count. Only the 2010 gazetteer layout "
+                            "carries this column; NULL in every other vintage."),
+            NestedField(6, "aland", StringType(), doc="Land area, square meters, as published."),
+            NestedField(7, "awater", StringType(), doc="Water area, square meters, as published."),
+            NestedField(8, "aland_sqmi", StringType(), doc="Land area, square miles, as published."),
+            NestedField(9, "awater_sqmi", StringType(), doc="Water area, square miles, as published."),
+            NestedField(10, "intptlat", StringType(), doc="Internal point latitude, as published."),
+            NestedField(11, "intptlong", StringType(), doc="Internal point longitude, as published."),
+            NestedField(12, "gazetteer_year", IntegerType(), required=True,
+                        doc="The gazetteer vintage year this row was published under, e.g. 2024. "
+                            "Version column: raw is replaced wholesale per value of this column, "
+                            "so every landed vintage accumulates rather than overwrites the last."),
+            NestedField(13, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="Census Gazetteer tract file landed verbatim and whole, every column, one row "
+                "per census tract per vintage year. The tract file carries no NAME column — "
+                "tracts are numbered, not named. Three real upstream layouts, same union-schema "
+                "treatment as raw.census__gazetteer_counties. Licence: U.S. government work, "
+                "public domain (17 U.S.C. § 105).",
+    ),
+
+    "raw.census__state_fips": TableDef(
+        schema=Schema(
+            NestedField(1, "state", StringType(), required=True,
+                        doc="2-digit state/territory FIPS code, e.g. '09'."),
+            NestedField(2, "stusab", StringType(), doc="Two-letter USPS abbreviation, e.g. 'CT'."),
+            NestedField(3, "state_name", StringType(), doc="Full state/territory name, e.g. 'Connecticut'."),
+            NestedField(4, "statens", StringType(), doc="GNIS ANSI feature code for the state."),
+            NestedField(5, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="Census's state/state-equivalent FIPS code reference "
+                "(https://www2.census.gov/geo/docs/reference/state.txt), landed whole and replaced "
+                "wholesale each time — not versioned by gazetteer year, since FIPS-to-state "
+                "assignment doesn't move on that cadence. Feeds geography.unit's state-level "
+                "names. Licence: U.S. government work, public domain (17 U.S.C. § 105).",
+    ),
 
     # --- raw: cdc places ---
     # CDC PLACES: model-based tract/county small-area estimates for chronic
