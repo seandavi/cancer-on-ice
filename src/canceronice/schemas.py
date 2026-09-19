@@ -467,6 +467,74 @@ TABLES = {
     # The table declaration(s) goes directly under this comment block.
     # Leave this marker and the blank lines around it untouched so
     # independent branches merge cleanly.
+    "raw.geography__county_recodes": TableDef(
+        schema=Schema(
+            NestedField(1, "old_fips", StringType(), required=True,
+                        doc="5-digit county FIPS code before the change, as published, "
+                            "zero-padded, e.g. '46113'."),
+            NestedField(2, "old_name", StringType(), required=True,
+                        doc="County (or equivalent) name before the change, as published."),
+            NestedField(3, "new_fips", StringType(), required=True,
+                        doc="5-digit county FIPS code after the change, as published."),
+            NestedField(4, "new_name", StringType(), required=True,
+                        doc="County (or equivalent) name after the change, as published."),
+            NestedField(5, "effective_year", StringType(), required=True,
+                        doc="Calendar year the change took effect, unparsed."),
+            NestedField(6, "change_type", StringType(), required=True,
+                        doc="One of: recode, rename, recode_and_rename."),
+            NestedField(7, "source_url", StringType(), required=True,
+                        doc="The Census county-changes decade page this row was transcribed "
+                            "from."),
+            NestedField(8, "note", StringType(),
+                        doc="The exact Census sentence this row was transcribed from, quoted."),
+            NestedField(9, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="Curated CSV of Census 'Substantial Changes to Counties' name/code changes "
+                "(county_recodes.csv, committed in the package — the upstream is prose, not a "
+                "data file), landed verbatim and whole. Replaced wholesale each time it is "
+                "re-curated, like raw.census__state_fips — there is no upstream edition to key "
+                "an overwrite scope on. Licence: U.S. government work, public domain "
+                "(17 U.S.C. § 105).",
+    ),
+
+    "geography.alias": TableDef(
+        schema=Schema(
+            NestedField(1, "old_geo_id", StringType(), required=True,
+                        doc="geography.unit-style id ('county:<fips>') before the change. Part "
+                            "of the business key together with new_geo_id. Carries no vintage — "
+                            "unlike geography.unit, an alias is a pure code mapping a join "
+                            "resolves regardless of which vintage the observation came from."),
+            NestedField(2, "new_geo_id", StringType(), required=True,
+                        doc="geography.unit-style id ('county:<fips>') after the change. Part "
+                            "of the business key together with old_geo_id."),
+            NestedField(3, "effective_year", IntegerType(), required=True,
+                        doc="Calendar year the change took effect, e.g. 2015."),
+            NestedField(4, "change_type", StringType(), required=True,
+                        doc="One of: recode (code changed, name did not), rename (name changed, "
+                            "code did not — not useful for resolving a join, since old_geo_id "
+                            "would equal new_geo_id, so none are seeded), recode_and_rename "
+                            "(both changed, e.g. Shannon -> Oglala Lakota County)."),
+            NestedField(5, "old_name", StringType(), required=True, doc="Name before the change."),
+            NestedField(6, "new_name", StringType(), required=True, doc="Name after the change."),
+            NestedField(7, "source", StringType(), required=True,
+                        doc="Asserting provider, e.g. 'CENSUS_COUNTY_CHANGES'. Part of every "
+                            "writer's merge scope, so a second source of aliases (NHGIS, say) "
+                            "could stack here without retiring this one's rows."),
+            NestedField(8, "source_url", StringType(), required=True,
+                        doc="The page this row's change was documented on."),
+            NestedField(9, "note", StringType(),
+                        doc="Citation: the exact source sentence this row was transcribed from."),
+            NestedField(10, "valid_from", StringType(), required=True, doc=VALID_FROM),
+            NestedField(11, "valid_to", StringType(), doc=VALID_TO),
+        ),
+        business_key=("old_geo_id", "new_geo_id"),
+        comment="FIPS renames and re-codings that are NOT boundary changes (SPEC.md § "
+                "geography.alias, #26): a join on an old code resolves through here to the "
+                "current one instead of dropping (SPEC.md Acceptance B). Real boundary changes "
+                "(splits, merges, Connecticut's planning regions) belong to geography.crosswalk "
+                "(#25) instead, since a 1:1 alias would misrepresent them.",
+    ),
 
     # --- derived: measure cancer site ---
     # measure.cancer_site — SEER site recode <-> ICD-O-3 <-> ICD-10 <-> NCIt / MONDO (#31).
