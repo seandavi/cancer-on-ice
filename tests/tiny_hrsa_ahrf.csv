@@ -1,0 +1,6 @@
+fips_st_cnty,cnty_name_st_abbrev,fedly_qualfd_hlth_ctr_24,fedly_qualfd_hlth_ctr_23,rural_hlth_clincs_24,rural_hlth_clincs_23,hospcs_24,hospcs_23,ambultry_surg_ctr_24,ambultry_surg_ctr_23,pers_noins_lt65_pct_22,pers_noins_lt65_pct_21,hpsa_prim_care_25,hpsa_prim_care_24,hpsa_mentl_hlth_25,hpsa_mentl_hlth_24,np_npi_24,np_npi_23,pa_npi_24,pa_npi_23,aprn_npi_24,aprn_npi_23,md_nf_23,hosp_23
+01001,"Autauga, AL",2,2,0,0,1,1,0,0,8.2,10,1,1,1,1,30,29,6,5,37,35,50,1
+02063,"Chugach (CA), AK",0,0,0,0,0,0,0,0,17.5,14.9,2,0,2,0,4,1,1,1,4,1,12,2
+02261,"Valdez-Cordova (CA), AK",3,3,0,0,0,0,0,0,,,2,2,2,1,,,,,,,,0
+09001,"Fairfield, CT",36,41,0,0,6,7,17,17,,7.4,2,2,2,2,,1003,,815,,1225,4853,8
+09110,"Capitol PR, CT",,,,,,,,,5.8,,,,,,1862,,1249,,2221,,,
