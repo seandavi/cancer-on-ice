@@ -1,0 +1,281 @@
+---
+title: "Catchment Lake"
+include-in-header:
+  text: |
+    <!-- DuckDB-WASM's browser build imports the bare specifier "apache-arrow",
+         which only resolves via an import map (see explorer/public/index.html for
+         the same fix) — and an import map must be present before any module
+         script on the page runs, hence this lives in <head> via include-in-header
+         rather than in an {ojs} cell. -->
+    <script type="importmap">
+    { "imports": { "apache-arrow": "https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/+esm" } }
+    </script>
+---
+
+This is a prototype page for the `cancer-on-ice` "Catchment Lake": population cancer
+data stored as Apache Iceberg tables, read anonymously straight from object storage
+through an Iceberg REST catalog (`icegate`). The map below runs entirely in your
+browser — DuckDB compiled to WebAssembly attaches the catalog and queries it live; no
+server renders this page's data, and nothing you do here is sent anywhere but
+Cloudflare's edge (the R2 bucket + the icegate worker).
+
+## Live county map
+
+::: {.callout-note}
+This map runs a live query against `coi.measure.observation` — a 23-million-row
+table — directly in your browser via DuckDB-WASM. Large-table reads like this can
+fail intermittently in a long-lived tab (a resource-accumulation limit in this
+DuckDB-WASM build, not a bug in this query — see
+[cancer-on-ice#120](https://github.com/seandavi/cancer-on-ice/issues/120)). If the
+map below shows an error, click Retry, or reload the page.
+:::
+
+```{ojs}
+//| echo: false
+CATALOG_ENDPOINT = "https://icegate-canceronice.seandavi.workers.dev"
+
+measures = [
+  { measure_id: "PLACES:CSMOKING:age_adjusted", label: "Current cigarette smoking (age-adjusted %)" },
+  { measure_id: "PLACES:COLON_SCREEN:age_adjusted", label: "Colorectal cancer screening (age-adjusted %)" },
+  { measure_id: "PLACES:MAMMOUSE:age_adjusted", label: "Mammography use (age-adjusted %)" }
+]
+releases = ["2025", "2024"]
+```
+
+```{ojs}
+//| echo: false
+viewof measureId = Inputs.select(measures, {
+  label: "Measure",
+  format: (d) => d.label,
+  value: measures[0]
+})
+viewof release = Inputs.select(releases, { label: "Release" })
+```
+
+```{ojs}
+//| echo: false
+sql = `SELECT geo_id, value, lower, upper, value_status
+FROM coi.measure.observation
+WHERE source = 'PLACES'
+  AND source_release = '${release}'
+  AND measure_id = '${measureId.measure_id}'
+  AND geo_id LIKE 'county:%'
+  AND stratum_id = 'PLACES:ALL'
+  AND valid_to IS NULL`
+```
+
+```{ojs}
+//| echo: false
+// Retry control: incrementing this mutable is the ONLY thing that rebuilds dbState
+// below. Selector changes (measure/release) never touch it — they only re-run
+// queryState, reusing the same connection. This is deliberate: our own diagnosis
+// (cancer-on-ice#120 / PR #119) found that "RangeError: Maximum call stack size
+// exceeded" came from stacking several undisposed DuckDB-WASM instances in one tab
+// during testing, not from any one query — so this page runs exactly one instance
+// and one connection for its whole lifetime, and Retry fully tears down and rebuilds
+// that single instance rather than layering a second one on top of it.
+mutable dbGeneration = 0
+```
+
+```{ojs}
+//| echo: false
+retryButton = {
+  const btn = html`<button>Retry connection</button>`;
+  btn.onclick = () => { mutable dbGeneration = dbGeneration + 1; };
+  return btn;
+}
+```
+
+```{ojs}
+//| echo: false
+// Loads the SAME pinned duckdb-wasm build the explorer app uses (Quarto's own OJS
+// stdlib DuckDBClient is an older bundled client that cannot ATTACH an Iceberg REST
+// catalog — see the PR description for the exact dead end). Depends only on
+// dbGeneration, so it runs once per page load and again only on Retry.
+dbState = {
+  dbGeneration; // reactive dependency — Retry increments this to rebuild the instance
+  const t0 = performance.now();
+  try {
+    const duckdb = await import(
+      "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.33.1-dev57.0/dist/duckdb-browser.mjs"
+    );
+    const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+    const tBundle = performance.now();
+    const workerUrl = URL.createObjectURL(
+      new Blob([`importScripts("${bundle.mainWorker}");`], { type: "text/javascript" })
+    );
+    const worker = new Worker(workerUrl);
+    const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker);
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    URL.revokeObjectURL(workerUrl);
+    const conn = await db.connect();
+    const tInstantiate = performance.now();
+    await conn.query("INSTALL iceberg; LOAD iceberg; INSTALL httpfs; LOAD httpfs;");
+    const tExtensions = performance.now();
+    await conn.query(
+      `ATTACH 'canceronice' AS coi (TYPE ICEBERG, ENDPOINT '${CATALOG_ENDPOINT}', AUTHORIZATION_TYPE 'none');`
+    );
+    const tAttach = performance.now();
+    // Tear this instance down fully before the cell is ever replaced (a future Retry,
+    // or navigating away) — never leave a stale worker + WASM heap running alongside
+    // a new one.
+    invalidation.then(async () => {
+      try { await conn.close(); } catch {}
+      try { await db.terminate(); } catch {}
+    });
+    return {
+      status: "ready",
+      conn,
+      timings: {
+        bundleSelect: tBundle - t0,
+        instantiate: tInstantiate - tBundle,
+        extensions: tExtensions - tInstantiate,
+        attach: tAttach - tExtensions,
+        total: tAttach - t0
+      }
+    };
+  } catch (error) {
+    return { status: "error", error };
+  }
+}
+```
+
+```{ojs}
+//| echo: false
+function rowsFromArrow(table) {
+  const fields = table.schema.fields.map((f) => f.name);
+  return table.toArray().map((r) => {
+    const o = {};
+    for (const f of fields) {
+      let v = r[f];
+      if (typeof v === "bigint") v = Number(v);
+      o[f] = v;
+    }
+    return o;
+  });
+}
+```
+
+```{ojs}
+//| echo: false
+queryState = {
+  if (dbState.status !== "ready") return dbState;
+  const t0 = performance.now();
+  try {
+    const result = await dbState.conn.query(sql);
+    const rows = rowsFromArrow(result);
+    return { status: "ready", rows, ms: performance.now() - t0 };
+  } catch (error) {
+    return { status: "error", error };
+  }
+}
+```
+
+```{ojs}
+//| echo: false
+// County boundaries live nowhere in the lake (it holds tabular data, not geometry).
+// Loaded once, at view time, from a public TopoJSON CDN.
+countyGeo = {
+  const topojsonMod = await import("https://cdn.jsdelivr.net/npm/topojson-client@3/+esm");
+  const us = await fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json").then((r) => r.json());
+  return topojsonMod.feature(us, us.objects.counties);
+}
+```
+
+```{ojs}
+//| echo: false
+joined = {
+  if (queryState.status !== "ready") return null;
+  const byFips = new Map(queryState.rows.map((r) => [r.geo_id.replace("county:", ""), r]));
+  return countyGeo.features.map((f) => {
+    const obs = byFips.get(f.id);
+    return { ...f, properties: { ...f.properties, fips: f.id, obs } };
+  });
+}
+```
+
+```{ojs}
+//| echo: false
+html`<div class="proto-status">
+  ${dbState.status === "error"
+    ? html`<p style="color:#b00"><strong>Catalog unreachable:</strong> ${dbState.error?.message ?? dbState.error}. The live map cannot load — this page is telling you rather than rendering blank.</p><p>${retryButton}</p>`
+    : dbState.status !== "ready"
+    ? html`<p><em>Connecting to the catalog and loading DuckDB-WASM…</em></p>`
+    : queryState.status === "error"
+    ? html`<p style="color:#b00"><strong>Query failed:</strong> ${queryState.error?.message ?? queryState.error}</p><p>${retryButton}</p>`
+    : queryState.status !== "ready"
+    ? html`<p><em>Running query…</em></p>`
+    : html`<p><small>DuckDB-WASM ready in ${dbState.timings.total.toFixed(0)} ms (bundle+worker ${dbState.timings.instantiate.toFixed(0)} ms, extensions ${dbState.timings.extensions.toFixed(0)} ms, ATTACH ${dbState.timings.attach.toFixed(0)} ms). This query: ${queryState.ms.toFixed(0)} ms, ${queryState.rows.length} rows.</small></p>`}
+</div>`
+```
+
+```{ojs}
+//| echo: false
+joined
+  ? Plot.plot({
+      projection: "albers-usa",
+      color: {
+        type: "sequential",
+        scheme: "blues",
+        label: measureId.label,
+        legend: true,
+        nice: true
+      },
+      marks: [
+        Plot.geo(joined, {
+          fill: (d) =>
+            !d.properties.obs
+              ? null
+              : d.properties.obs.value_status !== "reported"
+              ? null
+              : d.properties.obs.value,
+          stroke: "white",
+          strokeWidth: 0.3,
+          title: (d) => {
+            const o = d.properties.obs;
+            if (!o) return `${d.properties.name} (${d.properties.fips}): no data`;
+            if (o.value_status !== "reported")
+              return `${d.properties.name} (${d.properties.fips}): ${o.value_status.replace(/_/g, " ")} — no value`;
+            return `${d.properties.name} (${d.properties.fips})\n${measureId.label}: ${o.value}% (CI ${o.lower}–${o.upper})\nrelease ${release}`;
+          }
+        }),
+        // Counties present in the boundary file but with no row, or a row whose value
+        // isn't "reported" (suppressed etc.), drawn hatched/grey instead of as zero.
+        Plot.geo(
+          joined.filter((d) => !d.properties.obs || d.properties.obs.value_status !== "reported"),
+          { fill: "#ddd", stroke: "white", strokeWidth: 0.3, fillOpacity: 0.6 }
+        )
+      ],
+      width: 900,
+      height: 550,
+      caption:
+        "Connecticut's eight legacy counties (topojson boundary set) don't match PLACES 2024/2025's nine planning regions, so Connecticut shows as no-data here — that boundary-vintage mismatch is exactly what the lake's geo_vintage column exists to make explicit, not something to paper over."
+    })
+  : html`<p><em>Map will render once the query returns.</em></p>`
+```
+
+### Ten lowest counties
+
+```{ojs}
+//| echo: false
+queryState.status === "ready"
+  ? Inputs.table(
+      queryState.rows
+        .filter((d) => d.value_status === "reported")
+        .sort((a, b) => a.value - b.value)
+        .slice(0, 10)
+        .map((d) => ({ geo_id: d.geo_id, value: d.value, lower: d.lower, upper: d.upper })),
+      { columns: ["geo_id", "value", "lower", "upper"] }
+    )
+  : html`<p><em>Table will render once the query returns.</em></p>`
+```
+
+<details>
+<summary>SQL run for this map (copy me)</summary>
+
+```{ojs}
+//| echo: false
+html`<pre><code>${sql}</code></pre>`
+```
+
+</details>

@@ -1,0 +1,5 @@
+/_site/
+/.quarto/
+/.venv-proto/
+
+**/*.quarto_ipynb
