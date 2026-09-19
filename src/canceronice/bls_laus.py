@@ -121,6 +121,7 @@ own scope; a later issue can widen the default or backfill the rest from raw
 without re-landing anything.
 """
 
+import os
 import hashlib
 import tempfile
 import urllib.request
@@ -134,7 +135,13 @@ from pyiceberg.expressions import And, EqualTo, GreaterThanOrEqual, In
 
 from . import merge
 
-USER_AGENT = "cancerOnIce ingest (https://github.com/seandavi/cancer-on-ice)"
+# BLS serves automated clients only when the User-Agent carries a contact
+# address (checked 2026-09-18: the project URL alone gets 403, the same string
+# with an email gets 200). The address is the operator's, so it comes from the
+# environment rather than being committed: CANCERONICE_CONTACT=you@example.org
+USER_AGENT = " ".join(filter(None, [
+    "cancerOnIce ingest (https://github.com/seandavi/cancer-on-ice)",
+    os.environ.get("CANCERONICE_CONTACT")]))
 BASE = "https://download.bls.gov/pub/time.series/la"
 URL_COUNTY = f"{BASE}/la.data.64.County"
 URL_AREA = f"{BASE}/la.area"
