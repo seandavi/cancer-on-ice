@@ -51,10 +51,16 @@ def main():
     # independent branches merge cleanly.
 
     # --- raw: cdc atsdr svi ---
-    # CDC/ATSDR Social Vulnerability Index, every published edition (#40).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import cdc_svi
+    sv = sub.add_parser("svi", help="land one CDC/ATSDR SVI edition's county or tract "
+                        "file, then derive")
+    sv.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    sv.add_argument("--edition", choices=sorted(cdc_svi.EDITIONS, key=int),
+                    help="SVI edition (default: latest known)")
+    sv.add_argument("--level", choices=("county", "tract"), default="county",
+                    help="geography level to land (default: county; tract is only "
+                         f"landed for {cdc_svi.TRACT_EDITIONS})")
+    sv.add_argument("--url", help="an already-downloaded CSV file or alternate URL")
 
     # --- raw: usda ers ruca ---
     # USDA ERS Rural-Urban Commuting Area codes, tract level (#41).
@@ -114,10 +120,8 @@ def main():
     # independent branches merge cleanly.
 
     # --- raw: cdc atsdr svi ---
-    # CDC/ATSDR Social Vulnerability Index, every published edition (#40).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "svi":
+        _print(cdc_svi.ingest(cat, args.release, args.edition, args.level, args.url))
 
     # --- raw: usda ers ruca ---
     # USDA ERS Rural-Urban Commuting Area codes, tract level (#41).
