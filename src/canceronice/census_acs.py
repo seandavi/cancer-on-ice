@@ -211,6 +211,7 @@ import urllib.request
 from pathlib import Path
 
 import duckdb
+from pyiceberg.exceptions import NoSuchTableError
 from pyiceberg.expressions import And, EqualTo, In
 
 from . import merge
@@ -608,15 +609,37 @@ def _measures():
     return m
 
 
-def transform(cat, release, year, level):
-    """Phase 2: measure.definition / measure.stratum / measure.observation
-    for one (year, level). Scoped to `acs_year = year`: raw accumulates every
-    landed release, so an unscoped read would derive from all of them at once.
+def transform(cat, release, year):
+    """Phase 2: measure.definition / measure.stratum / measure.observation for
+    one `year`, rebuilt from WHICHEVER of raw.acs__county / raw.acs__tract are
+    landed for it (not just the level `ingest` was just called for).
+
+    County and tract share one `source_release` (they're the same ACS
+    release, just two geography grains), and measure.observation's merge
+    scope is (source, source_release) -- not per-level, matching
+    measure.observation's declared business key. Deriving from only the
+    level just landed would make `incoming` an INCOMPLETE state for that
+    scope, and merge.merge retires whatever's missing from it: landing tract
+    after county silently deleted every county row for the release (caught
+    in this PR's own real ingest; see cdc_svi.py's identical fix/comment for
+    the same two-level-one-scope shape). Scoped to `acs_year = year`: raw
+    accumulates every landed release, so an unscoped read would derive from
+    all of them at once.
     """
-    identifier = f"raw.acs__{level}"
     con = duckdb.connect()
-    con.register("raw", cat.load_table(identifier).scan(
-        row_filter=EqualTo("acs_year", year)).to_arrow())
+    levels = []
+    for level in ("county", "tract"):
+        try:
+            con.register(f"{level}_raw", cat.load_table(f"raw.acs__{level}").scan(
+                row_filter=EqualTo("acs_year", year)).to_arrow())
+            levels.append(level)
+        except NoSuchTableError:
+            pass
+    if not levels:
+        raise SystemExit(f"census_acs: neither raw.acs__county nor raw.acs__tract has "
+                         f"acs_year = {year} landed yet")
+    con.execute("CREATE OR REPLACE VIEW raw AS " +
+               " UNION ALL ".join(f"SELECT * FROM {lvl}_raw" for lvl in levels))
     _build_resolved(con)
 
     geo_vintage = GEO_VINTAGE[year]
@@ -712,4 +735,4 @@ def transform(cat, release, year, level):
 
 def ingest(cat, release, year, level, dat_dir=None):
     year, n = land_raw(cat, release, year, level, dat_dir)
-    return {f"raw.acs__{level}": n, **transform(cat, release, year, level)}
+    return {f"raw.acs__{level}": n, **transform(cat, release, year)}

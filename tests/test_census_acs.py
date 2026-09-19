@@ -60,6 +60,31 @@ def test_raw_tract_filters_to_tract_rows(cat):
     assert {r["geo_id"] for r in raw} == {"tract:08001988700", "tract:08005005636"}
 
 
+def test_county_and_tract_share_a_release_without_retiring_each_other(cat):
+    """County and tract land into separate raw tables but derive into the
+    SAME measure.observation scope (source='ACS', source_release='2019-2023')
+    -- transform() must rebuild from both raw tables every time it runs, or
+    landing the second level makes `incoming` look like an incomplete state
+    for that scope and merge.merge retires the first level's rows (caught in
+    this PR's own real nationwide ingest: landing tract after county silently
+    deleted every county observation for the release)."""
+    census_acs.ingest(cat, REL, 2023, "county", dat_dir=DAT_DIR)
+    census_acs.ingest(cat, REL, 2023, "tract", dat_dir=DAT_DIR)
+
+    live = rows(cat, "measure.observation",
+               row_filter="source = 'ACS' AND source_release = '2019-2023' AND valid_to IS NULL")
+    county_rows = [r for r in live if r["geo_id"].startswith("county:")]
+    tract_rows = [r for r in live if r["geo_id"].startswith("tract:")]
+    assert len(county_rows) == 4 * 21
+    assert len(tract_rows) == 2 * 21
+
+    # re-landing county alone afterwards must not retire the tract rows either
+    census_acs.ingest(cat, "2026.10", 2023, "county", dat_dir=DAT_DIR)
+    live = rows(cat, "measure.observation",
+               row_filter="source = 'ACS' AND source_release = '2019-2023' AND valid_to IS NULL")
+    assert len([r for r in live if r["geo_id"].startswith("tract:")]) == 2 * 21
+
+
 def test_a_changed_header_fails_before_landing(cat, tmp_path):
     (tmp_path / "acsdt5y2023-b01003.dat").write_text("GEO_ID|B01003_E001\n0500000US01001|59285\n")
     for table_id, n in census_acs.TABLE_VARS.items():
