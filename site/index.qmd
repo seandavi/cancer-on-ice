@@ -21,17 +21,13 @@ Cloudflare's edge (the R2 bucket + the icegate worker).
 
 ## Live county map
 
-::: {.callout-warning}
-As of this prototype, querying `coi.measure.observation` (the table this map needs —
-millions of rows, Hive-partitioned by `source`, individual partition files in the
-hundreds-of-MB range) from DuckDB-WASM 1.33.1-dev57.0 reliably throws `RangeError:
-Maximum call stack size exceeded`, regardless of filters. Small catalog tables
-(`measure.definition`, `provenance.release`, `geography.unit`) query fine from the
-same browser session with the same ATTACH. Native DuckDB runs the identical SQL in
-~0.3s. This looks like a WASM/Asyncify stack-depth limit in that pinned build's
-Iceberg or Parquet-over-httpfs path when the underlying file is large, not a bug in
-this page's query — see the PR description for the full diagnosis. The error state
-below is real, live output, not a stub.
+::: {.callout-note}
+This map runs a live query against `coi.measure.observation` — a 23-million-row
+table — directly in your browser via DuckDB-WASM. Large-table reads like this can
+fail intermittently in a long-lived tab (a resource-accumulation limit in this
+DuckDB-WASM build, not a bug in this query — see
+[cancer-on-ice#120](https://github.com/seandavi/cancer-on-ice/issues/120)). If the
+map below shows an error, click Retry, or reload the page.
 :::
 
 ```{ojs}
@@ -70,11 +66,34 @@ WHERE source = 'PLACES'
 
 ```{ojs}
 //| echo: false
+// Retry control: incrementing this mutable is the ONLY thing that rebuilds dbState
+// below. Selector changes (measure/release) never touch it — they only re-run
+// queryState, reusing the same connection. This is deliberate: our own diagnosis
+// (cancer-on-ice#120 / PR #119) found that "RangeError: Maximum call stack size
+// exceeded" came from stacking several undisposed DuckDB-WASM instances in one tab
+// during testing, not from any one query — so this page runs exactly one instance
+// and one connection for its whole lifetime, and Retry fully tears down and rebuilds
+// that single instance rather than layering a second one on top of it.
+mutable dbGeneration = 0
+```
+
+```{ojs}
+//| echo: false
+retryButton = {
+  const btn = html`<button>Retry connection</button>`;
+  btn.onclick = () => { mutable dbGeneration = dbGeneration + 1; };
+  return btn;
+}
+```
+
+```{ojs}
+//| echo: false
 // Loads the SAME pinned duckdb-wasm build the explorer app uses (Quarto's own OJS
 // stdlib DuckDBClient is an older bundled client that cannot ATTACH an Iceberg REST
-// catalog — see the PR description for the exact dead end). Memoized: this cell runs
-// once per page load, not once per input change.
+// catalog — see the PR description for the exact dead end). Depends only on
+// dbGeneration, so it runs once per page load and again only on Retry.
 dbState = {
+  dbGeneration; // reactive dependency — Retry increments this to rebuild the instance
   const t0 = performance.now();
   try {
     const duckdb = await import(
@@ -97,6 +116,13 @@ dbState = {
       `ATTACH 'canceronice' AS coi (TYPE ICEBERG, ENDPOINT '${CATALOG_ENDPOINT}', AUTHORIZATION_TYPE 'none');`
     );
     const tAttach = performance.now();
+    // Tear this instance down fully before the cell is ever replaced (a future Retry,
+    // or navigating away) — never leave a stale worker + WASM heap running alongside
+    // a new one.
+    invalidation.then(async () => {
+      try { await conn.close(); } catch {}
+      try { await db.terminate(); } catch {}
+    });
     return {
       status: "ready",
       conn,
@@ -172,11 +198,11 @@ joined = {
 //| echo: false
 html`<div class="proto-status">
   ${dbState.status === "error"
-    ? html`<p style="color:#b00"><strong>Catalog unreachable:</strong> ${dbState.error?.message ?? dbState.error}. The live map cannot load — this page is telling you rather than rendering blank.</p>`
+    ? html`<p style="color:#b00"><strong>Catalog unreachable:</strong> ${dbState.error?.message ?? dbState.error}. The live map cannot load — this page is telling you rather than rendering blank.</p><p>${retryButton}</p>`
     : dbState.status !== "ready"
     ? html`<p><em>Connecting to the catalog and loading DuckDB-WASM…</em></p>`
     : queryState.status === "error"
-    ? html`<p style="color:#b00"><strong>Query failed:</strong> ${queryState.error?.message ?? queryState.error}</p>`
+    ? html`<p style="color:#b00"><strong>Query failed:</strong> ${queryState.error?.message ?? queryState.error}</p><p>${retryButton}</p>`
     : queryState.status !== "ready"
     ? html`<p><em>Running query…</em></p>`
     : html`<p><small>DuckDB-WASM ready in ${dbState.timings.total.toFixed(0)} ms (bundle+worker ${dbState.timings.instantiate.toFixed(0)} ms, extensions ${dbState.timings.extensions.toFixed(0)} ms, ATTACH ${dbState.timings.attach.toFixed(0)} ms). This query: ${queryState.ms.toFixed(0)} ms, ${queryState.rows.length} rows.</small></p>`}

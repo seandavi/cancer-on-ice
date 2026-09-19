@@ -19,6 +19,12 @@ format:
   html:
     theme: cosmo
     toc: false
+    include-before-body:
+      text: |
+        <div style="background:#fff3cd;color:#664d03;padding:0.5rem 1rem;
+                    text-align:center;font-weight:600;border-bottom:1px solid #ffe69c;">
+          Prototype — not the final site
+        </div>
 
 # freeze: auto means Quarto caches each .qmd's *rendered* code output (not the .qmd
 # source) under _freeze/ and commits it. A CI render with no network access reuses the
