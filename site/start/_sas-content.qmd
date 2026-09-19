@@ -1,14 +1,1 @@
-<!-- Placeholder for docs/CLIENTS.md (#115)'s SAS section, being written on a
-     separate branch and not yet on main. When it lands, replace this file's
-     body with that section (or an {{< include >}} pointing straight at it)
-     — sas.qmd itself needs no change either way. -->
-
-## What's coming in #115
-
-This page will document how to reach the lake from SAS — worked out and
-verified in [cancer-on-ice#115](https://github.com/seandavi/cancer-on-ice/issues/115),
-not invented here. Nothing SAS-specific is published on this site yet.
-
-If you can reach a DuckDB CLI or Python environment in the meantime, the
-[DuckDB CLI](duckdb-cli.qmd) page can write any query's result to a CSV
-(`COPY (...) TO 'out.csv'`) for `PROC IMPORT` in the meantime.
+{{< include ../../docs/clients/sas.md >}}

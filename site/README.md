@@ -104,10 +104,18 @@ until someone actually deploys.
 
 ## CI
 
-`.github/workflows/ci.yml` runs `quarto render site` on every push/PR
-(`quarto-dev/quarto-actions/setup`, no Python/R install) — it relies
-entirely on the committed `_freeze/` cache and `data/home_map.json` above,
-so it needs no network access and no Jupyter kernel. If a page's `.qmd`
-source changes without its `_freeze/` entry being regenerated locally
-first, CI will try to re-execute it, fail (no kernel, no network), and tell
-you which page needs a real local re-render.
+`.github/workflows/ci.yml` runs `quarto render site` on every push/PR. It
+relies on the committed `_freeze/` cache and `data/home_map.json` above for
+actual page content, so it needs no network access and no working
+`duckdb`/`canceronice` install. It does, however, still need a *registered*
+`coi-docs` kernel — Quarto's Jupyter engine resolves a kernel by name before
+it will even consult the freeze cache, confirmed to fail (even with
+`--no-execute` and a fully up-to-date freeze entry) if no kernel by that
+name exists. It doesn't need a *working* one: with valid freeze results, a
+whole-project render never actually launches it. So the `docs` job installs
+a lightweight `jupyter_core`/`jupyter_client`/`nbclient`/`ipykernel` shim
+and registers `coi-docs` against it — no `duckdb`, `pandas`, or this
+project's own package. If a page's `.qmd` source changes without its
+`_freeze/` entry being regenerated locally first, CI will try to
+re-execute it, fail (the shim kernel has none of the real dependencies),
+and tell you which page needs a real local re-render.

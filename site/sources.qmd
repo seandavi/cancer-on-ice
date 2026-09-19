@@ -39,7 +39,7 @@ CLI_SUBCOMMAND = {
     "bls_laus": "laus",
 }
 
-SRC_DIR = Path("../../src/canceronice")
+SRC_DIR = Path("../src/canceronice")
 KNOWN_TABLES = set(schemas.TABLES)
 TABLE_RE = re.compile(r'"([a-z_]+\.[a-zA-Z0-9_]+)"')
 

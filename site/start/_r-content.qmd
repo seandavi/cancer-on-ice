@@ -1,18 +1,1 @@
-<!-- Placeholder for docs/CLIENTS.md (#115)'s R section, being written on a
-     separate branch and not yet on main. When it lands, replace this file's
-     body with that section (or an {{< include >}} pointing straight at it)
-     — r.qmd itself needs no change either way. -->
-
-## What's here today
-
-DuckDB's [R client](https://duckdb.org/docs/api/r) (`install.packages("duckdb")`)
-speaks the same SQL every other client on this site uses — the `ATTACH`
-statement on the [Start here](index.qmd) page and the query patterns on the
-[Python](python.qmd) page carry over directly: open a
-`duckdb::duckdb()` connection, `dbExecute()` the `INSTALL`/`LOAD`/`ATTACH`
-statements once, then `dbGetQuery()` any SQL from this site.
-
-## What's coming in #115
-
-Worked R examples for the recipes on this site — tracked in
-[cancer-on-ice#115](https://github.com/seandavi/cancer-on-ice/issues/115).
+{{< include ../../docs/clients/r.md >}}
