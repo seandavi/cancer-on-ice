@@ -1982,10 +1982,246 @@ TABLES = {
     # independent branches merge cleanly.
 
     # --- raw: epa sdwis ---
-    # EPA SDWIS drinking-water violations (#53).
-    # The table declaration(s) goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    # EPA SDWIS Federal (via ECHO's SDWA bulk download): public water systems,
+    # their violations, and the counties/areas they serve, refreshed quarterly
+    # (SPEC.md § Sources — second tranche). Public domain (17 U.S.C. § 105).
+    # ADMIN_NAME/EMAIL_ADDR/PHONE_NUMBER/PHONE_EXT_NUMBER/FAX_NUMBER/
+    # ALT_PHONE_NUMBER are excluded from raw.sdwis__pub_water_systems -- see
+    # epa_sdwis.py's module docstring.
+    "raw.sdwis__pub_water_systems": TableDef(
+        schema=Schema(
+            NestedField(1, "SUBMISSIONYEARQUARTER", StringType(), required=True,
+                        doc="Fiscal year and quarter of this quarterly SDWIS snapshot, e.g. "
+                            "'2026Q2' -- this source's version axis. Raw is replaced wholesale "
+                            "per value of this column."),
+            NestedField(2, "PWSID", StringType(), required=True,
+                        doc="Public water system id: a two-letter state, territory, or numeric "
+                            "EPA-region code, followed by seven digits, e.g. 'CT1680051'."),
+            NestedField(3, "PWS_NAME", StringType(), doc="Water system name."),
+            NestedField(4, "PRIMACY_AGENCY_CODE", StringType(),
+                        doc="Two-character state/territory code, or a numeric EPA Region code, "
+                            "of the agency with primary enforcement responsibility."),
+            NestedField(5, "EPA_REGION", StringType(), doc="EPA Region number."),
+            NestedField(6, "SEASON_BEGIN_DATE", StringType(),
+                        doc="Opening month/day of a seasonal system's service period."),
+            NestedField(7, "SEASON_END_DATE", StringType(),
+                        doc="Closing month/day of a seasonal system's service period."),
+            NestedField(8, "PWS_ACTIVITY_CODE", StringType(),
+                        doc="Current activity status: A active, I inactive, N never operated, "
+                            "M merged/consolidated, P potential future system. A current-snapshot "
+                            "field, not a per-year history -- see module docstring."),
+            NestedField(9, "PWS_DEACTIVATION_DATE", StringType(),
+                        doc="Date the system was reported closed/deactivated."),
+            NestedField(10, "PWS_TYPE_CODE", StringType(),
+                        doc="CWS community, TNCWS transient non-community, NTNCWS non-transient "
+                            "non-community, or NP."),
+            NestedField(11, "DBPR_SCHEDULE_CAT_CODE", StringType(),
+                        doc="Stage 2 Disinfectant Byproducts Rule monitoring category."),
+            NestedField(12, "CDS_ID", StringType(), doc="Combined distribution system id."),
+            NestedField(13, "GW_SW_CODE", StringType(), doc="Groundwater or surface water source."),
+            NestedField(14, "LT2_SCHEDULE_CAT_CODE", StringType(),
+                        doc="Long Term 2 Enhanced Surface Water Treatment Rule category."),
+            NestedField(15, "OWNER_TYPE_CODE", StringType(),
+                        doc="Ownership: F federal, L local, M public/private, N native American, "
+                            "P private, S state."),
+            NestedField(16, "POPULATION_SERVED_COUNT", StringType(),
+                        doc="Estimated average daily population served, as of this snapshot -- "
+                            "not a per-year historical figure (module docstring)."),
+            NestedField(17, "POP_CAT_2_CODE", StringType(), doc="Population-size category (2 tiers)."),
+            NestedField(18, "POP_CAT_3_CODE", StringType(), doc="Population-size category (3 tiers)."),
+            NestedField(19, "POP_CAT_4_CODE", StringType(), doc="Population-size category (4 tiers)."),
+            NestedField(20, "POP_CAT_5_CODE", StringType(), doc="Population-size category (5 tiers)."),
+            NestedField(21, "POP_CAT_11_CODE", StringType(), doc="Population-size category (11 tiers)."),
+            NestedField(22, "PRIMACY_TYPE", StringType(),
+                        doc="State, tribal, territorial, or EPA-direct primacy regulation."),
+            NestedField(23, "PRIMARY_SOURCE_CODE", StringType(),
+                        doc="Primary water source, e.g. GW, SW, GU, GWP, SWP."),
+            NestedField(24, "IS_GRANT_ELIGIBLE_IND", StringType(), doc="Grant eligibility indicator."),
+            NestedField(25, "IS_WHOLESALER_IND", StringType(), doc="Wholesaler status indicator."),
+            NestedField(26, "IS_SCHOOL_OR_DAYCARE_IND", StringType(),
+                        doc="School-or-daycare service-area indicator."),
+            NestedField(27, "SERVICE_CONNECTIONS_COUNT", StringType(),
+                        doc="Number of service connections."),
+            NestedField(28, "SUBMISSION_STATUS_CODE", StringType(),
+                        doc="Reported/unreported/rejected submission status."),
+            NestedField(29, "ORG_NAME", StringType(),
+                        doc="The organization (legal entity) associated with the system. For "
+                            "many small systems the legal entity IS a sole proprietor and this "
+                            "is that person's name as publicly filed with EPA -- unlike "
+                            "ADMIN_NAME/EMAIL_ADDR/PHONE_NUMBER (excluded from this table), this "
+                            "is the organizational-identity field itself, the same kind of public "
+                            "business-registration fact any facility source in this lake carries."),
+            NestedField(30, "ADDRESS_LINE1", StringType(), doc="Address line 1."),
+            NestedField(31, "ADDRESS_LINE2", StringType(), doc="Address line 2."),
+            NestedField(32, "CITY_NAME", StringType(), doc="City."),
+            NestedField(33, "ZIP_CODE", StringType(), doc="USPS ZIP code."),
+            NestedField(34, "COUNTRY_CODE", StringType(), doc="Two-character country code."),
+            NestedField(35, "FIRST_REPORTED_DATE", StringType(), doc="First reported date for the system."),
+            NestedField(36, "LAST_REPORTED_DATE", StringType(), doc="Last reported date for the system."),
+            NestedField(37, "STATE_CODE", StringType(),
+                        doc="USPS state abbreviation of the system's address -- a mailing "
+                            "address, not necessarily the state of the geography it serves (see "
+                            "raw.sdwis__geographic_areas); can be NULL or non-US for a handful of "
+                            "systems."),
+            NestedField(38, "SOURCE_WATER_PROTECTION_CODE", StringType(),
+                        doc="Source water protection implementation status."),
+            NestedField(39, "SOURCE_PROTECTION_BEGIN_DATE", StringType(),
+                        doc="Date source water protection was substantially implemented."),
+            NestedField(40, "OUTSTANDING_PERFORMER", StringType(),
+                        doc="Outstanding-performer criteria compliance."),
+            NestedField(41, "OUTSTANDING_PERFORM_BEGIN_DATE", StringType(),
+                        doc="Date outstanding-performer criteria was met."),
+            NestedField(42, "REDUCED_RTCR_MONITORING", StringType(),
+                        doc="Reduced Revised Total Coliform Rule monitoring frequency."),
+            NestedField(43, "REDUCED_MONITORING_BEGIN_DATE", StringType(),
+                        doc="Start date of reduced monitoring."),
+            NestedField(44, "REDUCED_MONITORING_END_DATE", StringType(),
+                        doc="End date of reduced monitoring."),
+            NestedField(45, "SEASONAL_STARTUP_SYSTEM", StringType(),
+                        doc="Seasonal pressurization/startup status."),
+            NestedField(46, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="EPA SDWIS Federal public water systems, landed verbatim and whole (minus six "
+                "individual-contact columns, excluded -- see epa_sdwis.py). One row per PWSID, "
+                "replaced wholesale per SUBMISSIONYEARQUARTER (SPEC.md § Sources — second "
+                "tranche). Public domain (17 U.S.C. § 105).",
+    ),
+
+    "raw.sdwis__geographic_areas": TableDef(
+        schema=Schema(
+            NestedField(1, "SUBMISSIONYEARQUARTER", StringType(), required=True,
+                        doc="This source's version axis, e.g. '2026Q2'. Raw is replaced "
+                            "wholesale per value of this column."),
+            NestedField(2, "PWSID", StringType(), required=True, doc="Public water system id."),
+            NestedField(3, "GEO_ID", StringType(),
+                        doc="EPA's own system-generated id for this (PWSID, area) record -- "
+                            "unrelated to cancerOnIce's own geo_id convention used elsewhere in "
+                            "this catalog."),
+            NestedField(4, "AREA_TYPE_CODE", StringType(),
+                        doc="TR tribal, CN county, ZC zip code, CT city, IR Indian reservation, "
+                            "or NULL/unknown. Only CN rows are used to derive county measures."),
+            NestedField(5, "TRIBAL_CODE", StringType(),
+                        doc="EPA code for the Indian reservation or Alaska Native village."),
+            NestedField(6, "STATE_SERVED", StringType(),
+                        doc="State the facility is serving, per EPA's own documentation -- empty "
+                            "on every CN (county) row observed in the real 2026Q2 download; "
+                            "epa_sdwis.py derives the state from PWSID's own two-letter prefix "
+                            "instead (see its module docstring)."),
+            NestedField(7, "ANSI_ENTITY_CODE", StringType(),
+                        doc="ANSI/FIPS county entity code, 3-digit zero-padded. Paired with the "
+                            "state implied by PWSID's prefix, via raw.sdwis__ref_ansi_areas, to "
+                            "build a county FIPS code. NULL on non-county rows; on some CN rows "
+                            "it is populated but does not match any real county for that state "
+                            "(bad upstream data) -- excluded and reported, never guessed."),
+            NestedField(8, "ZIP_CODE_SERVED", StringType(), doc="ZIP code served, on ZC rows."),
+            NestedField(9, "CITY_SERVED", StringType(), doc="City name served, on CT rows."),
+            NestedField(10, "COUNTY_SERVED", StringType(),
+                        doc="County name as reported; sometimes NULL even when ANSI_ENTITY_CODE "
+                            "is populated. Not used for the FIPS derivation, kept for reference."),
+            NestedField(11, "LAST_REPORTED_DATE", StringType(), doc="Last reported date."),
+            NestedField(12, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="EPA SDWIS Federal: every county/city/zip/tribal area each public water system "
+                "reports serving, landed verbatim and whole, replaced wholesale per "
+                "SUBMISSIONYEARQUARTER (SPEC.md § Sources — second tranche). A system serving "
+                "several counties has one row per county. Public domain (17 U.S.C. § 105).",
+    ),
+
+    "raw.sdwis__violations_enforcement": TableDef(
+        schema=Schema(
+            NestedField(1, "SUBMISSIONYEARQUARTER", StringType(), required=True,
+                        doc="This source's version axis, e.g. '2026Q2'. Raw is replaced "
+                            "wholesale per value of this column."),
+            NestedField(2, "PWSID", StringType(), required=True, doc="Public water system id."),
+            NestedField(3, "VIOLATION_ID", StringType(),
+                        doc="System-generated violation id; NULL on enforcement-only rows with "
+                            "no associated violation. (PWSID, VIOLATION_ID) identifies one "
+                            "violation but is NOT this table's row key: a violation with several "
+                            "enforcement actions repeats across several rows sharing the same "
+                            "(PWSID, VIOLATION_ID) and a different ENFORCEMENT_ID -- verified "
+                            "against the real 2026Q2 file, whose 15,432,737 rows compress to "
+                            "5,514,271 distinct (PWSID, VIOLATION_ID) pairs. Deriving a count of "
+                            "violations must count DISTINCT (PWSID, VIOLATION_ID), never rows."),
+            NestedField(4, "FACILITY_ID", StringType(), doc="Facility id within the water system."),
+            NestedField(5, "COMPL_PER_BEGIN_DATE", StringType(), doc="Compliance period begin date."),
+            NestedField(6, "COMPL_PER_END_DATE", StringType(), doc="Compliance period end date."),
+            NestedField(7, "NON_COMPL_PER_BEGIN_DATE", StringType(),
+                        doc="Noncompliance period begin date -- the violation-year axis "
+                            "epa_sdwis.py derives measure.observation's period_start/period_end "
+                            "from. Verified constant within a (PWSID, VIOLATION_ID) group."),
+            NestedField(8, "NON_COMPL_PER_END_DATE", StringType(), doc="Noncompliance period end date."),
+            NestedField(9, "PWS_DEACTIVATION_DATE", StringType(), doc="System deactivation date, if any."),
+            NestedField(10, "VIOLATION_CODE", StringType(), doc="Violation type code."),
+            NestedField(11, "VIOLATION_CATEGORY_CODE", StringType(),
+                        doc="Category: TT, MRDL, MCL, MR, MON, RPT, etc."),
+            NestedField(12, "IS_HEALTH_BASED_IND", StringType(),
+                        doc="'Y' for a health-based violation, 'N' or NULL otherwise. "
+                            "epa_sdwis.py's derived measure counts 'Y' only. Verified constant "
+                            "within a (PWSID, VIOLATION_ID) group."),
+            NestedField(13, "CONTAMINANT_CODE", StringType(), doc="Contaminant code."),
+            NestedField(14, "VIOL_MEASURE", StringType(), doc="Analytical result value, unparsed."),
+            NestedField(15, "UNIT_OF_MEASURE", StringType(), doc="Unit of VIOL_MEASURE."),
+            NestedField(16, "FEDERAL_MCL", StringType(), doc="Federal maximum contaminant level exceeded."),
+            NestedField(17, "STATE_MCL", StringType(), doc="State maximum contaminant level exceeded."),
+            NestedField(18, "IS_MAJOR_VIOL_IND", StringType(), doc="Major/minor designation for MR violations."),
+            NestedField(19, "SEVERITY_IND_CNT", StringType(), doc="Severity count for certain DBPR/IESWTR violations."),
+            NestedField(20, "CALCULATED_RTC_DATE", StringType(), doc="Date the system returned to compliance."),
+            NestedField(21, "VIOLATION_STATUS", StringType(),
+                        doc="Resolved, Archived, Addressed, or Unaddressed."),
+            NestedField(22, "PUBLIC_NOTIFICATION_TIER", StringType(), doc="Public notification tier."),
+            NestedField(23, "CALCULATED_PUB_NOTIF_TIER", StringType(), doc="Calculated public notification tier."),
+            NestedField(24, "VIOL_ORIGINATOR_CODE", StringType(), doc="F federal, H state, R reporting agency, S state."),
+            NestedField(25, "SAMPLE_RESULT_ID", StringType(), doc="Reporting jurisdiction's sample-result id."),
+            NestedField(26, "CORRECTIVE_ACTION_ID", StringType(), doc="Corrective action id."),
+            NestedField(27, "RULE_CODE", StringType(), doc="National Drinking Water rule code."),
+            NestedField(28, "RULE_GROUP_CODE", StringType(), doc="Rule group code."),
+            NestedField(29, "RULE_FAMILY_CODE", StringType(), doc="Rule family code."),
+            NestedField(30, "VIOL_FIRST_REPORTED_DATE", StringType(), doc="Date the violation was first reported."),
+            NestedField(31, "VIOL_LAST_REPORTED_DATE", StringType(), doc="Date the violation was last reported."),
+            NestedField(32, "ENFORCEMENT_ID", StringType(),
+                        doc="Id of one enforcement action; several can exist per (PWSID, "
+                            "VIOLATION_ID) -- see VIOLATION_ID's doc."),
+            NestedField(33, "ENFORCEMENT_DATE", StringType(), doc="Enforcement action date."),
+            NestedField(34, "ENFORCEMENT_ACTION_TYPE_CODE", StringType(), doc="Enforcement action type."),
+            NestedField(35, "ENF_ACTION_CATEGORY", StringType(), doc="Formal, Informal, or Resolving."),
+            NestedField(36, "ENF_ORIGINATOR_CODE", StringType(), doc="F federal, H state, R reporting agency, S state."),
+            NestedField(37, "ENF_FIRST_REPORTED_DATE", StringType(), doc="Date the enforcement action was first reported."),
+            NestedField(38, "ENF_LAST_REPORTED_DATE", StringType(), doc="Date the enforcement action was last reported."),
+            NestedField(39, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="EPA SDWIS Federal violation+enforcement records, landed verbatim and whole, "
+                "replaced wholesale per SUBMISSIONYEARQUARTER (SPEC.md § Sources — second "
+                "tranche). Grain is (violation, enforcement action) -- see VIOLATION_ID's doc "
+                "for why a violation count must dedupe. Millions of rows; landed in batches "
+                "(epa_sdwis.py, ported from bioc-on-ice's ncbi.py::_land). Public domain "
+                "(17 U.S.C. § 105).",
+    ),
+
+    "raw.sdwis__ref_ansi_areas": TableDef(
+        schema=Schema(
+            NestedField(1, "ANSI_STATE_CODE", StringType(), required=True,
+                        doc="2-digit ANSI/FIPS state code, zero-padded, e.g. '09' for Connecticut."),
+            NestedField(2, "ANSI_ENTITY_CODE", StringType(), required=True,
+                        doc="3-digit ANSI/FIPS county entity code, zero-padded, e.g. '001'."),
+            NestedField(3, "ANSI_NAME", StringType(), doc="County (or equivalent) name."),
+            NestedField(4, "STATE_CODE", StringType(), required=True,
+                        doc="USPS state postal abbreviation, e.g. 'CT'. Joined against "
+                            "raw.sdwis__geographic_areas' PWSID prefix in epa_sdwis.py, since "
+                            "that table's own STATE_SERVED column is empty on county rows."),
+            NestedField(5, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="EPA's own ANSI/FIPS county reference table, bundled in the same SDWA bulk "
+                "download -- the authority epa_sdwis.py uses to turn a (PWSID prefix, "
+                "ANSI_ENTITY_CODE) pair into a real county FIPS code, and to catch the ones that "
+                "do not correspond to any real county (SPEC.md's 'report the unmatched rate "
+                "honestly' rule). Not itself versioned per quarter; replaced wholesale each "
+                "release, the same pattern as raw.census__state_fips. Public domain "
+                "(17 U.S.C. § 105).",
+    ),
 
     # --- raw: fcc broadband ---
     # FCC Broadband Data Collection (#54).
