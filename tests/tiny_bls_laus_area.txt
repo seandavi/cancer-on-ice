@@ -1,0 +1,5 @@
+area_type_code	area_code	area_text	display_level	selectable	sort_sequence
+F	CN0100100000000	Autauga County, AL	0	T	33
+F	CN0911000000000	Capitol Planning Region, CT	0	T	920
+F	CN2207100000000	Orleans Parish, LA	0	T	2687
+F	CN7200100000000	Adjuntas Municipio, PR	0	T	8235

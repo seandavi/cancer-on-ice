@@ -148,9 +148,18 @@ def main():
 
     # --- raw: bls laus ---
     # BLS Local Area Unemployment Statistics, county (#94).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import bls_laus
+    bl = sub.add_parser("laus", help="land a BLS LAUS county retrieval vintage, then derive")
+    bl.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    bl.add_argument("--county-url", dest="county_url",
+                    help="an already-downloaded la.data.64.County file or alternate URL")
+    bl.add_argument("--area-url", dest="area_url", help="an already-downloaded la.area file or alternate URL")
+    bl.add_argument("--series-url", dest="series_url", help="an already-downloaded la.series file or alternate URL")
+    bl.add_argument("--measure-url", dest="measure_url", help="an already-downloaded la.measure file or alternate URL")
+    bl.add_argument("--footnote-url", dest="footnote_url", help="an already-downloaded la.footnote file or alternate URL")
+    bl.add_argument("--vintage", help="ISO date to record as the version (default: today)")
+    bl.add_argument("--since", type=int,
+                    help="derive years >= this (default: this year minus 10)")
 
     args = p.parse_args()
 
@@ -241,9 +250,9 @@ def main():
 
     # --- raw: bls laus ---
     # BLS Local Area Unemployment Statistics, county (#94).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "laus":
+        _print(bls_laus.ingest(cat, args.release, args.county_url, args.area_url, args.series_url,
+                               args.measure_url, args.footnote_url, args.vintage, args.since))
 
     else:
         for ns in cat.list_namespaces():

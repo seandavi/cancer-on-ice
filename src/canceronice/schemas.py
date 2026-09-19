@@ -2061,10 +2061,115 @@ TABLES = {
     # independent branches merge cleanly.
 
     # --- raw: bls laus ---
-    # BLS Local Area Unemployment Statistics, county (#94).
-    # The table declaration(s) goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    # BLS Local Area Unemployment Statistics, county (#94). Landed whole per
+    # retrieval-date vintage (bls_laus.py module docstring); scoped by laus_vintage.
+    "raw.bls__laus_county": TableDef(
+        schema=Schema(
+            NestedField(1, "series_id", StringType(), required=True,
+                        doc="BLS series id, 'LAUCN<5-digit FIPS>00000000<measure_code>' -- "
+                            "e.g. 'LAUCN010010000000003' is Autauga County AL (01001), measure "
+                            "03. Every row of this file carries the 'LAUCN' county prefix "
+                            "(verified against the full real file, 3,225 areas)."),
+            NestedField(2, "year", StringType(), required=True, doc="4-digit calendar year."),
+            NestedField(3, "period", StringType(), required=True,
+                        doc="'M01'-'M12' for a calendar month, 'M13' for the annual average "
+                            "(la.period, landed in raw.bls__laus_measure's sibling la.period is "
+                            "not landed separately -- its 13 values are exactly M01-M13, not "
+                            "worth a lookup table of its own)."),
+            NestedField(4, "value", StringType(),
+                        doc="The published value, unparsed. A literal '-' means not available "
+                            "(footnote_codes explains why); never silently cast to a number."),
+            NestedField(5, "footnote_codes", StringType(),
+                        doc="FK to raw.bls__laus_footnote.footnote_code; NULL when the value "
+                            "carries no footnote."),
+            NestedField(6, "laus_vintage", StringType(), required=True,
+                        doc="Retrieval-date vintage (SPEC.md's versioning model: BLS revises "
+                            "prior months in place, so the flat file's version axis is when it "
+                            "was retrieved, not a label BLS publishes). Raw is replaced wholesale "
+                            "per value of this column; several retrievals with identical bytes "
+                            "are one vintage (bls_laus.py skips landing a repeat)."),
+            NestedField(7, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="BLS LAUS county-level (area_type_code='F') monthly + annual-average data, "
+                "landed verbatim and whole from la.data.64.County. Public domain (BLS is a "
+                "federal agency).",
+    ),
+
+    "raw.bls__laus_area": TableDef(
+        schema=Schema(
+            NestedField(1, "area_type_code", StringType(), required=True,
+                        doc="BLS area classification letter. 'F' is county/county-equivalent -- "
+                            "the only level this module derives from; other codes (state, "
+                            "metropolitan area, balance-of-state, etc.) are landed for reference "
+                            "but not used."),
+            NestedField(2, "area_code", StringType(), required=True,
+                        doc="'CN' + 2-digit state FIPS + 3-digit county FIPS + 8 zeros for a "
+                            "county-equivalent area, e.g. 'CN0100100000000' (Autauga County, AL)."),
+            NestedField(3, "area_text", StringType(), required=True, doc="Human-readable area name."),
+            NestedField(4, "display_level", StringType(), doc="BLS display grouping, as published."),
+            NestedField(5, "selectable", StringType(), doc="'T'/'F', as published."),
+            NestedField(6, "sort_sequence", StringType(), doc="BLS display sort order, as published."),
+            NestedField(7, "laus_vintage", StringType(), required=True, doc="See raw.bls__laus_county."),
+            NestedField(8, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="BLS LAUS area code lookup (la.area), landed verbatim and whole per vintage.",
+    ),
+
+    "raw.bls__laus_series": TableDef(
+        schema=Schema(
+            NestedField(1, "series_id", StringType(), required=True, doc="See raw.bls__laus_county."),
+            NestedField(2, "area_type_code", StringType(), required=True, doc="See raw.bls__laus_area."),
+            NestedField(3, "area_code", StringType(), required=True, doc="FK raw.bls__laus_area."),
+            NestedField(4, "measure_code", StringType(), required=True, doc="FK raw.bls__laus_measure."),
+            NestedField(5, "seasonal", StringType(), required=True,
+                        doc="'S' seasonally adjusted, 'U' not. Every county-level series is 'U' "
+                            "(verified against the full real file) -- LAUS publishes no "
+                            "seasonally-adjusted county series."),
+            NestedField(6, "srd_code", StringType(), doc="BLS state/regional division code, as published."),
+            NestedField(7, "series_title", StringType(), required=True, doc="Human-readable series title."),
+            NestedField(8, "footnote_codes", StringType(), doc="Footnote(s) on the series overall, if any."),
+            NestedField(9, "begin_year", StringType(), doc="First year this series has data."),
+            NestedField(10, "begin_period", StringType(), doc="First period this series has data."),
+            NestedField(11, "end_year", StringType(), doc="Last year this series has data, as of this vintage."),
+            NestedField(12, "end_period", StringType(), doc="Last period this series has data, as of this vintage."),
+            NestedField(13, "laus_vintage", StringType(), required=True, doc="See raw.bls__laus_county."),
+            NestedField(14, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="BLS LAUS series identification lookup (la.series), landed verbatim and whole "
+                "per vintage. Not read by this module's derive step -- the county data file's own "
+                "series_id already encodes area + measure (raw.bls__laus_county's doc) -- landed "
+                "for reference and for a future series-title/date-range lookup need.",
+    ),
+
+    "raw.bls__laus_measure": TableDef(
+        schema=Schema(
+            NestedField(1, "measure_code", StringType(), required=True,
+                        doc="2-digit measure code, e.g. '03' = unemployment rate."),
+            NestedField(2, "measure_text", StringType(), required=True, doc="Human-readable measure name."),
+            NestedField(3, "laus_vintage", StringType(), required=True, doc="See raw.bls__laus_county."),
+            NestedField(4, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="BLS LAUS measure code lookup (la.measure), landed verbatim and whole per vintage.",
+    ),
+
+    "raw.bls__laus_footnote": TableDef(
+        schema=Schema(
+            NestedField(1, "footnote_code", StringType(), required=True,
+                        doc="Single-letter footnote code, e.g. 'N' = not available."),
+            NestedField(2, "footnote_text", StringType(), required=True, doc="Footnote text, as published."),
+            NestedField(3, "laus_vintage", StringType(), required=True, doc="See raw.bls__laus_county."),
+            NestedField(4, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="BLS LAUS footnote code lookup (la.footnote), landed verbatim and whole per "
+                "vintage -- the real, complete set of sentinel/reliability codes this source "
+                "publishes (bls_laus.py's FOOTNOTE_TEXT mirrors it and SystemExits on a code "
+                "not in this table).",
+    ),
 }
 
 
