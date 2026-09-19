@@ -406,7 +406,7 @@ ingest, as in biocOnIce.
 | **Census TIGER/Line + relationship files** | the spine | boundary vintage | public domain; geometry → GeoParquet/PMTiles pointer |
 | **State Cancer Profiles** | county incidence, mortality, screening, risk, demographics | vintage | land from scraper releases / cdsci-lake (ADR-0012); existing Zenodo vintages backfill history |
 | **SEER county & tract population** | denominators matching the rates | release | freely downloadable, no DUA |
-| **ACS 5-year** (curated table subset) | demographics, insurance, poverty, vehicle access | release year | public domain; MOE → `interval_level = 0.90` |
+| **ACS 5-year** (curated table subset) | demographics, poverty, vehicle access | release year | public domain; MOE → `interval_level = 0.90`; insurance/Medicaid not landed (#29 — the Census Data API now demands a key even for tiny requests, and the keyless bulk Summary File only ships detailed tables, whose insurance equivalents are 230+ columns for one overall rate) |
 | **CDC PLACES** | model-based tract/county screening & behaviors | annual release | public domain; `method = model_based` |
 | **CDC/ATSDR SVI** | area-level context index | edition (2000–2022) | land every published edition |
 | **USDA ERS RUCC / RUCA; Food Access Atlas** | rurality, food access | edition | public domain |

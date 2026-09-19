@@ -130,6 +130,17 @@ def main():
     # The local `from . import <module>` and the subparser goes directly under this comment block.
     # Leave this marker and the blank lines around it untouched so
     # independent branches merge cleanly.
+    from . import census_acs
+    acs = sub.add_parser("acs", help="land a Census ACS 5-year Summary File release's county "
+                         "or tract detailed tables, then derive the CIF-parity indicator subset")
+    acs.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    acs.add_argument("--year", required=True, type=int,
+                     help="ACS 5-year release end year (e.g. 2023 for the 2019-2023 release)")
+    acs.add_argument("--level", required=True, choices=("county", "tract"),
+                     help="geography level to land")
+    acs.add_argument("--dat-dir", dest="dat_dir",
+                     help="a directory of already-downloaded acsdt5y<year>-<table>.dat files; "
+                          "skips downloading")
 
     # --- raw: cdc places tract ---
     # CDC PLACES tract releases (#30).
@@ -251,6 +262,8 @@ def main():
     # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
     # Leave this marker and the blank lines around it untouched so
     # independent branches merge cleanly.
+    elif args.cmd == "acs":
+        _print(census_acs.ingest(cat, args.release, args.year, args.level, args.dat_dir))
 
     # --- raw: cdc places tract ---
     # CDC PLACES tract releases (#30).
