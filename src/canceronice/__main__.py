@@ -120,9 +120,13 @@ def main():
 
     # --- raw: fda mqsa ---
     # FDA MQSA certified mammography facilities (#36).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import fda_mqsa
+    mq = sub.add_parser("mqsa", help="land the weekly FDA MQSA certified facility list, "
+                        "then derive facility.site")
+    mq.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    mq.add_argument("--url", help="an already-downloaded zip/txt file or alternate URL")
+    mq.add_argument("--retrieved-on", dest="retrieved_on",
+                    help="ISO date to record as the version (default: today)")
 
     # --- raw: epa sdwis ---
     # EPA SDWIS drinking-water violations (#53).
@@ -214,9 +218,8 @@ def main():
 
     # --- raw: fda mqsa ---
     # FDA MQSA certified mammography facilities (#36).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "mqsa":
+        _print(fda_mqsa.ingest(cat, args.release, args.url, args.retrieved_on))
 
     # --- raw: epa sdwis ---
     # EPA SDWIS drinking-water violations (#53).
