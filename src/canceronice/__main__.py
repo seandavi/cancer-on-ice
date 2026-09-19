@@ -135,10 +135,15 @@ def main():
                     help="ISO date to record as the version (default: today)")
 
     # --- raw: epa sdwis ---
-    # EPA SDWIS drinking-water violations (#53).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import epa_sdwis
+    sd = sub.add_parser("sdwis", help="land one EPA SDWIS quarterly SDWA bulk download, "
+                        "then derive county-year health-based violation counts")
+    sd.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    sd.add_argument("--url", help="an already-downloaded SDWA zip file or alternate URL")
+    sd.add_argument("--pws-url", dest="pws_url", help="an already-downloaded pub_water_systems CSV")
+    sd.add_argument("--geo-url", dest="geo_url", help="an already-downloaded geographic_areas CSV")
+    sd.add_argument("--viol-url", dest="viol_url", help="an already-downloaded violations_enforcement CSV")
+    sd.add_argument("--ansi-url", dest="ansi_url", help="an already-downloaded ref_ansi_areas CSV")
 
     # --- raw: fcc broadband ---
     # FCC Broadband Data Collection (#54).
@@ -237,10 +242,9 @@ def main():
         _print(fda_mqsa.ingest(cat, args.release, args.url, args.retrieved_on))
 
     # --- raw: epa sdwis ---
-    # EPA SDWIS drinking-water violations (#53).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "sdwis":
+        _print(epa_sdwis.ingest(cat, args.release, args.url, args.pws_url, args.geo_url,
+                                args.viol_url, args.ansi_url))
 
     # --- raw: fcc broadband ---
     # FCC Broadband Data Collection (#54).
