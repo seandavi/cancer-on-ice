@@ -175,6 +175,19 @@ def main():
     # Leave this marker and the blank lines around it untouched so
     # independent branches merge cleanly.
 
+    # --- raw: epa ejscreen ---
+    # EPA EJScreen, every archived edition (#97).
+    from . import ejscreen
+    ej = sub.add_parser("ejscreen", help="land one EPA EJScreen edition's block group "
+                        "or tract file, then derive (tract only)")
+    ej.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    ej.add_argument("--edition", choices=sorted(ejscreen.EDITIONS, key=int),
+                    help="EJScreen edition (default: latest known)")
+    ej.add_argument("--level", choices=("blockgroup", "tract"), default="blockgroup",
+                    help="geography level to land (default: blockgroup; tract is only "
+                         f"landed for {ejscreen.TRACT_EDITIONS})")
+    ej.add_argument("--url", help="an already-downloaded CSV/zip file or alternate URL")
+
     # --- raw: bls laus ---
     # BLS Local Area Unemployment Statistics, county (#94).
     from . import bls_laus
@@ -286,6 +299,11 @@ def main():
     # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
     # Leave this marker and the blank lines around it untouched so
     # independent branches merge cleanly.
+
+    # --- raw: epa ejscreen ---
+    # EPA EJScreen, every archived edition (#97).
+    elif args.cmd == "ejscreen":
+        _print(ejscreen.ingest(cat, args.release, args.edition, args.level, args.url))
 
     # --- raw: bls laus ---
     # BLS Local Area Unemployment Statistics, county (#94).

@@ -3166,6 +3166,109 @@ TABLES = {
                 "publishes (bls_laus.py's FOOTNOTE_TEXT mirrors it and SystemExits on a code "
                 "not in this table).",
     ),
+
+    # --- raw: epa ejscreen ---
+    # EPA EJScreen, every archived edition, block group + tract (#97). EPA removed it
+    # from epa.gov in Feb 2025; landed from EDGI's DOI-bearing Zenodo archive (CC-BY-4.0,
+    # doi:10.5281/zenodo.14767363) -- see ejscreen.py module docstring.
+    "raw.ejscreen__blockgroup": TableDef(
+        schema=Schema(
+            NestedField(1, "geo_id", StringType(), required=True,
+                        doc="Block group GEOID as published (12-digit numeric string, e.g. "
+                            "'010010201001'). NOT yet a geography.unit FK -- census_gazetteer.py "
+                            "lands county/tract only, no block_group level (ejscreen.py module "
+                            "docstring); Iceberg enforces no FK either way."),
+            NestedField(2, "pm25", StringType(), doc="PM2.5 concentration (annual mean), "
+                        "modeled, unparsed as published."),
+            NestedField(3, "ozone", StringType(), doc="Ozone concentration (seasonal average), "
+                        "modeled, unparsed as published."),
+            NestedField(4, "dslpm", StringType(), doc="Diesel particulate matter concentration, "
+                        "modeled (NATA), unparsed as published."),
+            NestedField(5, "cancer", StringType(), doc="Air toxics cancer risk, modeled (NATA), "
+                        "unparsed as published. Not published from the 2024 edition onward "
+                        "(replaced by rsei_air) -- NULL there."),
+            NestedField(6, "resp", StringType(), doc="Air toxics respiratory hazard index, "
+                        "modeled (NATA), unparsed as published. Not published from the 2024 "
+                        "edition onward (replaced by rsei_air) -- NULL there."),
+            NestedField(7, "rsei_air", StringType(), doc="Air toxics concentration score "
+                        "(RSEI-based), unparsed as published. Published from the 2023 edition "
+                        "onward only -- NULL before."),
+            NestedField(8, "ptraf", StringType(), doc="Traffic proximity and volume near major "
+                        "roads, unparsed as published."),
+            NestedField(9, "pre1960pct", StringType(), doc="Percent of housing units built "
+                        "before 1960 (lead-paint exposure indicator), unparsed as published."),
+            NestedField(10, "pnpl", StringType(), doc="Proximity to National Priorities List "
+                        "(Superfund) sites, unparsed as published."),
+            NestedField(11, "prmp", StringType(), doc="Proximity to Risk Management Plan (RMP) "
+                        "facilities, unparsed as published."),
+            NestedField(12, "ptsdf", StringType(), doc="Proximity to hazardous waste treatment/"
+                        "storage/disposal facilities, unparsed as published."),
+            NestedField(13, "ust", StringType(), doc="Proximity to leaking/underground storage "
+                        "tanks, unparsed as published. Published from the 2021 edition onward "
+                        "only -- NULL before."),
+            NestedField(14, "pwdis", StringType(), doc="Proximity-weighted modeled toxic "
+                        "concentration from NPDES wastewater dischargers, unparsed as published."),
+            NestedField(15, "no2", StringType(), doc="NO2 (nitrogen dioxide) concentration, "
+                        "modeled, unparsed as published. Published in the 2024 edition only -- "
+                        "NULL before."),
+            NestedField(16, "dwater", StringType(), doc="Drinking water non-compliance "
+                        "indicator, unparsed as published. Published in the 2024 edition only "
+                        "-- NULL before."),
+            NestedField(17, "ejscreen_edition", StringType(), required=True,
+                        doc="The EJScreen edition (2015-2024) -- the version axis for this "
+                            "source. Raw is replaced wholesale per value of this column."),
+            NestedField(18, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+            NestedField(19, "extra_json", StringType(),
+                        doc="Every other column this edition's file publishes (demographic "
+                            "bases, percentile/statistical-comparison breakdown columns, "
+                            "geometry bookkeeping -- ~130-380 columns whose exact set shifts "
+                            "release to release), as one JSON object per row, text-valued, "
+                            "verbatim -- including geo_id and the columns broken out above. "
+                            "Same 'declared columns for what's used, JSON for the rest' shape "
+                            "as facility.site.attributes_json (ejscreen.py module docstring)."),
+        ),
+        sort_by=("ejscreen_edition", "geo_id"),
+        comment="EPA EJScreen block group file, landed verbatim and whole per edition "
+                "(SPEC.md Sources: 'land every published edition'). CC-BY-4.0 (Zenodo "
+                "doi:10.5281/zenodo.14767363) over U.S. Government (EPA) geospatial data, "
+                "public domain by default (17 U.S.C. Sec 105).",
+    ),
+
+    "raw.ejscreen__tract": TableDef(
+        schema=Schema(
+            NestedField(1, "geo_id", StringType(), required=True,
+                        doc="Tract GEOID as published (11-digit numeric string, e.g. "
+                            "'01001020100'). FK geography.unit (census_gazetteer.py lands "
+                            "tract), together with the edition's GEO_VINTAGE."),
+            NestedField(2, "pm25", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(3, "ozone", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(4, "dslpm", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(5, "cancer", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(6, "resp", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(7, "rsei_air", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(8, "ptraf", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(9, "pre1960pct", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(10, "pnpl", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(11, "prmp", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(12, "ptsdf", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(13, "ust", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(14, "pwdis", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(15, "no2", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(16, "dwater", StringType(), doc="See raw.ejscreen__blockgroup."),
+            NestedField(17, "ejscreen_edition", StringType(), required=True,
+                        doc="See raw.ejscreen__blockgroup. Only landed for editions "
+                            "2021-2024 -- EPA published no separate tract file before."),
+            NestedField(18, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+            NestedField(19, "extra_json", StringType(), doc="See raw.ejscreen__blockgroup."),
+        ),
+        sort_by=("ejscreen_edition", "geo_id"),
+        comment="EPA EJScreen tract file, landed verbatim and whole per edition (2021-2024 "
+                "only -- EPA's own separate tract product, not a block-group aggregation "
+                "this module computes). Same licence as raw.ejscreen__blockgroup. The only "
+                "level derived into measure.observation today (ejscreen.py module docstring).",
+    ),
 }
 
 
