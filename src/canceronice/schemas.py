@@ -92,9 +92,14 @@ TABLES = {
                             "'2026.10.2' and release ordering would otherwise invert."),
             NestedField(2, "source", StringType(), required=True,
                         doc="Source key, e.g. scp, places, acs."),
-            NestedField(3, "source_version", StringType(),
+            NestedField(3, "source_version", StringType(), required=True,
                         doc="The upstream version in the SOURCE'S OWN vocabulary, never "
-                            "normalised. NULL only where nothing at all is knowable."),
+                            "normalised. Part of the business key together with release and "
+                            "source (#78): several source releases can land under one catalog "
+                            "release, and keying on (release, source) alone kept only the last "
+                            "one landed. Always populated — merge.manifest defaults it to the "
+                            "retrieval date when the source publishes no version label of its "
+                            "own, so it is never NULL."),
             NestedField(4, "version_method", StringType(), required=True,
                         doc="How the version was determined: release_number, "
                             "http_last_modified, etag, ftp_index_probe, retrieval_date, "
@@ -108,11 +113,13 @@ TABLES = {
             NestedField(8, "row_count", IntegerType(),
                         doc="Rows landed from this source, as a cheap integrity check."),
         ),
-        business_key=("release", "source"),
-        comment="One row per (cancerOnIce release, source): what this release was built from. "
-                "This is what makes a release reproducible — resolve it here to each "
-                "source's own version, then query each table at that release. Durable "
-                "by design: unlike Iceberg snapshot summaries it does not expire.",
+        business_key=("release", "source", "source_version"),
+        comment="One row per (cancerOnIce release, source, source_version): what this release "
+                "was built from. This is what makes a release reproducible — resolve it here to "
+                "each source's own version, then query each table at that release. Durable by "
+                "design: unlike Iceberg snapshot summaries it does not expire. Keyed on "
+                "source_version too (#78) so landing several source releases of one source "
+                "under one catalog release keeps a row for each.",
         properties={},
     ),
 
@@ -554,25 +561,62 @@ def create(cat, identifier):
 
 
 def _evolve(table, d, identifier):
-    """Add columns the declaration has gained since the table was created.
+    """Add columns the declaration has gained since the table was created, and
+    reconcile Iceberg identifier fields when the declared business key changed.
 
-    Without this a new column in a TableDef never reaches a live table, and the
-    cast in merge.write fails on it. Only optional columns can be added: existing
-    rows read NULL for them. A new *required* column has no value for the rows
-    already there, so that is a rebuild and this refuses it rather than guessing.
+    Without the column-add a new column in a TableDef never reaches a live
+    table, and the cast in merge.write fails on it. Only optional columns can
+    be added: existing rows read NULL for them. A new *required* column has no
+    value for the rows already there, so that is a rebuild and this refuses it
+    rather than guessing.
 
-    ponytail: additions only. A changed type, a dropped column or a changed doc
-    string is left alone — handle those when one actually happens.
+    Identifier fields follow the same rule, one level up: Iceberg requires an
+    identifier field to be `required` (pyiceberg validates this at schema
+    construction), so a business-key change is only reconcilable in place when
+    every field in the new key is already required on the live table —
+    `update_schema().set_identifier_fields(...)` handles exactly that case.
+    When a newly-keyed field is still optional live (e.g. #78's
+    provenance.release, whose source_version predates being part of the key),
+    pyiceberg cannot verify no existing row is actually NULL there, so
+    promoting it to required is refused rather than forced — see
+    docs/DEPLOY.md for the rebuild this needs instead.
+
+    ponytail: column additions and identifier-field reconciliation only. A
+    changed type, a dropped column or a changed doc string is left alone —
+    handle those when one actually happens.
     """
-    live = {f.name for f in table.schema().fields}
+    live_schema = table.schema()
+    live = {f.name for f in live_schema.fields}
     missing = [f for f in d.schema.fields if f.name not in live]
-    if not missing:
-        return table
     required = [f.name for f in missing if f.required]
     if required:
         raise ValueError(f"{identifier}: declared required column(s) {required} are not in the "
                          "live table; Iceberg cannot add a required column to existing rows — "
                          "rebuild the table")
+
+    declared_key = set(d.business_key)
+    live_key = {f.name for f in live_schema.fields if f.field_id in live_schema.identifier_field_ids}
+    key_changed = bool(declared_key) and declared_key != live_key
+    if not missing and not key_changed:
+        return table
+
+    if key_changed:
+        not_required = sorted(n for n in declared_key
+                              if n in live and not live_schema.find_field(n).required)
+        if not_required:
+            raise ValueError(
+                f"{identifier}: business key changed to {sorted(declared_key)}, but "
+                f"{not_required} is still optional on the live table. Iceberg identifier "
+                f"fields must be required, and this cannot verify no existing row is NULL "
+                f"there, so it refuses to promote it in place — see docs/DEPLOY.md for the "
+                f"rebuild.")
+
     with table.update_schema() as update:
         for f in missing:
             update.add_column(f.name, f.field_type, doc=f.doc)
+        if key_changed:
+            update.set_identifier_fields(*declared_key)
+    # `table` is updated in place by the commit above (pyiceberg sets
+    # table.metadata directly); returning it explicitly fixes a latent bug
+    # where create() got None back from here whenever a column was added.
+    return table

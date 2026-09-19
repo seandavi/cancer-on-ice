@@ -3,9 +3,13 @@ suppression invariant (SPEC.md Acceptance C). Uses the local sqlite warehouse
 only, via the shared `cat` fixture in conftest.py.
 """
 
+import dataclasses
+
 import pyarrow as pa
 import pytest
 from pyiceberg.expressions import AlwaysTrue
+from pyiceberg.schema import Schema
+from pyiceberg.types import NestedField
 
 from canceronice import merge, schemas
 
@@ -84,3 +88,51 @@ def test_manifest_writes_a_provenance_release_row(cat):
     assert row["row_count"] == 42
     assert row["source_version"] == "v1"
     assert row["version_method"] == "release_number"
+
+
+def test_manifest_keeps_one_row_per_source_version(cat):
+    """#78: several source releases can land under one catalog release; the
+    manifest keyed on (release, source, source_version) keeps a row for each,
+    rather than the last one landed overwriting the rest."""
+    for version in ("2024", "2025", "2026"):
+        merge.manifest(cat, REL1, "places", "http://example.org/places", 10,
+                       version=version, method="release_number")
+    landed = {r["source_version"]: r for r in rows(cat, "provenance.release")
+             if r["source"] == "places"}
+    assert set(landed) == {"2024", "2025", "2026"}
+    assert all(r["release"] == REL1 for r in landed.values())
+
+
+def test_manifest_same_version_twice_overwrites_its_own_row(cat):
+    merge.manifest(cat, REL1, "places", "http://example.org/places", 10,
+                   version="2024", method="release_number")
+    merge.manifest(cat, REL1, "places", "http://example.org/places", 20,
+                   version="2024", method="release_number")
+    landed = [r for r in rows(cat, "provenance.release")
+             if r["source"] == "places" and r["source_version"] == "2024"]
+    assert len(landed) == 1
+    assert landed[0]["row_count"] == 20
+
+
+def test_evolve_refuses_to_promote_business_key_field_to_required(cat, monkeypatch):
+    """#78 changed provenance.release's business key to include
+    source_version, which Iceberg requires to be `required` as an identifier
+    field. Simulates the real live table: created under the OLD declaration
+    (business_key=(release, source), source_version optional) as the first
+    live ingest actually did, then asked to evolve under the current one.
+    _evolve should refuse rather than silently force the promotion."""
+    live_def = schemas.TABLES["provenance.release"]
+    old_fields = tuple(
+        NestedField(f.field_id, f.name, f.field_type, required=False, doc=f.doc)
+        if f.name == "source_version" else f
+        for f in live_def.schema.fields
+    )
+    old_def = dataclasses.replace(live_def, schema=Schema(*old_fields),
+                                  business_key=("release", "source"))
+
+    monkeypatch.setitem(schemas.TABLES, "provenance.release", old_def)
+    schemas.create(cat, "provenance.release")  # the pre-#78 live table
+
+    monkeypatch.setitem(schemas.TABLES, "provenance.release", live_def)
+    with pytest.raises(ValueError, match="source_version.*optional"):
+        schemas.create(cat, "provenance.release")

@@ -256,15 +256,20 @@ def manifest(cat, release, source, url, rows, version=None, method="retrieval_da
     method="release_number", so the version the source itself uses is kept.
     """
     now = datetime.now(timezone.utc)
+    source_version = str(version) if version is not None else str(now.date())
     con = duckdb.connect()
     arrow = con.sql(f"""
         SELECT '{release}' AS release, '{source}' AS source,
-               '{version or now.date()}' AS source_version,
+               '{source_version}' AS source_version,
                '{method}' AS version_method,
                '{now.isoformat(timespec="seconds")}' AS retrieved_at,
                '{url}' AS url, NULL::VARCHAR AS checksum, {rows}::BIGINT AS row_count
     """).to_arrow_table()
     # A manifest row states what a completed ingest used; it is not versioned,
-    # so it is replaced wholesale for its (release, source) rather than merged.
+    # so it is replaced wholesale for its (release, source, source_version)
+    # rather than merged. source_version is part of the key (#78): several
+    # source releases can land under one catalog release, and keying on
+    # (release, source) alone kept only the last one landed.
     write(cat, "provenance.release", arrow,
-          And(EqualTo("release", release), EqualTo("source", source)))
+          And(EqualTo("release", release), EqualTo("source", source),
+              EqualTo("source_version", source_version)))
