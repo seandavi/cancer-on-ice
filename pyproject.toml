@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "duckdb>=1.4",
     "pyiceberg[sql-sqlite,pyarrow]>=0.9",
+    "sqlglot>=30.18.0",
 ]
 
 [project.scripts]
