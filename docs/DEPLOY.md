@@ -82,6 +82,35 @@ export CANCERONICE_TOKEN=$(gcloud secrets versions access latest --secret cancer
 uv run canceronice init
 ```
 
+## Rebuilding provenance.release for the source_version key (#78)
+
+`provenance.release`'s business key changed from `(release, source)` to
+`(release, source, source_version)`, and `source_version` had to become a
+required column to be a valid Iceberg identifier field. The live table was
+created under the old declaration, with `source_version` optional — `_evolve`
+(`schemas.py`) detects this and refuses to promote it in place, because
+pyiceberg cannot verify no existing row is actually NULL there. In practice
+every row written so far does have a `source_version` (`merge.manifest`
+always supplies one, defaulting to the retrieval date), so the rebuild below
+is a schema-only change, not a backfill:
+
+```python
+from canceronice import catalog
+
+cat = catalog()  # CANCERONICE_URI / CANCERONICE_TOKEN set, as in "Ingest" above
+table = cat.load_table("provenance.release")
+# allow_incompatible_changes=True: pyiceberg refuses optional -> required by
+# default because it cannot check existing rows for NULL; every row here
+# already has a source_version (see above), so this is safe.
+with table.update_schema(allow_incompatible_changes=True) as update:
+    update.update_column("source_version", required=True)
+    update.set_identifier_fields("release", "source", "source_version")
+```
+
+Run once, before deploying code built on this PR. After it, `_evolve` sees
+`source_version` already required and reconciles automatically on any future
+declaration change.
+
 ## Known gaps
 
 1. Steps 1–7 done 2026-09-18; access-control evidence is recorded on issue #15.

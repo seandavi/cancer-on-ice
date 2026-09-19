@@ -62,15 +62,18 @@ denominator — PLACES publishes model-based prevalence with no published
 numerator/denominator pair, only the population the estimate covers. They
 land in raw and stay there; `measure.observation.denominator` is NULL.
 
-ponytail: `measure.definition` has no `valid_from`/`valid_to` (SPEC.md calls
-it "replaced wholesale per source"), so it has no history either. The 2024
-release's `ISOLATION` measure became `LONELINESS` in 2025 (same slot,
-different MeasureId) — real data, checked directly. Deriving 2025 after 2024
-therefore drops the `PLACES:ISOLATION:*` definition rows even though their
-2024 `measure.observation` rows are untouched (measure.observation IS
-Type-2 versioned and scoped by source_release). This is the FK-outlives-its-
-definition gap SPEC.md's versioning model already leaves unsettled for
-measure.definition generally; not something to invent a fix for here.
+ponytail: `measure.definition` has no `valid_from`/`valid_to` — it is a
+lookup table, not Type-2 versioned (SPEC.md). Interim fix for #76: this
+module overwrites only the `measure_id`s it asserts this release
+(`And(EqualTo("source", "PLACES"), In("measure_id", ids))`), not the whole
+`source = 'PLACES'` scope, so a later release that drops a measure
+(`ISOLATION` -> `LONELINESS` in 2025 — same slot, different MeasureId, real
+data, checked directly) no longer deletes the earlier definition its still-
+live 2024 `measure.observation` rows reference. It does NOT give
+measure.definition history: if a `measure_id` that persists across releases
+changes its label/universe text, the newer release's text still silently
+overwrites the older one in place. The real fix (Type-2 measure.definition,
+or another option) is part of #19's versioning decision.
 """
 
 import re
@@ -78,7 +81,7 @@ import urllib.request
 
 import duckdb
 import pyarrow as pa
-from pyiceberg.expressions import And, EqualTo
+from pyiceberg.expressions import And, EqualTo, In
 
 from . import merge
 
@@ -230,7 +233,7 @@ def transform(cat, release, places_release):
                Data_Value_Unit, Short_Question_Text
         FROM raw
     """).fetchall()
-    definition = pa.Table.from_pylist([
+    definition_rows = [
         dict(measure_id=f"PLACES:{measure_id}:{variant}", source="PLACES",
              label=short_text, units=unit, universe=_universe(measure_text),
              rate_basis="percent",
@@ -238,14 +241,16 @@ def transform(cat, release, places_release):
              method="model_based", cancer_site_code=None,
              doc=f"{measure_text}. Category: {category}.")
         for measure_id, variant, measure_text, category, unit, short_text in defs
-    ])
+    ]
+    definition = pa.Table.from_pylist(definition_rows)
 
     # PLACES publishes no stratification within a county estimate — one
     # all-persons stratum covers every row.
-    stratum = pa.Table.from_pylist([dict(
+    stratum_rows = [dict(
         stratum_id="PLACES:ALL", source="PLACES", sex=None, age_group=None,
         race_ethnicity=None, stage=None, other=None, scheme="PLACES_TOTAL",
-    )])
+    )]
+    stratum = pa.Table.from_pylist(stratum_rows)
 
     value_status = _case("Data_Value_Footnote", FOOTNOTE_STATUS)
     observation = con.sql(f"""
@@ -272,11 +277,18 @@ def transform(cat, release, places_release):
     """).to_arrow_table()
     merge.check_observations(observation)
 
+    # Overwrite only the ids this release asserts, not the whole `source =
+    # 'PLACES'` scope — a wholesale replace deleted a live definition a live
+    # observation still referenced (#76).
     return {
-        "measure.definition": merge.write(cat, "measure.definition", definition,
-                                          EqualTo("source", "PLACES")),
-        "measure.stratum": merge.write(cat, "measure.stratum", stratum,
-                                       EqualTo("source", "PLACES")),
+        "measure.definition": merge.write(
+            cat, "measure.definition", definition,
+            And(EqualTo("source", "PLACES"),
+                In("measure_id", [r["measure_id"] for r in definition_rows]))),
+        "measure.stratum": merge.write(
+            cat, "measure.stratum", stratum,
+            And(EqualTo("source", "PLACES"),
+                In("stratum_id", [r["stratum_id"] for r in stratum_rows]))),
         "measure.observation": merge.merge(
             cat, "measure.observation", observation, release,
             And(EqualTo("source", "PLACES"), EqualTo("source_release", places_release))),

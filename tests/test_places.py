@@ -249,11 +249,13 @@ def test_two_releases_coexist_and_first_is_not_retired(cat, csv2024, csv2025):
     assert denver_2024["value"] == 14.2 and denver_2024["valid_to"] is None  # untouched
     assert denver_2025["value"] == 10.3 and denver_2025["valid_to"] is None  # a distinct business key
 
-    # measure.definition has no history (SPEC.md: replaced wholesale per
-    # source) -- the 2025 ingest drops the 2024-only ISOLATION definition even
-    # though the 2024 observation row survives.
+    # measure.definition still has no history (SPEC.md: replaced wholesale per
+    # source), but the write is now scoped to the ids each release asserts
+    # (#76 interim fix), so the 2025 ingest -- which asserts LONELINESS, not
+    # ISOLATION -- no longer deletes the 2024-only ISOLATION definition that
+    # its still-live 2024 observation row references.
     defs = {d["measure_id"] for d in rows(cat, "measure.definition")}
-    assert "PLACES:ISOLATION:crude" not in defs and "PLACES:LONELINESS:crude" in defs
+    assert "PLACES:ISOLATION:crude" in defs and "PLACES:LONELINESS:crude" in defs
     still_there = [o for o in rows(cat, "measure.observation")
                   if o["measure_id"] == "PLACES:ISOLATION:crude"]
     assert len(still_there) == 1

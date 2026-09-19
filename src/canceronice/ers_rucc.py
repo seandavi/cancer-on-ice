@@ -62,7 +62,7 @@ import urllib.request
 from pathlib import Path
 
 import duckdb
-from pyiceberg.expressions import And, EqualTo
+from pyiceberg.expressions import And, EqualTo, In
 
 from . import merge
 
@@ -177,9 +177,15 @@ def transform(cat, release, edition):
     merge.check_observations(observation)
 
     scope = EqualTo("source", "RUCC")
+    # Overwrite only the ids this edition asserts, not the whole `source =
+    # 'RUCC'` scope — the same wholesale-replace shape PLACES hit in #76 (RUCC
+    # has only ever published one measure_id/stratum_id, but the scope should
+    # not depend on that staying true).
     return {
-        "measure.definition": merge.write(cat, "measure.definition", definition, scope),
-        "measure.stratum": merge.write(cat, "measure.stratum", stratum, scope),
+        "measure.definition": merge.write(cat, "measure.definition", definition,
+                                          And(scope, In("measure_id", ["RUCC:code"]))),
+        "measure.stratum": merge.write(cat, "measure.stratum", stratum,
+                                       And(scope, In("stratum_id", ["RUCC:none"]))),
         "measure.observation": merge.merge(
             cat, "measure.observation", observation, release,
             And(scope, EqualTo("source_release", edition))),
