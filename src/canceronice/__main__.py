@@ -85,9 +85,15 @@ def main():
 
     # --- raw: hrsa ahrf ---
     # HRSA Area Health Resources Files, county (#39).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import hrsa_ahrf
+    ah = sub.add_parser("ahrf", help="land the HRSA Area Health Resources Files (county), then derive")
+    ah.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    ah.add_argument("--ahrf-release", dest="ahrf_release", choices=sorted(hrsa_ahrf.RELEASES),
+                    help="AHRF release, e.g. 2024-2025 (default: latest known)")
+    ah.add_argument("--csv-url", help="an already-downloaded AHRF county CSV (or its zip); "
+                    "skips download")
+    ah.add_argument("--techdoc-url", help="an already-downloaded technical documentation "
+                    "xlsx (or its zip); skips download")
 
     # --- raw: hrsa hpsa and health centers ---
     # HRSA HPSA designations and health-center sites; declares facility.site (#38).
@@ -185,9 +191,9 @@ def main():
 
     # --- raw: hrsa ahrf ---
     # HRSA Area Health Resources Files, county (#39).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "ahrf":
+        _print(hrsa_ahrf.ingest(cat, args.release, args.ahrf_release, args.csv_url,
+                                args.techdoc_url))
 
     # --- raw: hrsa hpsa and health centers ---
     # HRSA HPSA designations and health-center sites; declares facility.site (#38).

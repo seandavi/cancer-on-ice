@@ -1700,10 +1700,45 @@ TABLES = {
     ),
 
     # --- raw: hrsa ahrf ---
-    # HRSA Area Health Resources Files, county (#39).
-    # The table declaration(s) goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    # HRSA Area Health Resources Files, county (#39). Landed LONG (one row per
+    # county/field cell) rather than one wide row per county -- see
+    # hrsa_ahrf.py's docstring for why, and for the licence finding that
+    # excludes every AMA/AHA/ADA-sourced column (physician-specialty and
+    # hospital/bed counts) from this table entirely.
+    "raw.hrsa__ahrf": TableDef(
+        schema=Schema(
+            NestedField(1, "ahrf_release", StringType(), required=True,
+                        doc="The AHRF release label, e.g. '2024-2025' -- the version column; "
+                            "raw is replaced wholesale per value of this column. NOT the year a "
+                            "value describes: one release carries many data years, encoded in "
+                            "column_name's own numeric suffix (see hrsa_ahrf.py's docstring)."),
+            NestedField(2, "file", StringType(), required=True,
+                        doc="Which landed source file this cell came from, e.g. 'AHRF2025.csv'."),
+            NestedField(3, "fips", StringType(), required=True,
+                        doc="5-digit county (or county-equivalent) FIPS code, as published -- "
+                            "zero-padded string, e.g. '01001'."),
+            NestedField(4, "column_name", StringType(), required=True,
+                        doc="The AHRF field name this cell's value came from, verbatim, e.g. "
+                            "'fedly_qualfd_hlth_ctr_24'. Only fields NOT sourced from the AMA "
+                            "Physician Masterfile, the AHA hospital survey, or the ADA Masterfile "
+                            "are landed here -- those are copyrighted third-party content and are "
+                            "excluded before landing, never reproduced in any namespace."),
+            NestedField(5, "value", StringType(),
+                        doc="The cell's raw string value, unparsed. NULL only where the source "
+                            "CSV cell itself was blank -- AHRF's own missing-data marker for "
+                            "these fields; a real reported 0 is never read as missing."),
+            NestedField(6, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed this row."),
+        ),
+        comment="HRSA Area Health Resources Files (AHRF), county level, landed LONG: one row "
+                "per (county, field) cell rather than one enormously wide row per county "
+                "(SPEC.md § Sources -- first tranche). Landed WHOLE for every field not withheld "
+                "on licence grounds -- 'whole' as SPEC.md ADR-0002 uses it, at cell granularity "
+                "rather than one wide table; public-domain federal-origin fields only. Licence: "
+                "U.S. government work, public domain (17 U.S.C. Sec 105) for every field landed "
+                "here. Fields sourced from the AMA Physician Masterfile, AHA hospital survey, or "
+                "ADA Masterfile are copyrighted third-party content and are never landed.",
+    ),
 
     # --- raw: hrsa hpsa and health centers ---
     # HRSA HPSA designations and health-center sites; declares facility.site (#38).
