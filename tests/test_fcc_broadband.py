@@ -12,6 +12,9 @@ and an 'Urban' area_data_type row for Autauga (also not derived, only
 'Total' is).
 """
 
+import io
+import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -64,9 +67,54 @@ def test_as_of_is_required(cat):
         fcc_broadband.land_raw(cat, REL, None, CSV)
 
 
-def test_file_is_required(cat):
-    with pytest.raises(SystemExit, match="--file"):
+def test_file_is_required_without_api_credentials(cat, monkeypatch):
+    monkeypatch.delenv("FCC_BDC_USERNAME", raising=False)
+    monkeypatch.delenv("FCC_BDC_TOKEN", raising=False)
+    with pytest.raises(SystemExit, match="FCC_BDC_USERNAME"):
         fcc_broadband.land_raw(cat, REL, AS_OF, None)
+
+
+def _fake_zip_bytes():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.write(CSV, arcname="bdc_us_fixed_broadband_summary_by_geography_D25_15sep2026.csv")
+    return buf.getvalue()
+
+
+def test_documented_api_route_offline(cat, monkeypatch):
+    """Route (b) (module docstring), exercised entirely offline: urlopen is
+    mocked to return the same fixture bytes route (a)'s tests use, over the
+    three documented endpoints, so this checks the URLs/headers this module
+    builds without ever touching bdc.fcc.gov -- it does NOT confirm the FCC's
+    real API behaves as documented (unverified without a live account; see
+    module docstring)."""
+    monkeypatch.setenv("FCC_BDC_USERNAME", "test-user")
+    monkeypatch.setenv("FCC_BDC_TOKEN", "test-token")
+    seen = []
+
+    def fake_urlopen(req):
+        seen.append(req.full_url)
+        assert req.get_header("Username") == "test-user"
+        assert req.get_header("Hash_value") == "test-token"
+        if "listAsOfDates" in req.full_url:
+            body = json.dumps({"data": [{"data_type": "availability", "as_of_date": AS_OF},
+                                        {"data_type": "challenge", "as_of_date": "2099-01-01"}]}).encode()
+        elif "listAvailabilityData" in req.full_url:
+            assert f"/{AS_OF}?" in req.full_url
+            assert "subcategory=Summary+by+Geography+Type+-+Other+Geographies" in req.full_url
+            body = json.dumps({"data": [{"file_id": 424242, "category": "Summary",
+                                        "subcategory": "Summary by Geography Type - Other Geographies"}]}).encode()
+        elif "downloadFile/availability/424242" in req.full_url:
+            body = _fake_zip_bytes()
+        else:
+            raise AssertionError(f"unexpected URL: {req.full_url}")
+        return io.BytesIO(body)
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    as_of, n = fcc_broadband.land_raw(cat, REL, url=None)
+    assert as_of == AS_OF  # 2099-01-01 challenge date correctly excluded from "latest"
+    assert n == 12
+    assert len(seen) == 3
 
 
 def test_derives_definitions_stratum_and_observations(cat):

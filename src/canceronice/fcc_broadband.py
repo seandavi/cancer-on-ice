@@ -24,76 +24,74 @@ checked 2026-09-18). The file this module lands carries no location_id, no
 address, and no lat/lon -- only geography-level percentages -- so it never
 touches that restriction.
 
-**Licence for the summary file itself.** BDC is administered and published by
-the FCC, a federal agency, from data providers who are statutorily required
-to file; the published percentages are the FCC's own aggregation, not a
-third-party product. As with every other federal-agency source in this repo
-(ers_rucc.py, cdc_svi.py): "Data and content created by government employees
-within the scope of their employment are not subject to domestic copyright
-protection under 17 U.S.C. Sec 105. Government works are by default in the
-U.S. Public Domain." (https://resources.data.gov/open-licenses/, checked
-2026-09-18). FCC.gov's own pages carry no more specific statement reachable
-without a login (its edge WAF returned a bare 403 to every fetch attempt,
-checked 2026-09-18) -- issue #54 was filed `license:cleared` on this general
-federal-government-work basis, same as every other public-domain source here.
+**Licence for the summary file itself -- weaker than most sources in this
+repo, and worth a human reading FCC's own terms before this merges.** BDC
+availability data is FILED BY PRIVATE BROADBAND PROVIDERS under a statutory
+reporting requirement and compiled/published by the FCC; it is not, like
+ers_rucc.py's or cdc_svi.py's data, authored by government employees in the
+course of their duties, so the usual "U.S. Government work under 17 U.S.C.
+Sec 105" reasoning applies less directly here -- it covers the FCC's
+compilation and the summary percentages it computes, but the underlying
+provider-reported facts are not obviously a government work themselves.
+FCC.gov's own data-download and terms-of-use pages could NOT be read to
+check for a more specific statement: every fetch attempt (`www.fcc.gov`,
+`help.bdc.fcc.gov`, `broadbandmap.fcc.gov`'s non-API pages) got a bare edge
+WAF 403, checked 2026-09-18. Issue #54 carries `license:cleared`, set by the
+maintainer before this module was written; this module does not change that
+label, but flags the reasoning gap above for a human to resolve by reading
+FCC's actual data-download terms in a browser (something this agent cannot
+do) before merging.
 
-**Anonymous access is real, but this module does not auto-download --
-`--file` + `--as-of` are both required. Here is exactly why.** The FCC
-publishes a token-gated bulk API (`api/public/map/downloads/...`) that needs
-an FCC User Registration account and a generated API token (per "National
-Broadband Map Public Data API Specifications and Instructions," Apr 2025,
-https://www.fcc.gov/sites/default/files/bdc-public-data-api-spec.pdf) -- that
-one is out of reach anonymously, confirmed 2026-09-18 (`GET .../api/public/
-map/downloads/listAvailabilityData/...` -> 422/405 without a token). But the
-public map's own web page (https://broadbandmap.fcc.gov/data-download/
-nationwide-data) downloads this same file for a signed-out visitor through a
-*different*, undocumented set of endpoints -- found by reading that page's
-own JS bundle (`chunk-D2KllYKw.js`'s `DownloadService`) and confirmed live,
-2026-09-18, with `curl` and no login or token whatsoever:
+**Getting the file: two sanctioned routes, no bot-detection workarounds.**
+This module does not scrape or replicate any undocumented endpoint, and does
+not send headers designed to make an automated request look like a browser
+to an edge WAF -- both would be a bypass this repo shouldn't depend on, even
+for public, non-restricted data. The two routes:
 
-  1. `GET https://broadbandmap.fcc.gov/nbm/map/api/published/downloads` --
-     every filing (`filing_subtype` e.g. "December 31, 2025", `process_uuid`).
-  2. `GET https://broadbandmap.fcc.gov/api/reference/map_processing_updates/
-     {process_uuid}` -- `data_as_of_date` and `last_updated_date` (the data
-     vintage, see below) for that filing.
-  3. `GET https://broadbandmap.fcc.gov/nbm/map/api/national_map_process/
-     nbm_get_data_download/{process_uuid}/` -- every downloadable file for
-     that filing, each with an `id`; the target is the one row with
-     `data_category == "Nationwide"` and `data_type == "Fixed Broadband
-     Summary by Geography Type - Other Geographies"`.
-  4. `GET https://broadbandmap.fcc.gov/nbm/map/api/getNBMDataDownloadFile/
-     {id}/1` -- the file itself (a zip containing one CSV).
+  (a) **`--file`, downloaded by a human.** Visit
+      https://broadbandmap.fcc.gov/data-download/nationwide-data in a
+      browser, pick a filing, and download "Fixed Broadband" under "Summary
+      by Geography Type - Other Geographies." Pass the resulting
+      `.csv`/`.csv.zip` as `--file`, with `--as-of` (there's no filing list
+      to resolve "latest" from without a filing already in hand).
 
-All four succeed via `curl` with nothing beyond an `Accept`/`Referer`/
-`Origin` header set (without them the edge WAF 403s a bare request even
-though nothing is actually access-controlled) -- e.g.:
-```
-curl -H 'Accept: application/json' \\
-     -H 'Referer: https://broadbandmap.fcc.gov/data-download/nationwide-data' \\
-     -H 'Origin: https://broadbandmap.fcc.gov' \\
-     https://broadbandmap.fcc.gov/nbm/map/api/published/downloads
-```
-**But the identical request from Python's stdlib `urllib` -- same URL, same
-headers -- gets a bare 403 from Akamai (`Server: AkamaiGHost`), confirmed
-2026-09-18 against all four endpoints AND a plain static asset on the same
-host (`/assets/environment.json`, which `curl` also fetches fine).** This is
-TLS/JA-fingerprint bot detection at the edge, not a header or cookie check --
-no header combination this module tried closed the gap, and deliberately
-reverse-engineering Akamai's fingerprint check to pass as a browser is not
-something to build even for entirely legitimate, non-restricted data. So: no
-Python auto-download. A maintainer runs step 1-4 above with `curl`/`wget`/a
-browser (all unaffected) to get the current filing's zip, then:
+  (b) **The FCC's documented, token-gated Public Data API**, used when
+      `FCC_BDC_USERNAME`/`FCC_BDC_TOKEN` are set (free FCC User Registration
+      + a token generated in the BDC system's "Manage API Access" page; see
+      "National Broadband Map Public Data API Specifications and
+      Instructions," Apr 2025,
+      https://www.fcc.gov/sites/default/files/bdc-public-data-api-spec.pdf):
+        - `GET https://bdc.fcc.gov/api/public/map/listAsOfDates`
+        - `GET https://bdc.fcc.gov/api/public/map/downloads/
+          listAvailabilityData/{as_of_date}?category=Summary&subcategory=
+          Summary+by+Geography+Type+-+Other+Geographies&technology_type=
+          Fixed+Broadband`
+        - `GET https://bdc.fcc.gov/api/public/map/downloads/downloadFile/
+          availability/{file_id}`
+      each with `username`/`hash_value` request headers. **This path is
+      implemented directly from the FCC's own published spec, but has NOT
+      been exercised against a live account -- this agent has no FCC User
+      Registration credentials to test with.** In particular, `downloadFile`'s
+      trailing `{file_type}` path segment is documented as optional and only
+      meaningful for GIS downloads (`1`/`2`); it is omitted here for this csv
+      export, which is this module's own untested reading of "optional," not
+      something the spec states outright. A maintainer with an account
+      should run it once against a real `--as-of` and compare the row counts
+      against a route-(a) download before relying on it unattended.
 
 ```
 canceronice fcc-broadband --release 2026.10 --as-of 2025-12-31 \\
     --file bdc_us_fixed_broadband_summary_by_geography_D25_15sep2026.csv.zip
+# -- or, with FCC_BDC_USERNAME / FCC_BDC_TOKEN set --
+canceronice fcc-broadband --release 2026.10
 ```
 
-`--as-of` has no default (there is no filing list to resolve "latest" from
-without step 1) and `bdc_data_vintage` lands NULL unless the maintainer also
-runs step 2 and is willing to hand-thread the result in -- reading
-`data_as_of_date`/`last_updated_date` off step 2's JSON is what a future
-`--data-vintage` flag would automate, if this ever needs revisiting.
+`bdc_data_vintage` lands NULL either way unless `--data-vintage` is also
+passed -- neither route above surfaces `last_updated_date` (BDC's own
+`api/reference/map_processing_updates/{uuid}` endpoint, which does, sits
+behind the same bot detection as the rest of the anonymous website and was
+deliberately not built around; see the git history of this file for that
+investigation and why it was dropped).
 
 **Table name departs from the issue's `raw.fcc__bdc_summary_<level>`
 suggestion.** Verified 2026-09-18: upstream ships every geography level
@@ -177,7 +175,11 @@ doc already lists `derived` as a valid value, so no SPEC.md change is needed
 (flagged in the PR per issue #54's request anyway, for visibility).
 """
 
+import json
+import os
 import tempfile
+import urllib.parse
+import urllib.request
 import zipfile
 from pathlib import Path
 
@@ -185,6 +187,13 @@ import duckdb
 from pyiceberg.expressions import And, EqualTo, In
 
 from . import merge
+
+# Route (b), the documented Public Data API (module docstring). Credentials
+# come from the environment, never from a CLI flag or a committed file.
+BDC_API_HOST = "https://bdc.fcc.gov"
+SUMMARY_CATEGORY = "Summary"
+SUMMARY_SUBCATEGORY = "Summary by Geography Type - Other Geographies"
+SUMMARY_TECHNOLOGY = "Fixed Broadband"
 
 # The file's header, in file order (verified 2026-09-18 against the Dec 31,
 # 2025 filing).
@@ -223,10 +232,56 @@ def _extract_csv(zip_path, tmpdir):
 
 
 def _resolve_csv(url, tmpdir):
-    """An already-downloaded local .csv or .csv.zip (module docstring: no
-    auto-download -- a maintainer fetches this with curl/wget/a browser)."""
+    """An already-downloaded local .csv or .csv.zip -- route (a) (module
+    docstring)."""
     src = Path(url)
     return _extract_csv(src, tmpdir) if src.suffix == ".zip" else src
+
+
+def _bdc_api_get(path, username, token, **query):
+    """One GET against the documented Public Data API -- route (b) (module
+    docstring). `username`/`hash_value` are request headers, per the spec,
+    never query parameters or a bearer token."""
+    url = f"{BDC_API_HOST}{path}"
+    if query:
+        url += "?" + urllib.parse.urlencode(query)
+    req = urllib.request.Request(url, headers={"username": username, "hash_value": token})
+    with urllib.request.urlopen(req) as r:
+        return json.load(r)
+
+
+def list_as_of_dates(username, token):
+    """Every published BDC as-of date, per the documented `listAsOfDates`
+    API (module docstring route (b))."""
+    data = _bdc_api_get("/api/public/map/listAsOfDates", username, token)["data"]
+    return sorted({d["as_of_date"] for d in data if d["data_type"] == "availability"})
+
+
+def _summary_file_id(as_of, username, token):
+    """The one nationwide fixed-broadband summary-by-geography file's id for
+    this as-of date, via the documented `listAvailabilityData` API."""
+    data = _bdc_api_get(f"/api/public/map/downloads/listAvailabilityData/{as_of}",
+                        username, token, category=SUMMARY_CATEGORY,
+                        subcategory=SUMMARY_SUBCATEGORY, technology_type=SUMMARY_TECHNOLOGY)["data"]
+    matches = [r for r in data if r.get("category") == SUMMARY_CATEGORY
+               and r.get("subcategory") == SUMMARY_SUBCATEGORY]
+    if len(matches) != 1:
+        raise SystemExit(f"fcc_broadband: expected exactly 1 nationwide summary file for "
+                         f"as-of {as_of}, found {len(matches)} (documented API; module docstring)")
+    return matches[0]["file_id"]
+
+
+def _download_via_api(as_of, username, token, tmpdir):
+    """Route (b): resolve this as-of date's file id and download it through
+    the documented `downloadFile` API. UNVERIFIED against a live account --
+    module docstring, including the `file_type` path segment this omits."""
+    file_id = _summary_file_id(as_of, username, token)
+    url = f"{BDC_API_HOST}/api/public/map/downloads/downloadFile/availability/{file_id}"
+    req = urllib.request.Request(url, headers={"username": username, "hash_value": token})
+    zpath = Path(tmpdir) / "bdc_summary.zip"
+    with urllib.request.urlopen(req) as r, open(zpath, "wb") as f:
+        f.write(r.read())
+    return _extract_csv(zpath, tmpdir), url
 
 
 def _header(path):
@@ -253,29 +308,41 @@ def _parse(csv_path, as_of, data_vintage, release):
     """).to_arrow_table()
 
 
-def land_raw(cat, release, as_of, url, data_vintage=None):
+def land_raw(cat, release, as_of=None, url=None, data_vintage=None):
     """Phase 1: one filing's nationwide summary-by-geography file, verbatim
     and whole, replaced per `bdc_as_of`.
 
-    `url` is an already-downloaded .csv or .csv.zip (module docstring: no
-    Python auto-download). `as_of` has no default -- there's no live filing
-    list to resolve "latest" from. `data_vintage` is optional (module
-    docstring's step 2); NULL when not supplied.
+    `url` is route (a): an already-downloaded .csv or .csv.zip; `as_of` is
+    then required, since there's no filing list to resolve "latest" from.
+    With `url` omitted, route (b) is used instead: `FCC_BDC_USERNAME`/
+    `FCC_BDC_TOKEN` must be set, and `as_of` defaults to the latest published
+    date (module docstring covers both routes, and why there's no third,
+    unauthenticated auto-download). `data_vintage` is always optional; NULL
+    when not supplied.
     """
-    if not as_of:
-        raise SystemExit("fcc_broadband: --as-of is required, e.g. 2025-12-31 "
-                         "(see module docstring for how to find the current filing)")
-    if not url:
-        raise SystemExit("fcc_broadband: --file is required (see module docstring for "
-                         "how to download the current filing's summary file)")
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        arrow = _parse(_resolve_csv(url, tmpdir), as_of, data_vintage, release)
+    if url is not None:
+        if not as_of:
+            raise SystemExit("fcc_broadband: --as-of is required together with --file "
+                             "(there's no filing list to resolve it from)")
+        fetch_url = url
+        with tempfile.TemporaryDirectory() as tmpdir:
+            arrow = _parse(_resolve_csv(url, tmpdir), as_of, data_vintage, release)
+    else:
+        username, token = os.environ.get("FCC_BDC_USERNAME"), os.environ.get("FCC_BDC_TOKEN")
+        if not (username and token):
+            raise SystemExit("fcc_broadband: no --file given, and FCC_BDC_USERNAME/"
+                             "FCC_BDC_TOKEN aren't set -- see module docstring for the two "
+                             "ways to get this file (a browser download passed via --file, "
+                             "or registering for the FCC's Public Data API).")
+        as_of = as_of or max(list_as_of_dates(username, token))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path, fetch_url = _download_via_api(as_of, username, token, tmpdir)
+            arrow = _parse(csv_path, as_of, data_vintage, release)
 
     if not arrow.num_rows:
-        raise SystemExit(f"fcc_broadband: {url} yielded no rows")
+        raise SystemExit(f"fcc_broadband: {fetch_url} yielded no rows")
     n = merge.write(cat, "raw.fcc__bdc_summary", arrow, EqualTo("bdc_as_of", as_of))
-    merge.manifest(cat, release, "fcc_broadband", url, n, version=as_of, method="release_number")
+    merge.manifest(cat, release, "fcc_broadband", fetch_url, n, version=as_of, method="release_number")
     return as_of, n
 
 
@@ -388,6 +455,6 @@ def transform(cat, release, as_of):
     }
 
 
-def ingest(cat, release, as_of, url, data_vintage=None):
+def ingest(cat, release, as_of=None, url=None, data_vintage=None):
     as_of, n = land_raw(cat, release, as_of, url, data_vintage)
     return {"raw.fcc__bdc_summary": n, **transform(cat, release, as_of)}
