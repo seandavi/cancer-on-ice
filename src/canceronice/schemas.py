@@ -3166,9 +3166,191 @@ TABLES = {
                 "publishes (bls_laus.py's FOOTNOTE_TEXT mirrors it and SystemExits on a code "
                 "not in this table).",
     ),
+
+    # --- raw: epa tri ---
+    # EPA Toxics Release Inventory Basic Data Files, one national CSV per
+    # reporting year (#100). epa_tri.py. Declares facility.site's second writer
+    # (kind='tri') and measure.observation's second EPA source (source='TRI').
+    #
+    # Real header verified 2026-09-19 against the live download (see
+    # epa_tri.py's module docstring): every column carries a literal
+    # "<ordinal>. " prefix EPA's own efservice export writes into the header
+    # row itself (e.g. "1. YEAR", "2. TRIFD") -- stripped here; the module's
+    # own COLUMNS tuple keeps the literal prefixed text for header-drift
+    # detection. 122 columns, identical across every reporting year checked
+    # (1987, 1988, 1995, 2001, 2023).
+    "raw.epa__tri_basic": TableDef(
+        schema=Schema(
+            NestedField(1, "YEAR", StringType(), required=True,
+                        doc="4-digit reporting year -- the version axis (raw is replaced "
+                            "wholesale per value of this column; also measure.observation's "
+                            "source_release for this source, per issue #100)."),
+            NestedField(2, "TRIFD", StringType(), required=True,
+                        doc="EPA's own stable per-facility TRI Facility ID. facility.site.facility_id."),
+            NestedField(3, "FRS ID", StringType(), doc="EPA Facility Registry Service id, when assigned."),
+            NestedField(4, "FACILITY NAME", StringType(), doc="Facility's own name. facility.site.name."),
+            NestedField(5, "STREET ADDRESS", StringType(), doc="Part of facility.site.address."),
+            NestedField(6, "CITY", StringType(), doc="Part of facility.site.address."),
+            NestedField(7, "COUNTY", StringType(),
+                        doc="County (or parish/municipio/borough/census area) name as EPA "
+                            "publishes it -- no FIPS column exists in this file. Matched against "
+                            "geography.unit by normalised name + state to derive "
+                            "facility.site.geo_id / measure.observation.geo_id; see epa_tri.py's "
+                            "module docstring for the match rule and its real, reported miss rate."),
+            NestedField(8, "ST", StringType(), doc="USPS state/territory abbreviation."),
+            NestedField(9, "ZIP", StringType(), doc="Part of facility.site.address."),
+            NestedField(10, "BIA", StringType(), doc="Bureau of Indian Affairs reservation code, when applicable."),
+            NestedField(11, "TRIBE", StringType(), doc="Tribal name, when BIA is populated."),
+            NestedField(12, "LATITUDE", StringType(),
+                        doc="Unparsed; facility.site.lat (TRY_CAST to double)."),
+            NestedField(13, "LONGITUDE", StringType(),
+                        doc="Unparsed; facility.site.lon (TRY_CAST to double)."),
+            NestedField(14, "HORIZONTAL DATUM", StringType(), doc="Geodetic datum of LATITUDE/LONGITUDE, as published."),
+            NestedField(15, "PARENT CO NAME", StringType(),
+                        doc="Parent company's own name, as self-reported. An organisation, not an "
+                            "individual (verified against the real header and EPA's field "
+                            "definitions 2026-09-19 -- see module docstring)."),
+            NestedField(16, "PARENT CO DB NUM", StringType(), doc="Parent company D&B number, when reported."),
+            NestedField(17, "STANDARD PARENT CO NAME", StringType(), doc="EPA-standardised form of PARENT CO NAME."),
+            NestedField(18, "FOREIGN PARENT CO NAME", StringType(), doc="Foreign parent company name, when applicable."),
+            NestedField(19, "FOREIGN PARENT CO DB NUM", StringType(), doc="Foreign parent company D&B number, when reported."),
+            NestedField(20, "STANDARD FOREIGN PARENT CO NAME", StringType(),
+                        doc="EPA-standardised form of FOREIGN PARENT CO NAME."),
+            NestedField(21, "FEDERAL FACILITY", StringType(), doc="'YES'/'NO', as published."),
+            NestedField(22, "INDUSTRY SECTOR CODE", StringType(), doc="NAICS-sector-derived TRI industry sector code."),
+            NestedField(23, "INDUSTRY SECTOR", StringType(), doc="TRI industry sector name."),
+            NestedField(24, "PRIMARY SIC", StringType(), doc="Primary Standard Industrial Classification code."),
+            NestedField(25, "SIC 2", StringType(), doc="Secondary SIC code, when reported."),
+            NestedField(26, "SIC 3", StringType(), doc="Secondary SIC code, when reported."),
+            NestedField(27, "SIC 4", StringType(), doc="Secondary SIC code, when reported."),
+            NestedField(28, "SIC 5", StringType(), doc="Secondary SIC code, when reported."),
+            NestedField(29, "SIC 6", StringType(), doc="Secondary SIC code, when reported."),
+            NestedField(30, "PRIMARY NAICS", StringType(), doc="Primary North American Industry Classification code."),
+            NestedField(31, "NAICS 2", StringType(), doc="Secondary NAICS code, when reported."),
+            NestedField(32, "NAICS 3", StringType(), doc="Secondary NAICS code, when reported."),
+            NestedField(33, "NAICS 4", StringType(), doc="Secondary NAICS code, when reported."),
+            NestedField(34, "NAICS 5", StringType(), doc="Secondary NAICS code, when reported."),
+            NestedField(35, "NAICS 6", StringType(), doc="Secondary NAICS code, when reported."),
+            NestedField(36, "DOC_CTRL_NUM", StringType(), doc="EPA's internal document control number for this submission."),
+            NestedField(37, "CHEMICAL", StringType(), doc="Chemical or chemical-category name being reported."),
+            NestedField(38, "ELEMENTAL METAL INCLUDED", StringType(), doc="'YES'/'NO', as published."),
+            NestedField(39, "TRI CHEMICAL/COMPOUND ID", StringType(), doc="TRI's own chemical/compound id."),
+            NestedField(40, "CAS#", StringType(), doc="Chemical Abstracts Service registry number, when the chemical has one."),
+            NestedField(41, "SRS ID", StringType(), doc="EPA Substance Registry Services id."),
+            NestedField(42, "CLEAN AIR ACT CHEMICAL", StringType(), doc="'YES'/'NO', as published."),
+            NestedField(43, "CLASSIFICATION", StringType(),
+                        doc="'TRI' | 'PBT' | 'Dioxin' -- which reporting list the chemical is on. "
+                            "Dioxin-classified rows report in Grams (see UNIT OF MEASURE); "
+                            "everything else reports in Pounds (verified against the real file, "
+                            "every year checked)."),
+            NestedField(44, "METAL", StringType(), doc="'YES'/'NO', as published."),
+            NestedField(45, "METAL CATEGORY", StringType(), doc="Metal category name, when METAL='YES'."),
+            NestedField(46, "CARCINOGEN", StringType(),
+                        doc="'YES'/'NO' -- TRI's own carcinogen flag (verified: the only two real "
+                            "values in the live file). measure.observation's "
+                            "TRI:onsite_carcinogen_release_total sums ON-SITE RELEASE TOTAL where "
+                            "this is 'YES'; a republished flag, not an independent hazard assessment."),
+            NestedField(47, "PBT", StringType(), doc="'YES'/'NO' -- on the Persistent Bioaccumulative Toxic chemical list."),
+            NestedField(48, "PFAS", StringType(), doc="'YES'/'NO' -- on the PFAS chemical list."),
+            NestedField(49, "FORM TYPE", StringType(),
+                        doc="'R' (full Form R) or 'A' (certification statement, filed when the "
+                            "facility is below the threshold that requires quantities -- every "
+                            "real Form A row's release/transfer columns are '0.000', verified "
+                            "against the live file)."),
+            NestedField(50, "UNIT OF MEASURE", StringType(), doc="'Pounds' or 'Grams' -- see CLASSIFICATION."),
+            NestedField(51, "5.1 - FUGITIVE AIR", StringType(), doc="On-site fugitive/non-point air release, unparsed, in UNIT OF MEASURE."),
+            NestedField(52, "5.2 - STACK AIR", StringType(), doc="On-site stack/point air release, unparsed."),
+            NestedField(53, "5.3 - WATER", StringType(), doc="On-site surface water release, unparsed."),
+            NestedField(54, "5.4 - UNDERGROUND", StringType(), doc="On-site underground injection, total, unparsed."),
+            NestedField(55, "5.4.1 - UNDERGROUND CL I", StringType(), doc="On-site Class I underground injection, unparsed."),
+            NestedField(56, "5.4.2 - UNDERGROUND C II-V", StringType(), doc="On-site Class II-V underground injection, unparsed."),
+            NestedField(57, "5.5.1 - LANDFILLS", StringType(), doc="On-site landfill disposal, total, unparsed."),
+            NestedField(58, "5.5.1A - RCRA C LANDFILL", StringType(), doc="On-site RCRA Subtitle C landfill disposal, unparsed."),
+            NestedField(59, "5.5.1B - OTHER LANDFILLS", StringType(), doc="On-site other landfill disposal, unparsed."),
+            NestedField(60, "5.5.2 - LAND TREATMENT", StringType(), doc="On-site land treatment/application, unparsed."),
+            NestedField(61, "5.5.3 - SURFACE IMPNDMNT", StringType(), doc="On-site surface impoundment disposal, total, unparsed."),
+            NestedField(62, "5.5.3A - RCRA SURFACE IM", StringType(), doc="On-site RCRA Subtitle C surface impoundment, unparsed."),
+            NestedField(63, "5.5.3B - OTHER SURFACE I", StringType(), doc="On-site other surface impoundment, unparsed."),
+            NestedField(64, "5.5.4 - OTHER DISPOSAL", StringType(), doc="On-site other land disposal, unparsed."),
+            NestedField(65, "ON-SITE RELEASE TOTAL", StringType(),
+                        doc="Sum of columns 51-64 (fugitive+stack air, water, underground, land "
+                            "disposal), unparsed, in UNIT OF MEASURE. "
+                            "measure.observation's TRI:onsite_release_total sums this per "
+                            "(county, year), converting Grams rows to pounds (module docstring)."),
+            NestedField(66, "6.1 - POTW - TRNS RLSE", StringType(), doc="Transferred to a POTW, released by it, unparsed."),
+            NestedField(67, "6.1 - POTW - TRNS TRT", StringType(), doc="Transferred to a POTW, treated by it, unparsed."),
+            NestedField(68, "POTW - TOTAL TRANSFERS", StringType(), doc="Total transferred to POTWs, unparsed."),
+            NestedField(69, "6.2 - M10", StringType(), doc="Off-site transfer, EPA waste-management method code M10, unparsed."),
+            NestedField(70, "6.2 - M41", StringType(), doc="Off-site transfer, method code M41, unparsed."),
+            NestedField(71, "6.2 - M62", StringType(), doc="Off-site transfer, method code M62, unparsed."),
+            NestedField(72, "6.2 - M40 METAL", StringType(), doc="Off-site transfer, method code M40 (metals), unparsed."),
+            NestedField(73, "6.2 - M61 METAL", StringType(), doc="Off-site transfer, method code M61 (metals), unparsed."),
+            NestedField(74, "6.2 - M71", StringType(), doc="Off-site transfer, method code M71, unparsed."),
+            NestedField(75, "6.2 - M81", StringType(), doc="Off-site transfer, method code M81, unparsed."),
+            NestedField(76, "6.2 - M82", StringType(), doc="Off-site transfer, method code M82, unparsed."),
+            NestedField(77, "6.2 - M72", StringType(), doc="Off-site transfer, method code M72, unparsed."),
+            NestedField(78, "6.2 - M63", StringType(), doc="Off-site transfer, method code M63, unparsed."),
+            NestedField(79, "6.2 - M66", StringType(), doc="Off-site transfer, method code M66, unparsed."),
+            NestedField(80, "6.2 - M67", StringType(), doc="Off-site transfer, method code M67, unparsed."),
+            NestedField(81, "6.2 - M64", StringType(), doc="Off-site transfer, method code M64, unparsed."),
+            NestedField(82, "6.2 - M65", StringType(), doc="Off-site transfer, method code M65, unparsed."),
+            NestedField(83, "6.2 - M73", StringType(), doc="Off-site transfer, method code M73, unparsed."),
+            NestedField(84, "6.2 - M79", StringType(), doc="Off-site transfer, method code M79, unparsed."),
+            NestedField(85, "6.2 - M90", StringType(), doc="Off-site transfer, method code M90, unparsed."),
+            NestedField(86, "6.2 - M94", StringType(), doc="Off-site transfer, method code M94, unparsed."),
+            NestedField(87, "6.2 - M99", StringType(), doc="Off-site transfer, method code M99 (unknown/other), unparsed."),
+            NestedField(88, "OFF-SITE RELEASE TOTAL", StringType(), doc="Sum of off-site release method columns, unparsed. Not derived here (issue #100 asks for on-site totals only)."),
+            NestedField(89, "6.2 - M20", StringType(), doc="Off-site transfer, method code M20, unparsed."),
+            NestedField(90, "6.2 - M24", StringType(), doc="Off-site transfer, method code M24, unparsed."),
+            NestedField(91, "6.2 - M26", StringType(), doc="Off-site transfer, method code M26, unparsed."),
+            NestedField(92, "6.2 - M28", StringType(), doc="Off-site transfer, method code M28, unparsed."),
+            NestedField(93, "6.2 - M93", StringType(), doc="Off-site transfer, method code M93, unparsed."),
+            NestedField(94, "OFF-SITE RECYCLED TOTAL", StringType(), doc="Sum of off-site recycling method columns, unparsed."),
+            NestedField(95, "6.2 - M56", StringType(), doc="Off-site transfer, method code M56, unparsed."),
+            NestedField(96, "6.2 - M92", StringType(), doc="Off-site transfer, method code M92, unparsed."),
+            NestedField(97, "OFF-SITE ENERGY RECOVERY T", StringType(), doc="Sum of off-site energy-recovery method columns, unparsed."),
+            NestedField(98, "6.2 - M40 NON-METAL", StringType(), doc="Off-site transfer, method code M40 (non-metals), unparsed."),
+            NestedField(99, "6.2 - M50", StringType(), doc="Off-site transfer, method code M50, unparsed."),
+            NestedField(100, "6.2 - M54", StringType(), doc="Off-site transfer, method code M54, unparsed."),
+            NestedField(101, "6.2 - M61 NON-METAL", StringType(), doc="Off-site transfer, method code M61 (non-metals), unparsed."),
+            NestedField(102, "6.2 - M69", StringType(), doc="Off-site transfer, method code M69, unparsed."),
+            NestedField(103, "6.2 - M95", StringType(), doc="Off-site transfer, method code M95, unparsed."),
+            NestedField(104, "OFF-SITE TREATED TOTAL", StringType(), doc="Sum of off-site treatment method columns, unparsed."),
+            NestedField(105, "6.2 - UNCLASSIFIED", StringType(), doc="Off-site transfer, unclassified method, unparsed."),
+            NestedField(106, "6.2 - TOTAL TRANSFER", StringType(), doc="Sum of every off-site transfer column (89-105), unparsed."),
+            NestedField(107, "TOTAL RELEASES", StringType(), doc="ON-SITE RELEASE TOTAL + OFF-SITE RELEASE TOTAL, unparsed."),
+            NestedField(108, "8.1 - RELEASES", StringType(), doc="Source Reduction and Recycling Act Section 8.1 releases total, unparsed."),
+            NestedField(109, "8.1A - ON-SITE CONTAINED", StringType(), doc="8.1 releases, on-site contained, unparsed."),
+            NestedField(110, "8.1B - ON-SITE OTHER", StringType(), doc="8.1 releases, on-site other, unparsed."),
+            NestedField(111, "8.1C - OFF-SITE CONTAIN", StringType(), doc="8.1 releases, off-site contained, unparsed."),
+            NestedField(112, "8.1D - OFF-SITE OTHER R", StringType(), doc="8.1 releases, off-site other, unparsed."),
+            NestedField(113, "8.2 - ENERGY RECOVER ON", StringType(), doc="8.2 quantity used for on-site energy recovery, unparsed."),
+            NestedField(114, "8.3 - ENERGY RECOVER OF", StringType(), doc="8.3 quantity used for off-site energy recovery, unparsed."),
+            NestedField(115, "8.4 - RECYCLING ON SITE", StringType(), doc="8.4 quantity recycled on-site, unparsed."),
+            NestedField(116, "8.5 - RECYCLING OFF SIT", StringType(), doc="8.5 quantity recycled off-site, unparsed."),
+            NestedField(117, "8.6 - TREATMENT ON SITE", StringType(), doc="8.6 quantity treated on-site, unparsed."),
+            NestedField(118, "8.7 - TREATMENT OFF SITE", StringType(), doc="8.7 quantity treated off-site, unparsed."),
+            NestedField(119, "PRODUCTION WSTE (8.1-8.7)", StringType(), doc="Sum of 8.1-8.7, total production-related waste, unparsed."),
+            NestedField(120, "8.8 - ONE-TIME RELEASE", StringType(), doc="8.8 one-time/catastrophic release included above, unparsed."),
+            NestedField(121, "PROD_RATIO_OR_ ACTIVITY", StringType(), doc="8.9's production ratio or activity index basis, as published."),
+            NestedField(122, "8.9 - PRODUCTION RATIO", StringType(), doc="Facility-reported production ratio vs. the prior year, unparsed."),
+            NestedField(123, "retrieved_on", StringType(), required=True,
+                        doc="ISO date this ingest fetched the file -- informational (EPA's own "
+                            "'as of' revision note, issue #100), not the merge scope: YEAR is, "
+                            "since EPA revises a reporting year's data in place with no edition "
+                            "label of its own (module docstring)."),
+            NestedField(124, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("YEAR", "TRIFD", "CHEMICAL"),
+        comment="EPA TRI Basic Data Files, landed verbatim and whole, one national file per "
+                "reporting year, replaced wholesale per value of YEAR (SPEC.md § Sources -- "
+                "second tranche). Public domain (17 U.S.C. § 105; EPA_Data_License.html). No "
+                "individual-contact columns exist in this file (checked against the real header "
+                "across 1987-2023, see epa_tri.py's module docstring) -- every name column is a "
+                "facility or company, not a person.",
+    ),
 }
-
-
 def is_rate_limit(err):
     """R2 Data Catalog's catalog-wide write limit, however pyiceberg surfaces it.
 
