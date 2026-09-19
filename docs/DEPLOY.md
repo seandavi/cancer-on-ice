@@ -24,8 +24,8 @@ Naming and labels follow `monode/infrastructure/terraform/README.md`.
 | --- | --- | --- |
 | `canceronice-icegate-key-seandavi` | ingest API key (read+write); digest in `icegate.yaml` | created 2026-09-18 |
 | `canceronice-icegate-key-seandavi-ro` | personal read-only API key | created 2026-09-18 |
-| `canceronice-cf-vending-ro` | bucket-scoped RO backend token | **not yet minted** — see below |
-| `canceronice-cf-vending-rw` | bucket-scoped RW backend token | **not yet minted** — see below |
+| `canceronice-cf-vending-ro` | bucket-scoped RO backend token (`icegate-canceronice-ro`) | minted 2026-09-18 |
+| `canceronice-cf-vending-rw` | bucket-scoped RW backend token (`icegate-canceronice-rw`) | minted 2026-09-18 |
 | `cdsci-cloudflare-workers-token`, `cdsci-r2-account-id` | shared deploy credentials | pre-existing |
 
 Worker secrets (set by `scripts/provision-vending-tokens.sh`):
@@ -66,8 +66,9 @@ curl -H "$H" $API/r2-catalog/canceronice      # status: active
    Worker that does not exist. Until step 6 the Worker answers 500.
 6. **Vending tokens and Worker secrets** —
    `TOKEN_MINTER=<token> scripts/provision-vending-tokens.sh`. Needs a
-   Cloudflare token with *Account API Tokens Write*; none in `cdsci-infra` has
-   it, so create a short-lived one in the dashboard and revoke it after.
+   Cloudflare token with *Account · API Tokens · Edit*. On 2026-09-18 that
+   permission was added to `monode-infra-tofu` (`cdsci-cloudflare-api-token`)
+   and the script was run with it; a short-lived dashboard token works too.
 7. **Verify** — rerun the verification block of `scripts/deploy-icegate.sh`,
    then reproduce biocOnIce ADR-0011's four-check evidence table against this
    bucket (vended read allowed; write 403; foreign bucket 403; catalog mutation
@@ -83,7 +84,7 @@ uv run canceronice init
 
 ## Known gaps
 
-1. Vending tokens not minted (step 6); gateway is non-functional until then.
+1. Steps 1–7 done 2026-09-18; access-control evidence is recorded on issue #15.
 2. Bucket was created by hand, while `monode/infrastructure/INDEX.md` says
    OpenTofu owns R2 buckets — import or amend the convention (tracked).
 3. No GCP uptime check on `/health` yet (tracked).
