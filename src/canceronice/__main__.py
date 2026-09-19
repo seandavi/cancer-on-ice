@@ -112,9 +112,12 @@ def main():
 
     # --- raw: state cancer profiles ---
     # State Cancer Profiles, all vintages (#27).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import scp
+    sc = sub.add_parser("scp", help="land one State Cancer Profiles vintage (all its "
+                        "topics), then derive incidence/mortality")
+    sc.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    sc.add_argument("--vintage", choices=sorted(scp.VINTAGES), help="SCP vintage "
+                    "(default: latest known)")
 
     # --- raw: census acs ---
     # ACS 5-year, the Cancer InFocus indicator subset (#29).
@@ -224,9 +227,8 @@ def main():
 
     # --- raw: state cancer profiles ---
     # State Cancer Profiles, all vintages (#27).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "scp":
+        _print(scp.ingest(cat, args.release, args.vintage))
 
     # --- raw: census acs ---
     # ACS 5-year, the Cancer InFocus indicator subset (#29).
