@@ -242,8 +242,15 @@ trend               -- source-published trend call, if any
 first_seen, retired_in
 ```
 
-Partitioned by `source`, clustered by `geo_id`. Merge scope is
-`(source, source_release)` — a new SCP vintage never retires a PLACES row.
+Partitioned by `source`. Merge scope is `(source, source_release)` — a new SCP
+vintage never retires a PLACES row. Physically sorted (issue #120) by
+`(source_release, measure_id, geo_id, period_start, stratum_id)` on every
+write — measure_id, not geo_id, is the dominant clustering key, since a query
+naming one measure is the common case and Parquet row-group statistics can
+only discriminate well on whichever column is highest in the sort order; a
+geo_id-only query still benefits only modestly (SPEC.md's earlier "clustered
+by geo_id" wording overstated this — see the #120 PR for the measured
+tradeoff).
 
 ### Suppression is a value, not a NULL
 

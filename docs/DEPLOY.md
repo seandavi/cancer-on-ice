@@ -79,6 +79,36 @@ export CANCERONICE_TOKEN=$(gcloud secrets versions access latest --secret cancer
 uv run canceronice init
 ```
 
+## Table layout (#120)
+
+Every table declares a `sort_by` (`schemas.TableDef`), and `merge.overwrite`
+ORDER BYs the final Arrow table by it before every write. `schemas.create` /
+`_evolve` also set `write.parquet.row-group-limit` (122,880 rows — DuckDB's
+own default) and record the sort as the table's Iceberg sort order, but
+neither of those alone changes existing data files: a table written before
+#120 keeps its old, unsorted, 1,048,576-row-group layout until its data files
+are actually rewritten, because an idempotent re-ingest reports "unchanged"
+and touches nothing.
+
+Run this once against the live catalog, after deploying this PR's code, for
+every table that has real data:
+
+```sh
+export CANCERONICE_URI=https://icegate-canceronice.seandavi.workers.dev
+export CANCERONICE_TOKEN=$(gcloud secrets versions access latest --secret canceronice-icegate-key-seandavi --project cdsci-infra)
+uv run canceronice rewrite --all
+```
+
+It reads each table's current data, sorts it, and commits one Iceberg
+overwrite per partition (per `source`, for `measure.observation`) — PyIceberg
+only, never a DuckDB write against a live table (AGENTS.md). Before every
+commit it checks the sorted data is the identical set of rows (row count plus
+an order-independent checksum) as what it read, and refuses to commit a
+partition where it isn't, so a bug here fails loud rather than silently
+corrupting the table. Safe to re-run: once every table is genuinely sorted, a
+second run is a no-op past the checksum check (it still re-reads and re-sorts
+each partition, so it costs time but changes nothing).
+
 ## Rebuilding provenance.release for the source_version key (#78)
 
 `provenance.release`'s business key changed from `(release, source)` to
