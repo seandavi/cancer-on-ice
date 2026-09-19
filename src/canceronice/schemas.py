@@ -356,9 +356,68 @@ TABLES = {
     # disease, screening and behaviors, published as one annual release
     # (SPEC.md § Sources — first tranche). Public domain; measure.definition rows
     # for PLACES set method = 'model_based'.
-    #
-    # A parallel agent fills this in; leave this marker and the surrounding
-    # blank space untouched so independent branches merge cleanly.
+    "raw.places__county": TableDef(
+        schema=Schema(
+            NestedField(1, "Year", StringType(), required=True,
+                        doc="BRFSS survey year this row's estimate is based on, e.g. '2022'."),
+            NestedField(2, "StateAbbr", StringType(),
+                        doc="Two-letter state postal abbreviation, or 'US' for the national "
+                            "aggregate row."),
+            NestedField(3, "StateDesc", StringType(),
+                        doc="State name, or 'United States' for the national row."),
+            NestedField(4, "LocationName", StringType(),
+                        doc="County name; empty for the national row."),
+            NestedField(5, "DataSource", StringType(),
+                        doc="Survey the estimate is modeled from, e.g. 'BRFSS'."),
+            NestedField(6, "Category", StringType(),
+                        doc="Measure category, e.g. 'Health Outcomes', 'Prevention'."),
+            NestedField(7, "Measure", StringType(),
+                        doc="Full measure description including its universe, e.g. 'Current "
+                            "cigarette smoking among adults'."),
+            NestedField(8, "Data_Value_Unit", StringType(), doc="Unit of Data_Value, e.g. '%'."),
+            NestedField(9, "Data_Value_Type", StringType(),
+                        doc="'Crude prevalence' or 'Age-adjusted prevalence'."),
+            NestedField(10, "Data_Value", StringType(),
+                        doc="The published estimate, unparsed; empty (NULL) when suppressed — "
+                            "see Data_Value_Footnote."),
+            NestedField(11, "Data_Value_Footnote_Symbol", StringType(),
+                        doc="Footnote marker on Data_Value, or NULL."),
+            NestedField(12, "Data_Value_Footnote", StringType(),
+                        doc="Footnote text explaining a missing Data_Value, or NULL."),
+            NestedField(13, "Low_Confidence_Limit", StringType(),
+                        doc="95% CI lower bound, unparsed."),
+            NestedField(14, "High_Confidence_Limit", StringType(),
+                        doc="95% CI upper bound, unparsed."),
+            NestedField(15, "TotalPopulation", StringType(),
+                        doc="Total population of the location, per the source's own population "
+                            "estimate. NOT this measure's denominator — PLACES publishes no "
+                            "numerator/denominator pair; kept for reference only."),
+            NestedField(16, "TotalPop18plus", StringType(),
+                        doc="Adult (18+) population of the location, per the source's own "
+                            "population estimate. Not used as a denominator, for the same reason "
+                            "as TotalPopulation."),
+            NestedField(17, "LocationID", StringType(), required=True,
+                        doc="County FIPS code (5 digits, leading zero kept), or '59' for the "
+                            "national aggregate row (paired with StateAbbr='US')."),
+            NestedField(18, "CategoryID", StringType(), doc="Short code for Category."),
+            NestedField(19, "MeasureId", StringType(), required=True,
+                        doc="Short code for Measure, e.g. 'CSMOKING'."),
+            NestedField(20, "DataValueTypeID", StringType(),
+                        doc="Short code for Data_Value_Type, e.g. 'CrdPrv', 'AgeAdjPrv'."),
+            NestedField(21, "Short_Question_Text", StringType(),
+                        doc="Short label for Measure, e.g. 'Current Smoking'."),
+            NestedField(22, "Geolocation", StringType(),
+                        doc="County centroid as a WKT POINT string, or NULL for the national "
+                            "row."),
+            NestedField(23, "places_release", StringType(), required=True,
+                        doc="The PLACES county-data release year this row came from, e.g. "
+                            "'2025' (a key of places.RELEASES). Raw is replaced wholesale per "
+                            "value of this column."),
+        ),
+        comment="CDC PLACES county-data release, landed verbatim and whole: one row per "
+                "(county, measure, stratification type) model-based small-area estimate "
+                "(SPEC.md § Sources — first tranche). Public domain.",
+    ),
 
     # --- raw: usda ers rucc ---
     # USDA ERS Rural-Urban Continuum Codes: county-level rurality classification,
