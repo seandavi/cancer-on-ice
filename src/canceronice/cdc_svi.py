@@ -69,10 +69,29 @@ columns unique to "2014": AFFGEOID and the POV/PCI group, since 2020 renamed pov
 POV150 and dropped PCI from the methodology -- ArcGIS geometry columns excluded, per
 SPEC.md's geometry non-goal); `raw.svi__tract` is exactly the "2020" layout.
 
-**Geography vintage moves mid-series, same pattern as places.py**: Connecticut's
-`FIPS`/`STCNTY` values are the legacy 8 counties (09001-09015) through the 2020 edition
-and the 9 planning regions (09110-09190) from 2022 on -- verified against each edition's
-real file. `GEO_VINTAGE` records 2010 for 2014-2020 and 2020 for 2022.
+**Geography vintage is the edition's own year, not a landed Gazetteer vintage.** Each
+edition's own data dictionary states its `AREA_SQMI` column is computed from "Census
+Cartographic Boundary File - U.S. Tracts `<edition>` 500K" (SVI2014Documentation,
+SVI2016Documentation, SVI2018Documentation, SVI2020Documentation, SVI2022Documentation,
+all checked 2026-09-18) -- i.e. SVI documents each edition against its own year's Census
+geography, not against the nearest 2010/2020 decennial vintage. Collapsing that into two
+buckets is wrong at the edges, confirmed empirically against the real files:
+  - **Alaska**: pre-2019 Valdez-Cordova (02261) appears through the 2018 edition; the
+    2019 split into Chugach (02063) and Copper River (02066) appears starting with the
+    **2020** edition (county count rises 3,142 -> 3,143, +1 net) -- this alone rules out
+    treating 2020 as 2010-vintage, since a 2010-vintage file cannot contain a 2019 split.
+  - **South Dakota**: the 2015 Shannon -> Oglala Lakota recode (46113 -> 46102) appears
+    starting with the **2016** edition; 2014 still carries 46113.
+  - **Connecticut**: the legacy 8 counties (09001-09015) persist through the **2020**
+    edition; the 9 planning regions (09110-09190) appear starting with **2022** (county
+    count rises 3,143 -> 3,144, net +1) -- same pattern as places.py and
+    census_gazetteer.py, just landing at a different edition.
+  These three changes account for the entire county-count sequence (3,142, 3,142, 3,142,
+  3,143, 3,144) and each shows up at a distinct edition, confirming the vintage moves
+  edition-by-edition rather than in two 2010/2020 steps. `GEO_VINTAGE` is therefore each
+  edition's own year -- `{2014: 2014, 2016: 2016, 2018: 2018, 2020: 2020, 2022: 2022}` --
+  for both county and tract (tract 2022 confirmed on the same file: STCNTY carries the
+  planning regions there too).
 
 **Period**: the ACS 5-year window each edition's own documentation states under "Methods
 > Variables Used" (svi.cdc.gov/map25/data/docs/SVI<edition>Documentation*.pdf, checked
@@ -141,9 +160,13 @@ LAYOUT = {"2014": "2014", "2016": "2016", "2018": "2016", "2020": "2020", "2022"
 # other family (and, unlike 2014-vs-2016, also share their raw column contract).
 FAMILY = {"2014": "2014", "2016": "2014", "2018": "2014", "2020": "2020", "2022": "2020"}
 
-# Connecticut's 2022 county -> planning-region switch; same value for county and tract
-# (verified: 2022 tract STCNTY carries 09110-09190 same as 2022 county FIPS).
-GEO_VINTAGE = {"2014": 2010, "2016": 2010, "2018": 2010, "2020": 2010, "2022": 2020}
+# Each edition's own year, per its own documentation ("Census Cartographic Boundary
+# File - U.S. Tracts <edition> 500K") and confirmed empirically (module docstring: the
+# Alaska 02261->02063/02066 split lands at 2020, the Connecticut county->planning-region
+# switch lands at 2022, the South Dakota 46113->46102 recode by 2016) -- NOT a landed
+# Gazetteer vintage; every edition gets its own real boundary year. Same value for
+# county and tract (verified: 2022 tract STCNTY also carries 09110-09190).
+GEO_VINTAGE = {edition: int(edition) for edition in EDITIONS}
 
 # The ACS 5-year window each edition documents under "Methods > Variables Used" in its
 # own PDF (module docstring), as (period_start, period_end).

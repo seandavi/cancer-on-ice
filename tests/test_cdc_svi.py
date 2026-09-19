@@ -105,7 +105,7 @@ def test_derives_definitions_stratum_and_observations(cat):
     obs = {(r["geo_id"], r["measure_id"]): r
            for r in rows(cat, "measure.observation", row_filter="source = 'SVI'")}
     assert obs[("county:01001", "SVI:RPL_THEMES:2014")]["value"] == pytest.approx(0.4354)
-    assert obs[("county:01001", "SVI:RPL_THEMES:2014")]["geo_vintage"] == 2010
+    assert obs[("county:01001", "SVI:RPL_THEMES:2014")]["geo_vintage"] == 2018  # the fixture's own edition year
     assert obs[("county:01001", "SVI:RPL_THEMES:2014")]["period_start"] == "2014"
     assert obs[("county:01001", "SVI:RPL_THEMES:2014")]["period_end"] == "2018"
     assert obs[("county:01001", "SVI:RPL_THEMES:2014")]["interval_level"] is None
@@ -168,11 +168,12 @@ def test_county_and_tract_combine_without_retiring_each_other(cat):
     assert {r["geo_id"].split(":")[0] for r in live2} == {"county", "tract"}
     assert len(live2) == len(live)
 
-    # the 2022 geography switch: county FIPS 09110 is a planning region (2020 vintage)
+    # the 2022 geography switch: county FIPS 09110 is a planning region, vintage is the
+    # edition's own year (2022), not a landed Gazetteer vintage
     ct = next(r for r in live2 if r["geo_id"] == "county:09110")
-    assert ct["geo_vintage"] == 2020
+    assert ct["geo_vintage"] == 2022
     ct_tract = next(r for r in live2 if r["geo_id"].startswith("tract:09110"))
-    assert ct_tract["geo_vintage"] == 2020
+    assert ct_tract["geo_vintage"] == 2022
 
     # a real partially-suppressed tract row: poverty150 reported, two concepts and
     # three of the five percentile measures suppressed, one theme percentile is a
