@@ -1,0 +1,8 @@
+series_id                     	area_type_code	area_code	measure_code	seasonal	srd_code	series_title	footnote_codes	begin_year	begin_period	end_year	end_period
+LAUCN010010000000003          	F	CN0100100000000	03	U	01	Unemployment Rate: Autauga County, AL (U)		1990	M01	2026	M04
+LAUCN010010000000004          	F	CN0100100000000	04	U	01	Unemployment: Autauga County, AL (U)		1990	M01	2026	M04
+LAUCN010010000000005          	F	CN0100100000000	05	U	01	Employment: Autauga County, AL (U)		1990	M01	2026	M04
+LAUCN010010000000006          	F	CN0100100000000	06	U	01	Labor Force: Autauga County, AL (U)		1990	M01	2026	M04
+LAUCN091100000000003          	F	CN0911000000000	03	U	09	Unemployment Rate: Capitol Planning Region, CT (U)		1990	M01	2026	M04
+LAUCN220710000000003          	F	CN2207100000000	03	U	22	Unemployment Rate: Orleans Parish, LA (U)		1990	M01	2026	M04
+LAUCN720010000000003          	F	CN7200100000000	03	U	72	Unemployment Rate: Adjuntas Municipio, PR (U)		1990	M01	2026	M04

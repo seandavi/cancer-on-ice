@@ -1,0 +1,8 @@
+footnote_code	footnote_text
+A	Area boundaries do not reflect official OMB definitions.
+N	Not available.
+P	Preliminary.
+U	The annual average cannot be calculated due to missing monthly data.
+V	The survey was not conducted due to bad weather. Interpolated data were seasonally adjusted.
+W	The household survey was not conducted for this month due to bad weather. Data were interpolated.
+Y	Data reflect controlling to interpolated statewide totals because the survey was not conducted.

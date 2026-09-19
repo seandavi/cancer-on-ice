@@ -245,7 +245,7 @@ def write(cat, identifier, arrow, overwrite_filter):
     return arrow.num_rows
 
 
-def manifest(cat, release, source, url, rows, version=None, method="retrieval_date"):
+def manifest(cat, release, source, url, rows, version=None, method="retrieval_date", checksum=None):
     """Record what this release was built from — SPEC.md provenance namespace,
     adopted from biocOnIce ADR-0007.
 
@@ -254,16 +254,25 @@ def manifest(cat, release, source, url, rows, version=None, method="retrieval_da
     built from. A source with no version of its own is versioned by the
     retrieval date; one with a real, citable release label passes `version` and
     method="release_number", so the version the source itself uses is kept.
+
+    `checksum` (SHA-256 of the retrieved bytes) is optional and NULL unless a
+    caller computes it — most sources don't need to. A source versioned by
+    retrieval date, where the upstream file can come back byte-identical
+    (SPEC.md's vintage rule: "several scrapes that captured identical values
+    are one vintage"), passes it so it can read the previous manifest row's
+    checksum back and skip landing a new vintage that changed nothing (see
+    bls_laus.py for the first caller).
     """
     now = datetime.now(timezone.utc)
     source_version = str(version) if version is not None else str(now.date())
     con = duckdb.connect()
+    checksum_sql = f"'{checksum}'" if checksum is not None else "NULL::VARCHAR"
     arrow = con.sql(f"""
         SELECT '{release}' AS release, '{source}' AS source,
                '{source_version}' AS source_version,
                '{method}' AS version_method,
                '{now.isoformat(timespec="seconds")}' AS retrieved_at,
-               '{url}' AS url, NULL::VARCHAR AS checksum, {rows}::BIGINT AS row_count
+               '{url}' AS url, {checksum_sql} AS checksum, {rows}::BIGINT AS row_count
     """).to_arrow_table()
     # A manifest row states what a completed ingest used; it is not versioned,
     # so it is replaced wholesale for its (release, source, source_version)
