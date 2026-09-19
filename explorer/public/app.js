@@ -520,6 +520,9 @@ function buildQueryPanel(ns, table, hasValidTo) {
 
   const runBtn = document.createElement("button");
   runBtn.className = "copy-btn";
+  runBtn.style.position = "static"; // ponytail: .copy-btn is `position: absolute`, meant for the
+  // Copy icon inside a positioned .copy-wrap; this button sits in a plain flex toolbar instead,
+  // so without this override it escapes to the page's top-right corner over the header nav.
   runBtn.type = "button";
   runBtn.textContent = "Run";
   controls.appendChild(runBtn);
