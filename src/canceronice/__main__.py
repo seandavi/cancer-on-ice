@@ -135,6 +135,17 @@ def main():
     # The local `from . import <module>` and the subparser goes directly under this comment block.
     # Leave this marker and the blank lines around it untouched so
     # independent branches merge cleanly.
+    from . import fcc_broadband
+    fb = sub.add_parser("fcc-broadband", help="land an already-downloaded FCC BDC nationwide "
+                        "fixed-broadband summary-by-geography file, then derive (see "
+                        "fcc_broadband.py's docstring for how to download it -- no auto-download)")
+    fb.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    fb.add_argument("--as-of", dest="as_of", required=True,
+                    help="BDC filing as-of date, e.g. 2025-12-31")
+    fb.add_argument("--file", dest="file", required=True,
+                    help="an already-downloaded .csv or .csv.zip")
+    fb.add_argument("--data-vintage", dest="data_vintage",
+                    help="the filing's last_updated_date, if known (optional; NULL otherwise)")
 
     # --- raw: bls laus ---
     # BLS Local Area Unemployment Statistics, county (#94).
@@ -229,6 +240,8 @@ def main():
     # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
     # Leave this marker and the blank lines around it untouched so
     # independent branches merge cleanly.
+    elif args.cmd == "fcc-broadband":
+        _print(fcc_broadband.ingest(cat, args.release, args.as_of, args.file, args.data_vintage))
 
     # --- raw: bls laus ---
     # BLS Local Area Unemployment Statistics, county (#94).
