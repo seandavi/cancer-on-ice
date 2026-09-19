@@ -1,0 +1,6 @@
+USPS	GEOID	ANSICODE	NAME	ALAND	AWATER	ALAND_SQMI	AWATER_SQMI	INTPTLAT	INTPTLONG                                                                                                               
+AL	01001	00161526	Autauga County	1539634184	25674812	594.456	9.913	32.532237	-86.64644                                                                                                                  
+CT	09001	00212794	Fairfield County	1618664029	549280913	624.97	212.079	41.227413	-73.367061                                                                                                             
+AK	02013	01419964	Aleutians East Borough	18091672533	20799851130	6985.234	8030.868	55.245044	-161.997477                                                                                                
+AK	02016	01419965	Aleutians West Census Area	11377885025	25183635754	4393.026	9723.457	51.959447	+178.338813                                                                                            
+PR	72001	01804480	Adjuntas Municipio	172725726	1051789	66.69	0.406	18.181611	-66.758165                                                                                                                 
