@@ -67,10 +67,13 @@ def main():
     ru.add_argument("--url", help="an already-downloaded file or alternate URL")
 
     # --- raw: usda ers food access ---
-    # USDA ERS Food Access Research Atlas (#42).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import ers_food_access
+    fa = sub.add_parser("food-access", help="land a USDA ERS Food Access Research Atlas "
+                        "edition, then derive")
+    fa.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    fa.add_argument("--edition", choices=sorted(ers_food_access.EDITIONS),
+                    help="atlas edition (default: latest known)")
+    fa.add_argument("--url", help="an already-downloaded zip/csv/xlsx file or alternate URL")
 
     # --- raw: hrsa ahrf ---
     # HRSA Area Health Resources Files, county (#39).
@@ -131,10 +134,8 @@ def main():
         _print(ers_ruca.ingest(cat, args.release, args.edition, args.url))
 
     # --- raw: usda ers food access ---
-    # USDA ERS Food Access Research Atlas (#42).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "food-access":
+        _print(ers_food_access.ingest(cat, args.release, args.edition, args.url))
 
     # --- raw: hrsa ahrf ---
     # HRSA Area Health Resources Files, county (#39).
