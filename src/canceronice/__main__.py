@@ -29,8 +29,12 @@ def main():
     from . import places
     pl = sub.add_parser("places", help="land a CDC PLACES county-data release, then derive")
     pl.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
-    pl.add_argument("--places-release", dest="places_release", choices=sorted(places.RELEASES),
-                    help="PLACES county-data release year (default: latest known)")
+    pl.add_argument("--places-release", dest="places_release",
+                    choices=sorted(set(places.RELEASES) | set(places.TRACT_RELEASES)),
+                    help="PLACES release year (default: latest known for --level)")
+    pl.add_argument("--level", choices=("county", "tract"), default="county",
+                    help="geography level to land (default: county) (#30)")
+    pl.add_argument("--url", help="an already-downloaded CSV file or alternate URL")
 
     # --- raw: usda ers rucc ---
     from . import ers_rucc
@@ -157,7 +161,7 @@ def main():
 
     # --- raw: cdc places ---
     elif args.cmd == "places":
-        _print(places.ingest(cat, args.release, args.places_release))
+        _print(places.ingest(cat, args.release, args.places_release, args.url, args.level))
 
     # --- raw: usda ers rucc ---
     elif args.cmd == "rucc":

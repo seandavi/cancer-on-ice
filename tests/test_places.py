@@ -7,6 +7,15 @@ header, a Colorado county in both releases, a Connecticut planning region, an
 Alaska county (leading-zero FIPS), the national aggregate row (LocationID
 '59'), a suppressed cell with its real footnote text, and the real
 ISOLATION->LONELINESS measure rename — so the test never touches the network.
+
+Tract fixtures (#30) are the same technique against the real 2024/2025
+tract-data CSVs (ai6z-tcin, cwsq-ngmh): a Denver, CO tract sharing CSMOKING
+with the county fixture (so the derived observation shares the county row's
+measure_id but not its geo_id), a Connecticut planning-region tract, an
+Alaska tract (leading-zero FIPS), and a Doña Ana County, NM tract
+(non-ASCII name). Both real tract releases landed here have zero suppressed
+rows (verified via the Socrata SODA API against the whole file, places.py
+module docstring), so no suppressed tract row is faked into a fixture.
 """
 
 import pytest
@@ -19,6 +28,10 @@ REL1, REL2 = "2026.08", "2026.09"
 
 def line(**cells):
     return ",".join(cells.get(c, "") for c in places.COLUMNS)
+
+
+def tract_line(**cells):
+    return ",".join(cells.get(c, "") for c in places.TRACT_COLUMNS)
 
 
 # 2024 release (fu4u-a9bh): Denver County both prevalence types, a Connecticut
@@ -147,6 +160,101 @@ def csv2025(tmp_path):
     return write(tmp_path / "tiny_places_2025.csv", DATA_2025)
 
 
+# 2024 tract release (ai6z-tcin): a Denver, CO tract with CSMOKING crude -- the
+# same measure_id as DATA_2024's county CSMOKING row, different geo_id -- a
+# Connecticut planning-region tract, an Alaska tract (leading-zero FIPS), and a
+# Doña Ana County, NM tract (non-ASCII name).
+DATA_TRACT_2024 = [
+    tract_line(Year="2022", StateAbbr="CO", StateDesc="Colorado", CountyName="Denver",
+              CountyFIPS="08031", LocationName="08031002709", DataSource="BRFSS",
+              Category="Health Risk Behaviors",
+              Measure="Current cigarette smoking among adults", Data_Value_Unit="%",
+              Data_Value_Type="Crude prevalence", Data_Value="11.8",
+              Low_Confidence_Limit="10.5", High_Confidence_Limit="13.3",
+              TotalPopulation="2284", TotalPop18plus="2167", LocationID="08031002709",
+              CategoryID="RISKBEH", MeasureId="CSMOKING", DataValueTypeID="CrdPrv",
+              Short_Question_Text="Current Cigarette Smoking",
+              Geolocation="POINT (-104.9764225 39.7335935)"),
+    tract_line(Year="2022", StateAbbr="CT", StateDesc="Connecticut", CountyName="Capitol",
+              CountyFIPS="09110", LocationName="09110400101", DataSource="BRFSS",
+              Category="Health Outcomes", Measure="Stroke among adults",
+              Data_Value_Unit="%", Data_Value_Type="Crude prevalence", Data_Value="4.0",
+              Low_Confidence_Limit="3.6", High_Confidence_Limit="4.4",
+              TotalPopulation="2928", TotalPop18plus="2483", LocationID="09110400101",
+              CategoryID="HLTHOUT", MeasureId="STROKE", DataValueTypeID="CrdPrv",
+              Short_Question_Text="Stroke", Geolocation="POINT (-72.7305122 41.6296007)"),
+    tract_line(Year="2022", StateAbbr="AK", StateDesc="Alaska", CountyName="Anchorage",
+              CountyFIPS="02020", LocationName="02020000102", DataSource="BRFSS",
+              Category="Health Outcomes", Measure="Arthritis among adults",
+              Data_Value_Unit="%", Data_Value_Type="Crude prevalence", Data_Value="26.5",
+              Low_Confidence_Limit="24.3", High_Confidence_Limit="28.8",
+              TotalPopulation="5215", TotalPop18plus="3978", LocationID="02020000102",
+              CategoryID="HLTHOUT", MeasureId="ARTHRITIS", DataValueTypeID="CrdPrv",
+              Short_Question_Text="Arthritis", Geolocation="POINT (-149.3997998 61.3488237)"),
+    tract_line(Year="2022", StateAbbr="NM", StateDesc="New Mexico", CountyName="Doña Ana",
+              CountyFIPS="35013", LocationName="35013001807", DataSource="BRFSS",
+              Category="Health Outcomes", Measure="Current asthma among adults",
+              Data_Value_Unit="%", Data_Value_Type="Crude prevalence", Data_Value="13.6",
+              Low_Confidence_Limit="12.0", High_Confidence_Limit="15.3",
+              TotalPopulation="2294", TotalPop18plus="1559", LocationID="35013001807",
+              CategoryID="HLTHOUT", MeasureId="CASTHMA", DataValueTypeID="CrdPrv",
+              Short_Question_Text="Current Asthma", Geolocation="POINT (-106.6100698 32.0056269)"),
+]
+
+# 2025 tract release (cwsq-ngmh): the same four geographies, different values.
+DATA_TRACT_2025 = [
+    tract_line(Year="2023", StateAbbr="CO", StateDesc="Colorado", CountyName="Denver",
+              CountyFIPS="08031", LocationName="08031000102", DataSource="BRFSS",
+              Category="Health Risk Behaviors",
+              Measure="Current cigarette smoking among adults", Data_Value_Unit="%",
+              Data_Value_Type="Crude prevalence", Data_Value="9.3",
+              Low_Confidence_Limit="7.1", High_Confidence_Limit="11.8",
+              TotalPopulation="3622", TotalPop18plus="3017", LocationID="08031000102",
+              CategoryID="RISKBEH", MeasureId="CSMOKING", DataValueTypeID="CrdPrv",
+              Short_Question_Text="Current Cigarette Smoking",
+              Geolocation="POINT (-105.03984 39.7811473)"),
+    tract_line(Year="2023", StateAbbr="CT", StateDesc="Connecticut", CountyName="Capitol",
+              CountyFIPS="09110", LocationName="09110415600", DataSource="BRFSS",
+              Category="Health Outcomes", Measure="Depression among adults",
+              Data_Value_Unit="%", Data_Value_Type="Crude prevalence", Data_Value="23.5",
+              Low_Confidence_Limit="20.9", High_Confidence_Limit="26.2",
+              TotalPopulation="4198", TotalPop18plus="3108", LocationID="09110415600",
+              CategoryID="HLTHOUT", MeasureId="DEPRESSION", DataValueTypeID="CrdPrv",
+              Short_Question_Text="Depression", Geolocation="POINT (-72.779282 41.6528417)"),
+    tract_line(Year="2023", StateAbbr="AK", StateDesc="Alaska", CountyName="Anchorage",
+              CountyFIPS="02020", LocationName="02020001000", DataSource="BRFSS",
+              Category="Health Outcomes", Measure="Depression among adults",
+              Data_Value_Unit="%", Data_Value_Type="Crude prevalence", Data_Value="21.8",
+              Low_Confidence_Limit="19.5", High_Confidence_Limit="24.6",
+              TotalPopulation="3942", TotalPop18plus="3426", LocationID="02020001000",
+              CategoryID="HLTHOUT", MeasureId="DEPRESSION", DataValueTypeID="CrdPrv",
+              Short_Question_Text="Depression", Geolocation="POINT (-149.8759839 61.2102868)"),
+    tract_line(Year="2023", StateAbbr="NM", StateDesc="New Mexico", CountyName="Doña Ana",
+              CountyFIPS="35013", LocationName="35013000204", DataSource="BRFSS",
+              Category="Health Outcomes", Measure="Stroke among adults",
+              Data_Value_Unit="%", Data_Value_Type="Crude prevalence", Data_Value="2.5",
+              Low_Confidence_Limit="2.2", High_Confidence_Limit="2.7",
+              TotalPopulation="4665", TotalPop18plus="3313", LocationID="35013000204",
+              CategoryID="HLTHOUT", MeasureId="STROKE", DataValueTypeID="CrdPrv",
+              Short_Question_Text="Stroke", Geolocation="POINT (-106.8206533 32.3193469)"),
+]
+
+
+def write_tract(path, data):
+    path.write_text("\n".join([",".join(places.TRACT_COLUMNS), *data]) + "\n")
+    return str(path)
+
+
+@pytest.fixture
+def tract_csv2024(tmp_path):
+    return write_tract(tmp_path / "tiny_places_tract_2024.csv", DATA_TRACT_2024)
+
+
+@pytest.fixture
+def tract_csv2025(tmp_path):
+    return write_tract(tmp_path / "tiny_places_tract_2025.csv", DATA_TRACT_2025)
+
+
 def rows(cat, identifier, **kw):
     return cat.load_table(identifier).scan(**kw).to_arrow().to_pylist()
 
@@ -268,11 +376,119 @@ def test_rerun_is_idempotent(cat, csv2024):
     assert counts["measure.observation"]["unchanged"] == 6
 
 
-def test_every_column_is_documented(cat, csv2024):
+def test_every_column_is_documented(cat, csv2024, tract_csv2024):
     places.ingest(cat, REL1, places_release="2024", url=csv2024)
-    for identifier in ("raw.places__county", "measure.definition", "measure.stratum",
-                      "measure.observation"):
+    places.ingest(cat, REL1, places_release="2024", url=tract_csv2024, level="tract")
+    for identifier in ("raw.places__county", "raw.places__tract", "measure.definition",
+                      "measure.stratum", "measure.observation"):
         table = cat.load_table(identifier)
         assert table.properties.get("comment"), identifier
         for f in table.schema().fields:
             assert f.doc, f"{identifier}.{f.name} has no doc"
+
+
+# --- tract (#30) ---
+
+def test_tract_raw_is_verbatim_and_whole(cat, tract_csv2025):
+    places_release, n = places.land_raw(cat, REL1, places_release="2025",
+                                        level="tract", url=tract_csv2025)
+    assert places_release == "2025" and n == 4
+
+    raw = rows(cat, "raw.places__tract")
+    assert len(raw) == 4
+    denver = next(r for r in raw if r["LocationID"] == "08031000102")
+    assert denver["Data_Value"] == "9.3" and denver["places_release"] == "2025"
+    # upstream's own quirk: LocationName duplicates LocationID (the tract FIPS),
+    # not a human name the way the county file's LocationName is
+    assert denver["LocationName"] == denver["LocationID"] == "08031000102"
+    assert denver["CountyFIPS"] == "08031" and denver["CountyName"] == "Denver"
+    # leading zeros survive on a tract FIPS
+    assert {r["LocationID"] for r in raw if r["StateAbbr"] == "AK"} == {"02020001000"}
+    # non-ASCII county name survives verbatim
+    dona_ana = next(r for r in raw if r["CountyFIPS"] == "35013")
+    assert dona_ana["CountyName"] == "Doña Ana"
+
+    # re-landing the same release replaces it rather than appending
+    places.land_raw(cat, REL1, places_release="2025", level="tract", url=tract_csv2025)
+    assert len(rows(cat, "raw.places__tract")) == 4
+
+
+def test_tract_header_check_uses_its_own_contract(cat, tmp_path):
+    # the county header is a real, different contract -- not the tract one
+    bad = tmp_path / "county_shaped.csv"
+    bad.write_text(",".join(places.COLUMNS) + "\n")
+    with pytest.raises(SystemExit, match="header is not the declared one"):
+        places.land_raw(cat, REL1, places_release="2025", level="tract", url=str(bad))
+
+
+def test_unknown_tract_release_fails(cat):
+    with pytest.raises(SystemExit, match="2019"):
+        places.land_raw(cat, REL1, places_release="2019", level="tract")
+
+
+def test_tract_reuses_county_crude_measure_ids(cat, csv2024, tract_csv2024):
+    """#30: tract mints no measure_ids of its own -- its CSMOKING crude row asserts
+    the SAME 'PLACES:CSMOKING:crude' id the county fixture's crude row does, just a
+    different geo_id."""
+    places.ingest(cat, REL1, places_release="2024", url=csv2024)
+    places.ingest(cat, REL1, places_release="2024", url=tract_csv2024, level="tract")
+
+    defs = {d["measure_id"] for d in rows(cat, "measure.definition")}
+    assert "PLACES:CSMOKING:crude" in defs
+    # exactly one definition row for it, not one per level
+    matches = [d for d in rows(cat, "measure.definition") if d["measure_id"] == "PLACES:CSMOKING:crude"]
+    assert len(matches) == 1
+
+    obs = {(o["measure_id"], o["geo_id"]): o
+           for o in rows(cat, "measure.observation", row_filter=EqualTo("source", "PLACES"))}
+    county_row = obs[("PLACES:CSMOKING:crude", "county:08031")]
+    tract_row = obs[("PLACES:CSMOKING:crude", "tract:08031002709")]
+    assert county_row["value"] == 14.2  # DATA_2024's county-level value
+    assert tract_row["value"] == 11.8   # DATA_TRACT_2024's tract-level value, same measure_id
+    assert tract_row["geo_vintage"] == 2020  # same GEO_VINTAGE dict as county for 2024
+
+    ct_tract = obs[("PLACES:STROKE:crude", "tract:09110400101")]
+    assert ct_tract["geo_id"] == "tract:09110400101"  # planning-region prefix, not zero-padded further
+
+
+def test_county_and_tract_combine_without_retiring_each_other(cat, csv2024, tract_csv2024):
+    """measure.observation's merge scope is (source, source_release), not per-level --
+    landing county then tract (or vice versa) for the same release must accumulate,
+    never retire the other level's rows (module docstring, same fix as cdc_svi.py)."""
+    places.ingest(cat, REL1, places_release="2024", url=csv2024)
+    places.ingest(cat, REL1, places_release="2024", url=tract_csv2024, level="tract")
+
+    live = rows(cat, "measure.observation",
+               row_filter="source = 'PLACES' AND source_release = '2024' AND valid_to IS NULL")
+    levels = {o["geo_id"].split(":")[0] for o in live}
+    assert levels == {"county", "tract", "nation"}
+
+    # re-deriving from county alone (e.g. a county-only re-ingest) must not retire tract
+    places.ingest(cat, "2026.10", places_release="2024", url=csv2024)
+    live2 = rows(cat, "measure.observation",
+                row_filter="source = 'PLACES' AND source_release = '2024' AND valid_to IS NULL")
+    assert {o["geo_id"].split(":")[0] for o in live2} == {"county", "tract", "nation"}
+    assert len(live2) == len(live)
+
+
+def test_tract_then_county_also_combine(cat, csv2024, tract_csv2024):
+    """The reverse order: landing tract before county must not retire county rows
+    either, and must pick them up once county lands."""
+    places.ingest(cat, REL1, places_release="2024", url=tract_csv2024, level="tract")
+    tract_only = rows(cat, "measure.observation",
+                      row_filter="source = 'PLACES' AND valid_to IS NULL")
+    assert {o["geo_id"].split(":")[0] for o in tract_only} == {"tract"}
+
+    places.ingest(cat, "2026.10", places_release="2024", url=csv2024)
+    combined = rows(cat, "measure.observation",
+                    row_filter="source = 'PLACES' AND valid_to IS NULL")
+    assert {o["geo_id"].split(":")[0] for o in combined} == {"county", "tract", "nation"}
+    assert len(combined) == len(tract_only) + 6  # DATA_2024's 6 county rows all land
+
+
+def test_tract_every_column_is_documented(cat, tract_csv2025):
+    places.ingest(cat, REL1, places_release="2025", url=tract_csv2025, level="tract")
+    table = cat.load_table("raw.places__tract")
+    assert table.properties.get("comment")
+    for f in table.schema().fields:
+        assert f.doc, f"raw.places__tract.{f.name} has no doc"
