@@ -2012,9 +2012,41 @@ TABLES = {
 
     # --- raw: fda mqsa ---
     # FDA MQSA certified mammography facilities (#36).
-    # The table declaration(s) goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    # A weekly, unlabeled snapshot with no header row -- see fda_mqsa.py's
+    # module docstring for the field list FDA's own page publishes and the
+    # verification that no id column exists.
+    "raw.fda__mqsa_facilities": TableDef(
+        schema=Schema(
+            NestedField(1, "Facility Name", StringType(), required=True,
+                        doc="Facility's own name. Normalised and hashed into facility.site.facility_id "
+                            "(no id column exists in this file -- see fda_mqsa.py); also facility.site.name."),
+            NestedField(2, "Address 1", StringType(), doc="Street address line 1; part of facility.site.address and facility_id."),
+            NestedField(3, "Address 2", StringType(), doc="Street address line 2, often NULL; part of facility.site.address and facility_id."),
+            NestedField(4, "Address 3", StringType(), doc="Street address line 3, often NULL; part of facility.site.address and facility_id."),
+            NestedField(5, "City", StringType(), doc="Part of facility.site.address and facility_id; also facility.site.attributes_json's 'city' key."),
+            NestedField(6, "State", StringType(), required=True,
+                        doc="USPS state/territory/military abbreviation; part of facility.site.address "
+                            "and facility_id; also facility.site.attributes_json's 'state' key."),
+            NestedField(7, "Zip Code", StringType(), required=True,
+                        doc="5-digit or ZIP+4; only the first 5 digits feed facility_id (a ZIP+4 changing "
+                            "alone must not look like a different facility). Also facility.site.address "
+                            "and attributes_json's 'zip' key."),
+            NestedField(8, "Phone", StringType(), doc="As published by FDA; not used downstream (excluded from facility_id -- see fda_mqsa.py)."),
+            NestedField(9, "Fax", StringType(), doc="As published by FDA; not used downstream."),
+            NestedField(10, "retrieved_on", StringType(), required=True,
+                        doc="Date this weekly-refreshed dump was fetched, ISO YYYY-MM-DD -- the version "
+                            "axis for this source (it publishes no edition label). Raw is replaced "
+                            "wholesale per value of this column."),
+            NestedField(11, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="FDA MQSA certified mammography facility list, landed verbatim and whole, replaced "
+                "weekly (SPEC.md § Sources — first tranche). Public domain; FDA's site-wide website "
+                "policy states 'the contents of the FDA website ... are not copyrighted. They are in "
+                "the public domain and may be republished, reprinted and otherwise used freely by "
+                "anyone without the need to obtain permission from FDA' "
+                "(https://www.fda.gov/about-fda/about-website/website-policies, checked 2026-09-18).",
+    ),
 
     # --- raw: epa sdwis ---
     # EPA SDWIS drinking-water violations (#53).
