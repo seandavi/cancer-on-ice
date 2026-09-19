@@ -1958,10 +1958,356 @@ TABLES = {
     ),
 
     # --- raw: state cancer profiles ---
-    # State Cancer Profiles, all vintages (#27).
-    # The table declaration(s) goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    # State Cancer Profiles, all vintages (#27). scp.py.
+    #
+    # SCP_PROVENANCE (repeated in each table's comment, #65): this is a REPUBLISHED
+    # SCRAPE, not the original archive. statecancerprofiles.cancer.gov (NCI/CDC) has
+    # no API, bulk download or archive, so seandavi/state-cancer-profile-scraper
+    # scrapes it and republishes each captured vintage as a versioned Zenodo deposit,
+    # read here over anonymous HTTPS. The underlying content is a U.S. Government
+    # work, public domain under 17 U.S.C. Sec 105; not endorsed by NCI/CDC.
+    "raw.scp__incidence": TableDef(
+        schema=Schema(
+            NestedField(1, "reported_locale", StringType(),
+                        doc="County/state name exactly as SCP renders it, including any "
+                            "footnote markers glued on (e.g. 'Allen County, Kansas(2)'); "
+                            "see locale/state for the plain name."),
+            NestedField(2, "fips", StringType(),
+                        doc="5-digit FIPS code as published: a county code, a state code "
+                            "padded '<state>000', or the national sentinel '00000'."),
+            NestedField(3, "2023_rural_urban_continuum_codesrural_urban_note", StringType(),
+                        doc="SCP's own two header cells concatenated with no separator by "
+                            "the upstream export (a verbatim upstream defect, not a scrape "
+                            "artifact) -- rural/urban classification per the 2023 USDA "
+                            "RUCC (2013 codes for Connecticut). NULL in V1/V2, which "
+                            "predate this column."),
+            NestedField(4, "age_adjusted_rate_per_100_000", StringType(),
+                        doc="The published incidence rate, age-adjusted to the 2000 US "
+                            "standard population. NULL whenever the cell is suppressed "
+                            "or withheld."),
+            NestedField(5, "lower_ci_rate", StringType(),
+                        doc="95% CI lower bound, or the literal sentinel '*' when the "
+                            "rate is suppressed -- landed as text so the sentinel "
+                            "survives verbatim; TRY_CAST in transform turns it into a "
+                            "clean NULL."),
+            NestedField(6, "upper_ci_rate", StringType(),
+                        doc="95% CI upper bound, or '*' when suppressed (see "
+                            "lower_ci_rate)."),
+            NestedField(7, "ci_rank", StringType(),
+                        doc="SCP's CI*Rank statistic; only populated for 'By State' rows "
+                            "from the 2026-05-28+ scrape. Landed for reference, not "
+                            "derived."),
+            NestedField(8, "lower_ci_rank", StringType(),
+                        doc="Lower bound of ci_rank's interval; see ci_rank."),
+            NestedField(9, "upper_ci_rank", StringType(),
+                        doc="Upper bound of ci_rank's interval; see ci_rank."),
+            NestedField(10, "average_annual_count", StringType(),
+                        doc="Average annual case count for the period, or NULL when "
+                            "suppressed. A small rounded value (e.g. '3') is not itself "
+                            "evidence of suppression -- SCP rounds counts of 16+ that "
+                            "are still below reporting precision; only "
+                            "suppression_reason / a NULL rate means suppressed."),
+            NestedField(11, "recent_trend", StringType(),
+                        doc="SCP's trend call ('stable'/'rising'/'falling'), or a text "
+                            "marker: '*' (trend not computable/suppressed) or "
+                            "'[P1 note]' (state-law withholding). Landed verbatim; both "
+                            "markers become trend=NULL in measure.observation."),
+            NestedField(12, "recent_5_year_trend_in_rate", StringType(),
+                        doc="Average Annual Percent Change (AAPC) point estimate, or "
+                            "the '*'/'[P1 note]' markers (see recent_trend). Landed for "
+                            "reference, not derived."),
+            NestedField(13, "lower_ci_trend_in_rate", StringType(),
+                        doc="AAPC's 95% CI lower bound; see recent_5_year_trend_in_rate."),
+            NestedField(14, "upper_ci_trend_in_rate", StringType(),
+                        doc="AAPC's 95% CI upper bound; see recent_5_year_trend_in_rate."),
+            NestedField(15, "year", StringType(),
+                        doc="SCP's own period label -- always the literal constant "
+                            "'Latest 5-year average' in every row of every vintage "
+                            "(verified); carries no real year. See scp.py's module "
+                            "docstring for where the real period comes from."),
+            NestedField(16, "sex", StringType(),
+                        doc="'Both Sexes' | 'Male' | 'Female', as published."),
+            NestedField(17, "stage", StringType(),
+                        doc="'All Stages' | 'Late Stage (Regional & Distant)', as "
+                            "published."),
+            NestedField(18, "race", StringType(),
+                        doc="Source-native race/ethnicity category, as published (6 "
+                            "values; see the scraper's select_options.json)."),
+            NestedField(19, "cancer", StringType(),
+                        doc="SCP's cancer-site category label, as published (23 values, "
+                            "including combined categories like 'Colon & Rectum' -- see "
+                            "select_options.json and scp.py's SEER bridge)."),
+            NestedField(20, "areatype", StringType(),
+                        doc="SCP's query-mode flag ('By County'/'By State'); NOT "
+                            "reliable for a row's own geographic level -- constant "
+                            "'By County' even on the national aggregate row in V1. See "
+                            "locale_type."),
+            NestedField(21, "age", StringType(),
+                        doc="Source-native age group, as published (7 values; see "
+                            "select_options.json)."),
+            NestedField(22, "state_fips", StringType(),
+                        doc="2-digit state FIPS code, or '00' for the national row."),
+            NestedField(23, "measurement", StringType(),
+                        doc="Topic marker, constant 'incidence' for this table."),
+            NestedField(24, "locale_type", StringType(),
+                        doc="SCP's own geography-type tag ('county'/'state'/'national'/"
+                            "'other'); NOT reliable for a row's own geographic level -- "
+                            "known to misclassify real counties (Louisiana parishes, "
+                            "Alaska boroughs, DC, Puerto Rico) as 'other'. Geo level is "
+                            "derived from fips's own shape instead (scp.py's module "
+                            "docstring)."),
+            NestedField(25, "_extracted_at", StringType(),
+                        doc="ISO timestamp the scraper recorded for this row's capture."),
+            NestedField(26, "url", StringType(),
+                        doc="The exact statecancerprofiles.cancer.gov query URL the "
+                            "scraper captured this row from."),
+            NestedField(27, "suppression_reason", StringType(),
+                        doc="'suppressed_small_count' | 'withheld_state_law', or NULL "
+                            "when reported. Absent from V1/V2 (NULL on every row there) "
+                            "-- those vintages carry no suppression marker at all "
+                            "(scp.py's module docstring); V3's own two values are the "
+                            "complete enum found in the real files -- an unmapped value "
+                            "raises SystemExit in transform rather than a guess."),
+            NestedField(28, "percent_of_cases_with_late_stage", StringType(),
+                        doc="A separate published statistic (not this measure's rate); "
+                            "landed for reference, not derived."),
+            NestedField(29, "locale", StringType(),
+                        doc="Plain county/state name, footnote markers stripped "
+                            "(compare reported_locale)."),
+            NestedField(30, "state", StringType(),
+                        doc="Full state name, or NULL for a county-level row (the "
+                            "state is implied by fips)."),
+            NestedField(31, "scp_vintage", StringType(), required=True,
+                        doc="Which vintage this row belongs to: 'V1' | 'V2' | 'V3' "
+                            "(scp.py's module docstring). Raw is replaced wholesale per "
+                            "value of this column."),
+            NestedField(32, "landed_in", StringType(), required=True,
+                        doc="cancerOnIce release that landed this row."),
+        ),
+        comment="State Cancer Profiles incidence, landed verbatim and whole, one row per "
+                "(geography, cancer site, sex, age, race, stage) query cell, per vintage "
+                "(SPEC.md § Sources -- first tranche, the flagship, #27). This is a "
+                "REPUBLISHED SCRAPE, not the original archive: statecancerprofiles."
+                "cancer.gov (NCI/CDC) has no API, bulk download or archive, so "
+                "seandavi/state-cancer-profile-scraper scrapes it and republishes each "
+                "captured vintage as a versioned Zenodo deposit, read here over anonymous "
+                "HTTPS (#65). The underlying content is a U.S. Government work, public "
+                "domain under 17 U.S.C. Sec 105; not endorsed by NCI/CDC.",
+    ),
+
+    "raw.scp__mortality": TableDef(
+        schema=Schema(
+            NestedField(1, "reported_locale", StringType(),
+                        doc="County/state name exactly as SCP renders it, including any "
+                            "footnote markers glued on (e.g. 'Allen County, Kansas(2)'); "
+                            "see locale/state for the plain name."),
+            NestedField(2, "fips", StringType(),
+                        doc="5-digit FIPS code as published: a county code, a state code "
+                            "padded '<state>000', or the national sentinel '00000'."),
+            NestedField(3, "2023_rural_urban_continuum_codesrural_urban_note", StringType(),
+                        doc="SCP's own two header cells concatenated with no separator by "
+                            "the upstream export (a verbatim upstream defect, not a scrape "
+                            "artifact) -- rural/urban classification per the 2023 USDA "
+                            "RUCC (2013 codes for Connecticut). NULL in V1/V2, which "
+                            "predate this column."),
+            NestedField(4, "age_adjusted_rate_per_100_000", StringType(),
+                        doc="The published death rate, age-adjusted to the 2000 US "
+                            "standard population. NULL whenever the cell is suppressed "
+                            "or withheld."),
+            NestedField(5, "lower_ci_rate", StringType(),
+                        doc="95% CI lower bound, or the literal sentinel '*' when the "
+                            "rate is suppressed -- landed as text so the sentinel "
+                            "survives verbatim; TRY_CAST in transform turns it into a "
+                            "clean NULL."),
+            NestedField(6, "upper_ci_rate", StringType(),
+                        doc="95% CI upper bound, or '*' when suppressed (see "
+                            "lower_ci_rate)."),
+            NestedField(7, "ci_rank", StringType(),
+                        doc="SCP's CI*Rank statistic; only populated for 'By State' rows "
+                            "from the 2026-05-28+ scrape. Landed for reference, not "
+                            "derived."),
+            NestedField(8, "lower_ci_rank", StringType(),
+                        doc="Lower bound of ci_rank's interval; see ci_rank."),
+            NestedField(9, "upper_ci_rank", StringType(),
+                        doc="Upper bound of ci_rank's interval; see ci_rank."),
+            NestedField(10, "average_annual_count", StringType(),
+                        doc="Average annual death count for the period, or NULL when "
+                            "suppressed. A small rounded value (e.g. '3') is not itself "
+                            "evidence of suppression -- SCP rounds counts of 16+ that "
+                            "are still below reporting precision; only "
+                            "suppression_reason / a NULL rate means suppressed."),
+            NestedField(11, "recent_trend", StringType(),
+                        doc="SCP's trend call ('stable'/'rising'/'falling'), or a text "
+                            "marker: '*' (trend not computable/suppressed) or "
+                            "'[P1 note]' (state-law withholding). Landed verbatim; both "
+                            "markers become trend=NULL in measure.observation."),
+            NestedField(12, "recent_5_year_trend_in_rate", StringType(),
+                        doc="Average Annual Percent Change (AAPC) point estimate, or "
+                            "the '*'/'[P1 note]' markers (see recent_trend). Landed for "
+                            "reference, not derived."),
+            NestedField(13, "lower_ci_trend_in_rate", StringType(),
+                        doc="AAPC's 95% CI lower bound; see recent_5_year_trend_in_rate."),
+            NestedField(14, "upper_ci_trend_in_rate", StringType(),
+                        doc="AAPC's 95% CI upper bound; see recent_5_year_trend_in_rate."),
+            NestedField(15, "year", StringType(),
+                        doc="SCP's own period label -- always the literal constant "
+                            "'Latest 5-year average' in every row of every vintage "
+                            "(verified); carries no real year. See scp.py's module "
+                            "docstring for where the real period comes from."),
+            NestedField(16, "sex", StringType(),
+                        doc="'Both Sexes' | 'Male' | 'Female', as published."),
+            NestedField(17, "stage", StringType(),
+                        doc="'All Stages' | 'Late Stage (Regional & Distant)', as "
+                            "published. Absent from V3 (NULL on every V3 row) -- SCP "
+                            "dropped this dimension from mortality starting with the "
+                            "2026-08-24 scrape."),
+            NestedField(18, "race", StringType(),
+                        doc="Source-native race/ethnicity category, as published (6 "
+                            "values; see the scraper's select_options.json)."),
+            NestedField(19, "cancer", StringType(),
+                        doc="SCP's cancer-site category label, as published (23 values, "
+                            "including combined categories like 'Colon & Rectum' -- see "
+                            "select_options.json and scp.py's SEER bridge)."),
+            NestedField(20, "areatype", StringType(),
+                        doc="SCP's query-mode flag ('By County'/'By State'); NOT "
+                            "reliable for a row's own geographic level -- constant "
+                            "'By County' even on the national aggregate row in V1. See "
+                            "locale_type."),
+            NestedField(21, "age", StringType(),
+                        doc="Source-native age group, as published (7 values; see "
+                            "select_options.json)."),
+            NestedField(22, "state_fips", StringType(),
+                        doc="2-digit state FIPS code, or '00' for the national row."),
+            NestedField(23, "measurement", StringType(),
+                        doc="Topic marker, constant 'mortality' for this table."),
+            NestedField(24, "locale_type", StringType(),
+                        doc="SCP's own geography-type tag ('county'/'state'/'national'/"
+                            "'other'); NOT reliable for a row's own geographic level -- "
+                            "known to misclassify real counties (Louisiana parishes, "
+                            "Alaska boroughs, DC, Puerto Rico) as 'other'. Geo level is "
+                            "derived from fips's own shape instead (scp.py's module "
+                            "docstring)."),
+            NestedField(25, "_extracted_at", StringType(),
+                        doc="ISO timestamp the scraper recorded for this row's capture."),
+            NestedField(26, "url", StringType(),
+                        doc="The exact statecancerprofiles.cancer.gov query URL the "
+                            "scraper captured this row from."),
+            NestedField(27, "suppression_reason", StringType(),
+                        doc="'suppressed_small_count' | 'withheld_state_law', or NULL "
+                            "when reported. Absent from V1/V2 (NULL on every row there) "
+                            "-- those vintages carry no suppression marker at all "
+                            "(scp.py's module docstring); V3's own two values are the "
+                            "complete enum found in the real files -- an unmapped value "
+                            "raises SystemExit in transform rather than a guess."),
+            NestedField(28, "locale", StringType(),
+                        doc="Plain county/state name, footnote markers stripped "
+                            "(compare reported_locale)."),
+            NestedField(29, "state", StringType(),
+                        doc="Full state name, or NULL for a county-level row (the "
+                            "state is implied by fips)."),
+            NestedField(30, "scp_vintage", StringType(), required=True,
+                        doc="Which vintage this row belongs to: 'V1' | 'V2' | 'V3' "
+                            "(scp.py's module docstring). Raw is replaced wholesale per "
+                            "value of this column."),
+            NestedField(31, "landed_in", StringType(), required=True,
+                        doc="cancerOnIce release that landed this row."),
+        ),
+        comment="State Cancer Profiles mortality, landed verbatim and whole, one row per "
+                "(geography, cancer site, sex, age, race[, stage]) query cell, per "
+                "vintage (SPEC.md § Sources -- first tranche, the flagship, #27). This is "
+                "a REPUBLISHED SCRAPE, not the original archive: statecancerprofiles."
+                "cancer.gov (NCI/CDC) has no API, bulk download or archive, so "
+                "seandavi/state-cancer-profile-scraper scrapes it and republishes each "
+                "captured vintage as a versioned Zenodo deposit, read here over anonymous "
+                "HTTPS (#65). The underlying content is a U.S. Government work, public "
+                "domain under 17 U.S.C. Sec 105; not endorsed by NCI/CDC.",
+    ),
+
+    "raw.scp__risk": TableDef(
+        schema=Schema(
+            NestedField(1, "reported_locale", StringType(),
+                        doc="County/state name exactly as SCP renders it, including any "
+                            "footnote markers glued on; see locale/state for the plain "
+                            "name."),
+            NestedField(2, "fips", StringType(),
+                        doc="5-digit FIPS code: a real county code for the District of "
+                            "Columbia/Puerto Rico rows only (BRFSS risk factors are not "
+                            "tabulated for ordinary US counties), a state code padded "
+                            "'<state>000', or the national sentinel '00000'."),
+            NestedField(3, "percent", StringType(),
+                        doc="The published BRFSS prevalence percent. NULL when "
+                            "suppressed."),
+            NestedField(4, "lower_ci_percent", StringType(),
+                        doc="95% CI lower bound, or NULL when suppressed."),
+            NestedField(5, "upper_ci_percent", StringType(),
+                        doc="95% CI upper bound, or NULL when suppressed."),
+            NestedField(6, "respondents", StringType(),
+                        doc="BRFSS survey respondent count underlying this estimate."),
+            NestedField(7, "topic", StringType(),
+                        doc="Short topic-group code, e.g. 'smoke', 'colorec', 'women', "
+                            "'men', 'alcohol', 'dietex', 'vaccine'."),
+            NestedField(8, "topic_label", StringType(),
+                        doc="Human-readable topic group, e.g. 'Smoking', 'Colorectal "
+                            "Screening'."),
+            NestedField(9, "risk", StringType(),
+                        doc="Short code for the specific risk/screening measure, e.g. "
+                            "'v505'."),
+            NestedField(10, "risk_label", StringType(),
+                        doc="Human-readable label for the measure, e.g. 'Binge drinking "
+                            "(4+ drinks on one occasion for women, 5+ ... ), ages 21+'."),
+            NestedField(11, "race", StringType(),
+                        doc="Source-native race/ethnicity category, as published -- a "
+                            "DIFFERENT vocabulary than incidence/mortality's race column "
+                            "(includes a verbatim upstream misspelling, 'Asian /Pacifice "
+                            "Islander (Non-Hispanic)'); never harmonised."),
+            NestedField(12, "sex", StringType(),
+                        doc="'Both Sexes' | 'Male' | 'Female', as published."),
+            NestedField(13, "datatype", StringType(),
+                        doc="Estimation method tag; always 'Direct Estimates' in the "
+                            "landed file."),
+            NestedField(14, "statefips_query", StringType(),
+                        doc="The state FIPS value SCP's own query form used to produce "
+                            "this row (not necessarily this row's own geography)."),
+            NestedField(15, "state_fips", StringType(),
+                        doc="2-digit state FIPS code, or '00' for the national row."),
+            NestedField(16, "locale_type", StringType(),
+                        doc="SCP's own geography-type tag; real county-level rows exist "
+                            "only for DC/Puerto Rico (BRFSS has no ordinary county "
+                            "estimates) -- see scp.py's module docstring ponytail note "
+                            "on why this topic isn't derived yet."),
+            NestedField(17, "_extracted_at", StringType(),
+                        doc="ISO timestamp the scraper recorded for this row's capture."),
+            NestedField(18, "url", StringType(),
+                        doc="The exact statecancerprofiles.cancer.gov query URL the "
+                            "scraper captured this row from."),
+            NestedField(19, "suppression_reason", StringType(),
+                        doc="'suppressed_small_count', or NULL when reported (the "
+                            "complete enum found in the real V3 risk file; an unmapped "
+                            "value would raise SystemExit if this topic were derived)."),
+            NestedField(20, "model_based_percent3", StringType(),
+                        doc="A separate model-based estimate variant published "
+                            "alongside the direct estimate; landed for reference, not "
+                            "derived."),
+            NestedField(21, "scp_vintage", StringType(), required=True,
+                        doc="Which vintage this row belongs to; always 'V3' -- risk is "
+                            "not published in V1/V2 (scp.py's module docstring). Raw is "
+                            "replaced wholesale per value of this column."),
+            NestedField(22, "landed_in", StringType(), required=True,
+                        doc="cancerOnIce release that landed this row."),
+        ),
+        comment="State Cancer Profiles screening & risk factors (BRFSS-derived), landed "
+                "verbatim and whole, V3 only -- not published in V1/V2 (SPEC.md § "
+                "Sources, #27). Land-only in this PR: not yet derived into "
+                "measure.observation (scp.py's module docstring ponytail note -- its "
+                "geography and race vocabulary need their own investigation before "
+                "deriving it safely). This is a REPUBLISHED SCRAPE, not the original "
+                "archive: statecancerprofiles.cancer.gov (NCI/CDC) has no API, bulk "
+                "download or archive, so seandavi/state-cancer-profile-scraper scrapes "
+                "it and republishes each captured vintage as a versioned Zenodo deposit, "
+                "read here over anonymous HTTPS (#65). The underlying content is a U.S. "
+                "Government work, public domain under 17 U.S.C. Sec 105; not endorsed "
+                "by NCI/CDC.",
+    ),
 
     # --- raw: census acs ---
     # ACS 5-year, the Cancer InFocus indicator subset (#29).
