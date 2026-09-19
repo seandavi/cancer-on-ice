@@ -71,6 +71,83 @@ correctly, and one that doesn't fails loudly rather than guessing.
 ponytail: no `geography.crosswalk` row for the Connecticut county -> planning
 region transition. Each vintage's units stand on their own; a weighted
 crosswalk (SPEC.md Acceptance B) is a separate, still-open piece of work.
+
+---
+
+**Districts (#104).** The same Gazetteer host also carries one national
+congressional-district (CD) file and one national state-legislative file per
+chamber (SLDU/SLDL upper/lower) per vintage year, e.g.
+`2024_Gazetteer/2024_Gaz_119CDs_national.zip`,
+`2024_Gazetteer/2024_Gaz_sldu_national.zip` — confirmed 2026-09-19 against the
+2024 and 2026 gazetteer directory listings. Same public-domain licence as
+above (same host, same federal-agency doctrine); checked again 2026-09-19.
+
+**CD version axis: Congress number, not the gazetteer year.** The issue's own
+framing states it: "Congress number / redistricting cycle = the boundary
+vintage." Census re-labels the CD file for whichever Congress its maps
+currently serve (2024_Gazetteer → 119CDs, 2026_Gazetteer → 120CDs, even before
+the 120th is sworn in) and updates it mid-cycle for court-ordered redraws —
+confirmed real: North Carolina's district 3701 carries a materially different
+ALAND/AWATER between the 2024 (119CDs) and 2026 (120CDs) files, the same
+boundary vintage window the issue names (NC, AL, LA, NY, GA). `land_districts`
+resolves the Congress number for a gazetteer year from `CD_CONGRESS`
+(verified against the real directory listings, 2017-2026) rather than
+guessing a formula, and skips CD (warn, continue) for a year outside it — the
+same graceful-degradation shape `land_state_fips`/`transform` already use for
+state names, so a district-less year never fails the whole ingest.
+`geography.unit.vintage` stays the gazetteer year for cd/sldu/sldl too (not
+the Congress number) — consistent with every other level, and sufficient:
+landing two gazetteer years both lands and keeps both boundaries queryable,
+Congress number or not, exactly like Connecticut's county -> planning-region
+switch above.
+
+**GEOID, not a NAME column, for CD.** Unlike SLDU/SLDL (which publish NAME,
+e.g. "State Senate District 1"), the CD file has no NAME column (like tracts)
+— `transform` synthesizes "Congressional District N" from the GEOID's
+district digits, "Congressional District At Large" for the single-district
+states (WY, VT, ... — GEOID's last two digits '00', verified against the real
+file).
+
+**No 2010 layout for districts.** ponytail: CD/SLDU/SLDL are only landed in
+the "modern" (2011-2024) and "2025+" layouts — the same two the 2024/2026
+files above are in. The 2010-era files exist (`Gaz_cd111_national.zip`,
+`Gaz_sldu_national.zip`, `Gaz_sldl_national.zip`, confirmed 2026-09-19) but
+add a third naming scheme (`cd111`, the Congress number *before* "CDs") and a
+third column layout (POP10/HU10, like 2010 counties) for a vintage this
+milestone doesn't need — add `CD_COLUMNS["2010"]`/a `_cd_zip_url` 2010 case
+alongside `COUNTY_COLUMNS["2010"]`'s if a later milestone lands district
+history back to 2010.
+
+**Block Assignment Files (BAF) — the block-to-district relationship, #104.**
+Census's own answer to "which blocks (hence tracts) are in which district" is
+not part of the Gazetteer: it is the redistricting BAF product, one zip per
+state bundling several geography kinds, e.g.
+`https://www2.census.gov/geo/docs/maps-data/data/baf2020/BlockAssign_ST01_AL.zip`
+containing `BlockAssign_ST01_AL_CD.txt` (`BLOCKID|DISTRICT`, one row per 2020
+Census block) among others — confirmed 2026-09-19 against the real Alabama
+zip and against the Block Assignment Files reference page
+(https://www.census.gov/geographies/reference-files/time-series/geo/block-assignment-files.html),
+same public-domain licence. `land_baf` lands only the `_CD`/`_SLDU`/`_SLDL`
+members into one raw table, `raw.census__baf`.
+
+**BAF is a fixed 2020-cycle product, not an annual one.** The reference page
+above carries only a "2020" tab — Census does not republish BAF for a
+mid-decade CD redraw, so `baf_vintage` is the constant `"2020"`, not a year
+(unlike the Gazetteer's `gazetteer_year`). A block's `district_code` in
+`raw.census__baf` can therefore lag a state's most recent redraw; it is still
+the only block-level detail Census publishes tying a block (hence a tract, by
+its GEOID's leading 11 digits) to a district.
+
+**geography.crosswalk (#25) does not exist yet.** `tract_district_weights` is
+a *recipe* (SPEC.md § Recipes), not a landed table: it computes
+`from_geo_id, to_geo_id, weight, weight_basis` from `raw.census__baf` on the
+fly and returns it, rather than writing anywhere — #25 hasn't declared
+`geography.crosswalk` for it to land in, and `weight_basis='block_count'`
+(share of a tract's 2020 blocks assigned to a district) isn't one of
+SPEC.md's declared bases (`population | housing_units | land_area`) since BAF
+carries no population. Once #25 lands `geography.crosswalk` with a
+`block_count` (or better, population-weighted once block population is also
+landed) basis, this recipe's SELECT is what feeds it — see the PR for #104.
 """
 
 import tempfile
@@ -81,7 +158,7 @@ from pathlib import Path
 
 import duckdb
 from pyiceberg.exceptions import NoSuchTableError
-from pyiceberg.expressions import AlwaysTrue, EqualTo
+from pyiceberg.expressions import AlwaysTrue, And, EqualTo
 
 from . import merge
 
@@ -116,6 +193,35 @@ FULL_COUNTY_COLUMNS = ("usps", "geoid", "geoidfq", "ansicode", "name", "pop10", 
 FULL_TRACT_COLUMNS = ("usps", "geoid", "geoidfq", "pop10", "hu10",
                       "aland", "awater", "aland_sqmi", "awater_sqmi", "intptlat", "intptlong")
 
+# Districts (#104): CD has no NAME column (like tracts); SLDU/SLDL do (like
+# counties). No "2010" layout -- see module docstring.
+CD_COLUMNS = {
+    "modern": ("USPS", "GEOID", "ALAND", "AWATER", "ALAND_SQMI", "AWATER_SQMI",
+               "INTPTLAT", "INTPTLONG"),
+    "2025": ("USPS", "GEOID", "GEOIDFQ", "ALAND", "AWATER", "ALAND_SQMI", "AWATER_SQMI",
+             "INTPTLAT", "INTPTLONG"),
+}
+SLD_COLUMNS = {
+    "modern": ("USPS", "GEOID", "NAME", "ALAND", "AWATER", "ALAND_SQMI", "AWATER_SQMI",
+               "INTPTLAT", "INTPTLONG"),
+    "2025": ("USPS", "GEOID", "GEOIDFQ", "NAME", "ALAND", "AWATER", "ALAND_SQMI", "AWATER_SQMI",
+             "INTPTLAT", "INTPTLONG"),
+}
+FULL_CD_COLUMNS = ("usps", "geoid", "geoidfq",
+                   "aland", "awater", "aland_sqmi", "awater_sqmi", "intptlat", "intptlong")
+FULL_SLD_COLUMNS = ("usps", "geoid", "geoidfq", "name",
+                    "aland", "awater", "aland_sqmi", "awater_sqmi", "intptlat", "intptlong")
+
+# gazetteer year -> the Congress number Census labels that year's CD file
+# with (module docstring), verified 2026-09-19 against the real directory
+# listings for every year here. A year outside this dict has its CD file
+# skipped (land_districts warns, continues) rather than guessed.
+CD_CONGRESS = {2017: 115, 2018: 116, 2019: 116, 2020: 116, 2021: 116, 2022: 116,
+              2023: 118, 2024: 119, 2025: 119, 2026: 120}
+
+BAF_BASE = "https://www2.census.gov/geo/docs/maps-data/data/baf2020"
+BAF_VINTAGE = "2020"  # fixed one-time-per-decade product (module docstring)
+
 
 def _zip_url(kind, year):
     if year == 2010:
@@ -123,24 +229,53 @@ def _zip_url(kind, year):
     return f"{BASE}/{year}_Gazetteer/{year}_Gaz_{kind}_national.zip"
 
 
+def _cd_zip_url(year):
+    """CD's file name embeds the serving Congress (module docstring), not a
+    fixed word, so it doesn't fit `_zip_url`'s formula. None for a year
+    outside `CD_CONGRESS` -- the caller decides what a missing Congress
+    number means (`land_districts` skips CD and warns)."""
+    congress = CD_CONGRESS.get(year)
+    return None if congress is None else f"{BASE}/{year}_Gazetteer/{year}_Gaz_{congress}CDs_national.zip"
+
+
+def _download(url, tmpdir, name):
+    """`url` as a local path: downloaded to `tmpdir/name` if it's `https://`,
+    used as-is otherwise (a local file, how the offline tests stay offline)."""
+    if not url.startswith("http"):
+        return Path(url)
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    dest = Path(tmpdir) / name
+    with urllib.request.urlopen(req) as r, open(dest, "wb") as f:
+        f.write(r.read())
+    return dest
+
+
 def _fetch_txt(url, tmpdir):
     """The gazetteer text file at `url`: downloaded and unzipped if it's an
     `https://` zip, used as-is otherwise (a local .txt, how the offline tests
     stay offline)."""
-    if url.startswith("http"):
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        zpath = Path(tmpdir) / "gazetteer.zip"
-        with urllib.request.urlopen(req) as r, open(zpath, "wb") as f:
-            f.write(r.read())
-        src = zpath
-    else:
-        src = Path(url)
+    src = _download(url, tmpdir, "gazetteer.zip")
     if src.suffix != ".zip":
         return src
     with zipfile.ZipFile(src) as z:
         names = [n for n in z.namelist() if n.endswith(".txt")]
         if len(names) != 1:
             raise SystemExit(f"census gazetteer: {url} has {len(names)} .txt member(s), expected 1")
+        z.extract(names[0], tmpdir)
+        return Path(tmpdir) / names[0]
+
+
+def _fetch_zip_member(url, suffix, tmpdir):
+    """One named member of a multi-file zip -- BAF's per-state zips bundle
+    AIANNH/CD/SLDU/SLDL/VTD/... together (module docstring), unlike the
+    single-.txt gazetteer zips `_fetch_txt` handles, so this picks the one
+    member whose name ends `suffix` (e.g. '_CD.txt')."""
+    src = _download(url, tmpdir, "baf.zip")
+    with zipfile.ZipFile(src) as z:
+        names = [n for n in z.namelist() if n.endswith(suffix)]
+        if len(names) != 1:
+            raise SystemExit(f"census gazetteer: {url} has {len(names)} member(s) ending "
+                             f"'{suffix}', expected 1")
         z.extract(names[0], tmpdir)
         return Path(tmpdir) / names[0]
 
@@ -254,9 +389,18 @@ def land_state_fips(cat, release, url=None):
 
 
 def transform(cat, release, year):
-    """Phase 2: this vintage's nation/state/county/tract rows into
-    geography.unit. Scoped to `vintage = year` — loading a later vintage never
-    retires an earlier one's rows (SPEC.md Acceptance B)."""
+    """Phase 2: this vintage's nation/state/county/tract(/cd/sldu/sldl) rows
+    into geography.unit, in ONE merge call scoped to `vintage = year` —
+    loading a later vintage never retires an earlier one's rows (SPEC.md
+    Acceptance B). Districts (#104) are folded into this same call, not a
+    second `merge.merge(..., EqualTo("vintage", year))`: two calls sharing one
+    scope is exactly issue #118 (the second retires the first's rows), so
+    every level landed for this vintage is re-derived here every time
+    (cdc_svi.py / census_acs.py do the same for their own scopes). A district
+    raw table not landed for this vintage (NoSuchTableError, same guard as
+    state_fips below) is simply left out of the UNION — the county/tract-only
+    behaviour every existing caller relies on is unchanged.
+    """
     con = duckdb.connect()
     con.register("counties", cat.load_table("raw.census__gazetteer_counties").scan(
         row_filter=EqualTo("gazetteer_year", year)).to_arrow())
@@ -271,6 +415,35 @@ def transform(cat, release, year):
         print("census gazetteer: raw.census__state_fips not landed; "
              "state names will fall back to USPS codes")
         name_expr, join_sql = "sk.usps", ""
+
+    # cd has no NAME column (module docstring): "Congressional District N" /
+    # "...At Large" is synthesized from the GEOID's district digits. A few
+    # rows per gazetteer year carry Census's own 'ZZ' sentinel (verified
+    # 2026-09-19 against the real 2024 file: CT/IL/NH each have one, ALAND=0
+    # -- water assigned to no district) instead of a number; TRY_CAST falls
+    # back to the raw code rather than failing the whole transform on it.
+    district_blocks = []
+    for level, table_id, name_sql in (
+        ("cd", "raw.census__gazetteer_cd",
+         "'Congressional District ' || CASE WHEN substr(d.geoid, 3, 2) = '00' THEN 'At Large' "
+         "ELSE coalesce(CAST(TRY_CAST(substr(d.geoid, 3, 2) AS INTEGER) AS VARCHAR), "
+         "substr(d.geoid, 3, 2)) END"),
+        ("sldu", "raw.census__gazetteer_sldu", "d.name"),
+        ("sldl", "raw.census__gazetteer_sldl", "d.name"),
+    ):
+        try:
+            con.register(f"{level}_raw", cat.load_table(table_id).scan(
+                row_filter=EqualTo("gazetteer_year", year)).to_arrow())
+        except NoSuchTableError:
+            continue
+        district_blocks.append(f"""
+      UNION ALL
+        SELECT '{level}:' || d.geoid, '{level}', d.geoid, {year}, {name_sql},
+               'state:' || substr(d.geoid, 1, 2),
+               TRY_CAST(d.aland AS DOUBLE), TRY_CAST(d.awater AS DOUBLE),
+               TRY_CAST(d.intptlat AS DOUBLE), TRY_CAST(d.intptlong AS DOUBLE),
+               CAST(NULL AS VARCHAR)
+        FROM {level}_raw d""")
 
     unit = con.sql(f"""
         SELECT 'nation:US' AS geo_id, 'nation' AS level, 'US' AS fips, {year} AS vintage,
@@ -297,6 +470,7 @@ def transform(cat, release, year):
                TRY_CAST(t.intptlat AS DOUBLE), TRY_CAST(t.intptlong AS DOUBLE),
                CAST(NULL AS VARCHAR)
         FROM tracts t
+        {"".join(district_blocks)}
     """).to_arrow_table()
 
     return {"geography.unit": merge.merge(cat, "geography.unit", unit, release, EqualTo("vintage", year))}
@@ -306,3 +480,104 @@ def ingest(cat, release, year, county_url=None, tract_url=None, state_url=None):
     year, raw_counts = land_raw(cat, release, year, county_url, tract_url)
     n_state = land_state_fips(cat, release, state_url)
     return {**raw_counts, "raw.census__state_fips": n_state, **transform(cat, release, year)}
+
+
+def land_districts(cat, release, year, cd_url=None, sldu_url=None, sldl_url=None):
+    """Phase 1 for the three district levels (#104): CD/SLDU/SLDL Gazetteer
+    files, same file family and layouts as counties/tracts (module docstring),
+    landed into their own raw tables. Separate from `land_raw`/`ingest` so a
+    year with no known Congress number, or the unsupported 2010 layout,
+    never breaks plain county/tract landing (call this only when you want
+    districts too; `transform` re-derives geography.unit safely either way).
+    """
+    sldu_url = sldu_url or _zip_url("sldu", year)
+    sldl_url = sldl_url or _zip_url("sldl", year)
+    with tempfile.TemporaryDirectory() as tmp:
+        n_sldu = _land_file(cat, release, year, sldu_url, tmp,
+                            SLD_COLUMNS, FULL_SLD_COLUMNS, "raw.census__gazetteer_sldu")
+        n_sldl = _land_file(cat, release, year, sldl_url, tmp,
+                            SLD_COLUMNS, FULL_SLD_COLUMNS, "raw.census__gazetteer_sldl")
+        cd_url = cd_url or _cd_zip_url(year)
+        if cd_url is None:
+            print(f"census gazetteer: no known Congress number for gazetteer year {year} "
+                 f"(CD_CONGRESS); skipping raw.census__gazetteer_cd")
+            n_cd = 0
+        else:
+            n_cd = _land_file(cat, release, year, cd_url, tmp,
+                              CD_COLUMNS, FULL_CD_COLUMNS, "raw.census__gazetteer_cd")
+    merge.manifest(cat, release, "census_gazetteer_districts", sldu_url, n_sldu,
+                   version=str(year), method="release_number")
+    return year, {"raw.census__gazetteer_cd": n_cd, "raw.census__gazetteer_sldu": n_sldu,
+                 "raw.census__gazetteer_sldl": n_sldl}
+
+
+def ingest_districts(cat, release, year, cd_url=None, sldu_url=None, sldl_url=None):
+    """Phase 1+2 for districts, callable on its own (see `land_districts`)."""
+    _, district_counts = land_districts(cat, release, year, cd_url, sldu_url, sldl_url)
+    return {**district_counts, **transform(cat, release, year)}
+
+
+def land_baf(cat, release, states, baf_vintage=BAF_VINTAGE, zip_path=None):
+    """Block Assignment Files (#104): the block-to-district relationship the
+    tract -> district weights below depend on (module docstring). One zip per
+    state bundles several geography kinds; only CD/SLDU/SLDL are extracted.
+
+    `states`: `[(fips, usps), ...]` to land, e.g. rows of
+    `raw.census__state_fips` (`land_state_fips`). `zip_path`, given, overrides
+    every state's URL with one local zip -- only meaningful for a
+    single-state offline test.
+
+    Scoped per state (`state` AND `baf_vintage`) so landing one state never
+    touches another's rows (AGENTS.md) -- BAF is not landed per gazetteer
+    year (module docstring: it is a single, fixed cycle product).
+    """
+    con = duckdb.connect()
+    total = 0
+    for fips, usps in states:
+        url = zip_path or f"{BAF_BASE}/BlockAssign_ST{fips}_{usps}.zip"
+        with tempfile.TemporaryDirectory() as tmp:
+            selects = []
+            for level, suffix in (("cd", "_CD.txt"), ("sldu", "_SLDU.txt"), ("sldl", "_SLDL.txt")):
+                path = _fetch_zip_member(url, suffix, tmp)
+                view = f"{level}_view"
+                con.sql(f"""
+                    CREATE OR REPLACE TEMP VIEW {view} AS
+                    SELECT BLOCKID AS block_geoid, DISTRICT AS district_code
+                    FROM read_csv('{path}', header=true, delim='|', quote='', escape='',
+                                  all_varchar=true)
+                """)
+                selects.append(f"SELECT '{fips}' AS state, block_geoid, '{level}' AS district_level, "
+                               f"district_code, '{baf_vintage}' AS baf_vintage, "
+                               f"'{release}' AS landed_in FROM {view}")
+            arrow = con.sql(" UNION ALL ".join(selects)).to_arrow_table()
+        if not arrow.num_rows:
+            raise SystemExit(f"census gazetteer: {url} yielded no BAF rows for {usps}")
+        scope = And(EqualTo("state", fips), EqualTo("baf_vintage", baf_vintage))
+        total += merge.write(cat, "raw.census__baf", arrow, scope)
+    merge.manifest(cat, release, "census_gazetteer_baf", BAF_BASE, total,
+                   version=baf_vintage, method="release_number")
+    return total
+
+
+def tract_district_weights(cat, district_level, baf_vintage=BAF_VINTAGE):
+    """Recipe (SPEC.md § Recipes; #104), not a landed table: `from_geo_id ->
+    to_geo_id` weights computed from `raw.census__baf` on the fly and
+    returned, since `geography.crosswalk` (#25) doesn't exist yet to hold
+    them (module docstring). `weight` is a tract's share of 2020 Census
+    blocks assigned to each district (`weight_basis='block_count'`) — a
+    stand-in for a population-weighted basis until block population is also
+    landed.
+    """
+    con = duckdb.connect()
+    con.register("baf", cat.load_table("raw.census__baf").scan(
+        row_filter=And(EqualTo("district_level", district_level),
+                       EqualTo("baf_vintage", baf_vintage))).to_arrow())
+    return con.sql(f"""
+        SELECT 'tract:' || substr(block_geoid, 1, 11) AS from_geo_id,
+               '{district_level}:' || state || district_code AS to_geo_id,
+               count(*)::DOUBLE / sum(count(*)) OVER (PARTITION BY substr(block_geoid, 1, 11))
+                   AS weight,
+               'block_count' AS weight_basis
+        FROM baf
+        GROUP BY substr(block_geoid, 1, 11), state, district_code
+    """).to_arrow_table()

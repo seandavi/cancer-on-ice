@@ -149,8 +149,9 @@ TABLES = {
                         doc="Canonical id: '<level>:<fips>', e.g. 'county:08031'. Part of the "
                             "business key together with vintage."),
             NestedField(2, "level", StringType(), required=True,
-                        doc="One of: nation, state, county, tract, block_group, zcta, place, "
-                            "custom."),
+                        doc="One of: nation, state, county, tract, block_group, zcta, place, cd "
+                            "(congressional district), sldu (state legislative district, upper "
+                            "chamber), sldl (state legislative district, lower chamber), custom."),
             NestedField(3, "fips", StringType(), doc="The bare code, without the level prefix."),
             NestedField(4, "vintage", IntegerType(), required=True,
                         doc="Boundary vintage year, e.g. 2020. Part of the business key: a FIPS "
@@ -383,6 +384,132 @@ TABLES = {
                 "wholesale each time — not versioned by gazetteer year, since FIPS-to-state "
                 "assignment doesn't move on that cadence. Feeds geography.unit's state-level "
                 "names. Licence: U.S. government work, public domain (17 U.S.C. § 105).",
+    ),
+
+    # --- raw: census gazetteer districts ---
+    # Congressional (CD) and state legislative (SLDU/SLDL) districts, plus the
+    # Census Block Assignment Files tying blocks (hence tracts) to them (#104).
+    "raw.census__gazetteer_cd": TableDef(
+        schema=Schema(
+            NestedField(1, "usps", StringType(), doc="Two-letter USPS state/territory abbreviation."),
+            NestedField(2, "geoid", StringType(), required=True,
+                        doc="4-digit state+district FIPS-style code, e.g. '0101' (Alabama's 1st). "
+                            "The last two digits are '00' for an at-large (single-district) state. "
+                            "Unique per row within one gazetteer_year."),
+            NestedField(3, "geoidfq", StringType(),
+                        doc="Fully qualified GEOID used to join data.census.gov tables. Only "
+                            "present from the 2025 gazetteer layout; NULL in earlier vintages."),
+            NestedField(4, "aland", StringType(), doc="Land area, square meters, as published."),
+            NestedField(5, "awater", StringType(), doc="Water area, square meters, as published."),
+            NestedField(6, "aland_sqmi", StringType(), doc="Land area, square miles, as published."),
+            NestedField(7, "awater_sqmi", StringType(), doc="Water area, square miles, as published."),
+            NestedField(8, "intptlat", StringType(), doc="Internal point latitude, as published."),
+            NestedField(9, "intptlong", StringType(), doc="Internal point longitude, as published."),
+            NestedField(10, "gazetteer_year", IntegerType(), required=True,
+                        doc="The gazetteer vintage year this row was published under. Census "
+                            "labels the underlying CD file with the Congress number that vintage "
+                            "serves (census_gazetteer.CD_CONGRESS), not this year — this column is "
+                            "geography.unit's boundary vintage, kept parallel to every other "
+                            "level. Raw is replaced wholesale per value of this column."),
+            NestedField(11, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("gazetteer_year", "geoid"),
+        comment="Census Gazetteer congressional-district (CD) file landed verbatim and whole, one "
+                "row per district per vintage year (SPEC.md § Geography; #104). No NAME column "
+                "(census_gazetteer.transform synthesizes one). Licence: U.S. government work, "
+                "public domain (17 U.S.C. § 105).",
+    ),
+
+    "raw.census__gazetteer_sldu": TableDef(
+        schema=Schema(
+            NestedField(1, "usps", StringType(), doc="Two-letter USPS state/territory abbreviation."),
+            NestedField(2, "geoid", StringType(), required=True,
+                        doc="5-digit state+district code, e.g. '01001' (Alabama Senate District 1). "
+                            "Unique per row within one gazetteer_year."),
+            NestedField(3, "geoidfq", StringType(),
+                        doc="Fully qualified GEOID used to join data.census.gov tables. Only "
+                            "present from the 2025 gazetteer layout; NULL in earlier vintages."),
+            NestedField(4, "name", StringType(), doc="District name, as published, e.g. 'State "
+                                                      "Senate District 1'."),
+            NestedField(5, "aland", StringType(), doc="Land area, square meters, as published."),
+            NestedField(6, "awater", StringType(), doc="Water area, square meters, as published."),
+            NestedField(7, "aland_sqmi", StringType(), doc="Land area, square miles, as published."),
+            NestedField(8, "awater_sqmi", StringType(), doc="Water area, square miles, as published."),
+            NestedField(9, "intptlat", StringType(), doc="Internal point latitude, as published."),
+            NestedField(10, "intptlong", StringType(), doc="Internal point longitude, as published."),
+            NestedField(11, "gazetteer_year", IntegerType(), required=True,
+                        doc="The gazetteer vintage year this row was published under. Raw is "
+                            "replaced wholesale per value of this column."),
+            NestedField(12, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("gazetteer_year", "geoid"),
+        comment="Census Gazetteer state-legislative upper-chamber (SLDU) file landed verbatim and "
+                "whole, one row per district per vintage year (SPEC.md § Geography; #104). Licence: "
+                "U.S. government work, public domain (17 U.S.C. § 105).",
+    ),
+
+    "raw.census__gazetteer_sldl": TableDef(
+        schema=Schema(
+            NestedField(1, "usps", StringType(), doc="Two-letter USPS state/territory abbreviation."),
+            NestedField(2, "geoid", StringType(), required=True,
+                        doc="5-digit state+district code, e.g. '01001' (Alabama House District 1). "
+                            "Unique per row within one gazetteer_year."),
+            NestedField(3, "geoidfq", StringType(),
+                        doc="Fully qualified GEOID used to join data.census.gov tables. Only "
+                            "present from the 2025 gazetteer layout; NULL in earlier vintages."),
+            NestedField(4, "name", StringType(), doc="District name, as published, e.g. 'State "
+                                                      "House District 1'."),
+            NestedField(5, "aland", StringType(), doc="Land area, square meters, as published."),
+            NestedField(6, "awater", StringType(), doc="Water area, square meters, as published."),
+            NestedField(7, "aland_sqmi", StringType(), doc="Land area, square miles, as published."),
+            NestedField(8, "awater_sqmi", StringType(), doc="Water area, square miles, as published."),
+            NestedField(9, "intptlat", StringType(), doc="Internal point latitude, as published."),
+            NestedField(10, "intptlong", StringType(), doc="Internal point longitude, as published."),
+            NestedField(11, "gazetteer_year", IntegerType(), required=True,
+                        doc="The gazetteer vintage year this row was published under. Raw is "
+                            "replaced wholesale per value of this column."),
+            NestedField(12, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("gazetteer_year", "geoid"),
+        comment="Census Gazetteer state-legislative lower-chamber (SLDL) file landed verbatim and "
+                "whole, one row per district per vintage year (SPEC.md § Geography; #104). Licence: "
+                "U.S. government work, public domain (17 U.S.C. § 105).",
+    ),
+
+    "raw.census__baf": TableDef(
+        schema=Schema(
+            NestedField(1, "state", StringType(), required=True,
+                        doc="2-digit state FIPS code this block's zip file was published under."),
+            NestedField(2, "block_geoid", StringType(), required=True,
+                        doc="15-digit 2020 Census block GEOID (state+county+tract+block), as "
+                            "published ('BLOCKID'). Its leading 11 digits are the block's tract's "
+                            "geography.unit fips."),
+            NestedField(3, "district_level", StringType(), required=True,
+                        doc="Which district type this row assigns the block to: 'cd', 'sldu' or "
+                            "'sldl'. Part of the business key together with block_geoid — one "
+                            "block has one row per level."),
+            NestedField(4, "district_code", StringType(), required=True,
+                        doc="The district's code within district_level, as published ('DISTRICT') "
+                            "— combined with state, matches the corresponding "
+                            "raw.census__gazetteer_{cd,sldu,sldl}.geoid's district digits."),
+            NestedField(5, "baf_vintage", StringType(), required=True,
+                        doc="Fixed '2020' — the redistricting-cycle Block Assignment Files are a "
+                            "one-time-per-decade product, not republished for mid-decade district "
+                            "redraws (census_gazetteer module docstring). Raw is replaced wholesale "
+                            "per (state, baf_vintage)."),
+            NestedField(6, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("baf_vintage", "district_level", "state", "block_geoid"),
+        comment="Census 2020 Redistricting Data Block Assignment Files (BAF), CD/SLDU/SLDL members "
+                "only, landed verbatim per state (SPEC.md § geography.crosswalk; #104). The "
+                "block-level detail `census_gazetteer.tract_district_weights` computes tract -> "
+                "district weights from — a recipe, not geography.crosswalk (#25 doesn't exist "
+                "yet; see that function's docstring). Licence: U.S. government work, public domain "
+                "(17 U.S.C. § 105).",
     ),
 
     # --- raw: cdc places ---
