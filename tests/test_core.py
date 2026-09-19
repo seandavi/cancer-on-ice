@@ -57,6 +57,26 @@ def test_geography_unit_merge_round_trip(cat):
     assert counts["unchanged"] == 1
 
 
+def test_merge_raises_rather_than_drop_a_sibling_calls_rows(cat):
+    """#118: merge.merge recomputes the *complete* state of `scope`, so two
+    calls sharing one scope in the same release (e.g. county then tract rows
+    under one source_release) silently lose the first call's rows -- they're
+    too new (valid_from == this release) to be 'retired', but absent from the
+    second call's `incoming` so also not 'new'/'changed'/'unchanged'. They
+    match none of the five outcomes, and the scope-filtered overwrite then
+    erases them. The guard must raise instead of losing them."""
+    v1 = pa.Table.from_pylist([county("county:08031", "08031", "Denver County")])
+    merge.merge(cat, "geography.unit", v1, REL1, AlwaysTrue())
+
+    v2 = pa.Table.from_pylist([county("county:08059", "08059", "Jefferson County")])
+    with pytest.raises(ValueError, match="08031"):
+        merge.merge(cat, "geography.unit", v2, REL1, AlwaysTrue())
+
+    # the first call's row must still be there, untouched
+    versions = {(r["geo_id"], r["valid_from"], r["valid_to"]) for r in rows(cat, "geography.unit")}
+    assert ("county:08031", REL1, None) in versions
+
+
 def observation(value_status, value):
     return dict(value_status=value_status, value=value)
 

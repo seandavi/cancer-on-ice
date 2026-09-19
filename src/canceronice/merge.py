@@ -169,6 +169,30 @@ def merge(cat, identifier, incoming, release, scope):
     # correct one.
     con.execute("CREATE OR REPLACE TABLE cur AS "
                 "SELECT * FROM stored WHERE valid_from IS DISTINCT FROM valid_to")
+
+    # #118: a row opened at this release -- by an earlier merge call sharing
+    # this scope, e.g. county then tract rows under one source_release -- that
+    # this call's `incoming` doesn't mention matches none of the five outcomes
+    # below: too new for 'retired'/'superseded' ({supersede} is false), not
+    # closed for 'history', and absent from `inc` for 'new'/'changed'/
+    # 'unchanged'. It would simply be missing from `final`, and the
+    # scope-filtered overwrite would then erase it -- silently, since nothing
+    # about that looks like an error. Raise instead of losing it.
+    cq = ", ".join(f'c."{k}"' for k in keys)
+    missing = con.sql(f"""
+        SELECT {cq} FROM cur c LEFT JOIN inc i ON {on}
+        WHERE c.valid_to IS NULL AND c.valid_from = '{release}' AND i.{k0} IS NULL
+    """).fetchall()
+    if missing:
+        sample = ", ".join(str(tuple(r)) for r in missing[:5])
+        raise ValueError(
+            f"{identifier}: {len(missing)} row(s) opened in release {release!r} by an "
+            f"earlier merge sharing this scope are absent from this incoming and would be "
+            f"silently dropped (#118), e.g. {sample}. One `merge.merge` call per scope per "
+            f"ingest: combine this source's slices into one incoming table, or narrow "
+            f"`scope` to name the slice (AGENTS.md)."
+        )
+
     # One stored row per incoming key to match against, by priority: a row
     # retired at this release that is identical (reopen it, and thereby drop any
     # replacement opened at this release), else the live row, else a row retired
