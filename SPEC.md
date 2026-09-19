@@ -43,9 +43,12 @@ vintage, or a dashboard that has since silently changed.
 
 - **Surveillance sources overwrite themselves.** State Cancer Profiles has no
   API, bulk download, or archive of prior estimates; each data refresh
-  replaces the last. PLACES, SVI, AHRF, and the facility lists behave the same
-  way. biocOnIce's rows-carry-history model (`first_seen` / `retired_in`) is
-  exactly what this domain lacks.
+  replaces the last. The facility lists (FDA MQSA, HPSA designations, provider
+  files) behave the same way: only today's list is served. biocOnIce's
+  rows-carry-history model (`first_seen` / `retired_in`) is exactly what this
+  domain lacks. PLACES, SVI and AHRF do keep their prior releases; the case
+  for landing them is the next bullet, plus having every release in one
+  joinable model rather than one file layout per year.
 - **Sources get revised, restructured and retired.** Methods change, geography
   vintages roll, and data products are periodically reorganized or
   discontinued. Analyses and grant narratives written against an earlier

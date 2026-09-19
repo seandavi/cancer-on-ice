@@ -38,6 +38,48 @@ def main():
     rc.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
     rc.add_argument("--url", help="an already-downloaded CSV file or alternate URL")
 
+    # --- derived: geography alias ---
+    # geography.alias — FIPS renames and recodes that are not boundary changes (#26).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- derived: measure cancer site ---
+    # measure.cancer_site — SEER site recode <-> ICD-O-3 <-> ICD-10 <-> NCIt / MONDO (#31).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: cdc atsdr svi ---
+    # CDC/ATSDR Social Vulnerability Index, every published edition (#40).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: usda ers ruca ---
+    # USDA ERS Rural-Urban Commuting Area codes, tract level (#41).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: usda ers food access ---
+    # USDA ERS Food Access Research Atlas (#42).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: hrsa ahrf ---
+    # HRSA Area Health Resources Files, county (#39).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: hrsa hpsa and health centers ---
+    # HRSA HPSA designations and health-center sites; declares facility.site (#38).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
     args = p.parse_args()
 
     cat = catalog()
@@ -58,6 +100,48 @@ def main():
     # --- raw: usda ers rucc ---
     elif args.cmd == "rucc":
         _print(ers_rucc.ingest(cat, args.release, args.url))
+
+    # --- derived: geography alias ---
+    # geography.alias — FIPS renames and recodes that are not boundary changes (#26).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- derived: measure cancer site ---
+    # measure.cancer_site — SEER site recode <-> ICD-O-3 <-> ICD-10 <-> NCIt / MONDO (#31).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: cdc atsdr svi ---
+    # CDC/ATSDR Social Vulnerability Index, every published edition (#40).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: usda ers ruca ---
+    # USDA ERS Rural-Urban Commuting Area codes, tract level (#41).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: usda ers food access ---
+    # USDA ERS Food Access Research Atlas (#42).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: hrsa ahrf ---
+    # HRSA Area Health Resources Files, county (#39).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: hrsa hpsa and health centers ---
+    # HRSA HPSA designations and health-center sites; declares facility.site (#38).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
 
     else:
         for ns in cat.list_namespaces():

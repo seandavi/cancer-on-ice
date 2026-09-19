@@ -454,6 +454,48 @@ TABLES = {
                 "one row per (county, attribute) exactly as published. Public domain (U.S. "
                 "Government work, 17 U.S.C. Sec 105).",
     ),
+
+    # --- derived: geography alias ---
+    # geography.alias — FIPS renames and recodes that are not boundary changes (#26).
+    # The table declaration(s) goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- derived: measure cancer site ---
+    # measure.cancer_site — SEER site recode <-> ICD-O-3 <-> ICD-10 <-> NCIt / MONDO (#31).
+    # The table declaration(s) goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: cdc atsdr svi ---
+    # CDC/ATSDR Social Vulnerability Index, every published edition (#40).
+    # The table declaration(s) goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: usda ers ruca ---
+    # USDA ERS Rural-Urban Commuting Area codes, tract level (#41).
+    # The table declaration(s) goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: usda ers food access ---
+    # USDA ERS Food Access Research Atlas (#42).
+    # The table declaration(s) goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: hrsa ahrf ---
+    # HRSA Area Health Resources Files, county (#39).
+    # The table declaration(s) goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: hrsa hpsa and health centers ---
+    # HRSA HPSA designations and health-center sites; declares facility.site (#38).
+    # The table declaration(s) goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
 }
 
 
