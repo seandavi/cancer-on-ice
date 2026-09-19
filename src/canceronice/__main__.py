@@ -33,7 +33,10 @@ def main():
                     help="PLACES county-data release year (default: latest known)")
 
     # --- raw: usda ers rucc ---
-    # A parallel agent adds an `ingest-*` subparser here.
+    from . import ers_rucc
+    rc = sub.add_parser("rucc", help="land the USDA ERS Rural-Urban Continuum Codes, then derive")
+    rc.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    rc.add_argument("--url", help="an already-downloaded CSV file or alternate URL")
 
     args = p.parse_args()
 
@@ -53,7 +56,8 @@ def main():
         _print(places.ingest(cat, args.release, args.places_release))
 
     # --- raw: usda ers rucc ---
-    # A parallel agent adds its dispatch branch here.
+    elif args.cmd == "rucc":
+        _print(ers_rucc.ingest(cat, args.release, args.url))
 
     else:
         for ns in cat.list_namespaces():
