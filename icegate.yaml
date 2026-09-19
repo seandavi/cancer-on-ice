@@ -1,0 +1,88 @@
+# icegate configuration for the cancerOnIce catalog (Catchment Lake).
+#
+# Deployed as its own icegate instance (Worker `icegate-canceronice`), separate
+# from the omicidx and biocOnIce gateways, so that an anonymous-enabled config
+# never shares a file — or a blast radius — with another catalog's.
+#
+# ${VARS} resolve from Workers secrets at deploy time; no infrastructure
+# identifiers are committed here. R2_CATALOG_PREFIX is the Data Catalog UUID
+# that /v1/config returns as `overrides.prefix` — for R2 this is NOT the
+# account id.
+
+cors:
+  enabled: true
+  origins:
+    - "*" # DuckDB-WASM in the browser; the bucket carries its own CORS policy for data files
+
+authentication:
+  # Anonymous public read. Safe in a shared account because vended credentials
+  # inherit the bucket-scoped read-only backend token (biocOnIce ADR-0011), and
+  # because nothing restricted ever lands here (SPEC.md § Licence gate).
+  # Namespaces and permissions MUST stay explicit: absent lists default to
+  # empty, which grants nothing.
+  anonymous:
+    enabled: true
+    namespaces:
+      - provenance
+      - raw
+      - geography
+      - population
+      - measure
+      - facility
+      - catchment
+      - resource
+    permissions:
+      - read
+
+  api_keys:
+    enabled: true
+
+    # Ingest key. The only principal that may write. Plaintext: Secret Manager
+    # canceronice-icegate-key-seandavi, cdsci-infra.
+    seandavi:
+      sha256: a98e0ac84cac0d33f24a00e119ec33561ec5d2e28d2c2f24a28f6125379b765a
+      namespaces:
+        - provenance
+        - raw
+        - geography
+        - population
+        - measure
+        - facility
+        - catchment
+        - resource
+      permissions:
+        - read
+        - write
+
+    # Personal read-only key (plaintext: Secret Manager
+    # canceronice-icegate-key-seandavi-ro, cdsci-infra). Exercises the RO token
+    # path end to end — the same path anonymous uses.
+    seandavi-ro:
+      sha256: 602ab810d606866d2f8c6ddadbba6e0049d57ee999dafc82ed612e6eb587e509
+      namespaces:
+        - provenance
+        - raw
+        - geography
+        - population
+        - measure
+        - facility
+        - catchment
+        - resource
+      permissions:
+        - read
+
+catalogs:
+  canceronice:
+    endpoint: https://catalog.cloudflarestorage.com/${CF_ACCOUNT_ID}/canceronice
+    backend_warehouse: ${CF_ACCOUNT_ID}_canceronice
+    backend_prefix: ${R2_CATALOG_PREFIX}
+    # Two bucket-scoped backend tokens (icegate#34, biocOnIce ADR-0011): the
+    # read-only vending token is the default every request falls back to; the
+    # write token is selected only for principals granted `write`. Nothing
+    # Admin-level enters this Worker.
+    auth:
+      bearer_token: ${CF_API_TOKEN_RO}
+      bearer_token_write: ${CF_API_TOKEN_RW}
+    capabilities:
+      read: true
+      write: true
