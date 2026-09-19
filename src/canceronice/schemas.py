@@ -688,6 +688,18 @@ TABLES = {
                             "rows."),
             NestedField(12, "valid_from", StringType(), required=True, doc=VALID_FROM),
             NestedField(13, "valid_to", StringType(), doc=VALID_TO),
+            NestedField(14, "mapping_relation", StringType(),
+                        doc="Whether ncit_id/mondo_id denote exactly this cancer_site_code's "
+                            "disease, or a broader one it is a constituent of: 'exact' | "
+                            "'broader'. NULL only where neither ncit_id nor mondo_id is filled "
+                            "(mapping_basis is also NULL there). A subsite code combined by SCP "
+                            "into a larger category (e.g. 21041 Cecum, part of 'Colon and "
+                            "Rectum') is 'broader' -- the ontology term denotes the combined "
+                            "disease, not the subsite alone; a code whose ontology term matches "
+                            "it 1:1 (e.g. 26000 Breast) is 'exact'. Same vocabulary as "
+                            "measure.stratum_map's relation column (SPEC.md), added by #90 for "
+                            "the cross-lake join to biocOnIce's ontology namespace (#60, #61) to "
+                            "be able to choose exact matches only."),
         ),
         business_key=("cancer_site_code", "source_release"),
         sort_by=("cancer_site_code", "source_release"),

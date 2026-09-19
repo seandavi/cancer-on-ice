@@ -122,6 +122,23 @@ Lymphoma", "Leukemia", "Corpus and Uterus, NOS", "Liver and Intrahepatic
 Bile Duct" groupings use the identical wording SCP's site list uses) -- a
 `note` on each such row says so.
 
+**`mapping_relation` (#90).** The CSV's free-text `note` said whether a
+mapping was exact or broader only in prose; #90 asks for that as its own
+column so a cross-lake join to biocOnIce's `ontology` namespace (#60, #61)
+can filter to exact matches only, the same way a stratum pooling is made
+visible via `measure.stratum_map.relation` (SPEC.md). Every one of the 40
+curated rows already documented above as a "SCP combined category" (Colon &
+Rectum's 11 subsites, NHL's 2, Leukemia's 9, Liver & Bile Duct's 2,
+Uterus/Corpus's 2, Brain & ONS's 2 -- 28 rows) is `broader`: the ontology
+term names the combined disease, and the row's own `cancer_site_code` is one
+narrower constituent of it. Kidney and Renal Pelvis (29020) is also
+`broader`, for the different reason already in its `note` (no NCIt/MONDO
+term splits kidney parenchyma from renal pelvis at SEER's granularity). The
+remaining 11 single-site rows (Breast, Cervix, Lung, Prostate, Melanoma,
+Bladder, Pancreas, Thyroid, Ovary, Stomach, Esophagus) are `exact` -- a 1:1
+match between the SEER code and the ontology term. `mapping_relation` is
+NULL exactly where `mapping_basis` is NULL (no ontology id at all).
+
 ponytail: `parent_code` is declared but always NULL for this edition (see
 above) -- add real values if a future SEER edition (e.g. the 2023 revision,
 which does assign single codes to some of these same combined groups) turns
@@ -274,10 +291,12 @@ def _cod_icd10_by_label(cat):
 
 
 def _curated_ontology(ontology_csv):
-    """cancer_site_code -> (ncit_id, mondo_id), from the reviewed CSV (module
-    docstring). A blank cell is NULL, never an empty string."""
+    """cancer_site_code -> (ncit_id, mondo_id, mapping_relation), from the
+    reviewed CSV (module docstring). A blank cell is NULL, never an empty
+    string."""
     with open(ontology_csv, newline="") as f:
-        return {row["cancer_site_code"]: (row["ncit_id"] or None, row["mondo_id"] or None)
+        return {row["cancer_site_code"]: (row["ncit_id"] or None, row["mondo_id"] or None,
+                                          row["mapping_relation"] or None)
                for row in csv.DictReader(f)}
 
 
@@ -298,7 +317,7 @@ def transform(cat, release, ontology_csv=None):
 
     out = []
     for code, entry in site_by_code.items():
-        ncit_id, mondo_id = ontology.get(code, (None, None))
+        ncit_id, mondo_id, mapping_relation = ontology.get(code, (None, None, None))
         out.append(dict(
             cancer_site_code=code,
             label=entry["label"],
@@ -311,6 +330,7 @@ def transform(cat, release, ontology_csv=None):
             mapping_basis="curated" if (ncit_id or mondo_id) else None,
             source="SEER",
             source_release=SITE_RECODE_EDITION,
+            mapping_relation=mapping_relation if (ncit_id or mondo_id) else None,
         ))
 
     cancer_site = pa.Table.from_pylist(out)

@@ -301,6 +301,13 @@ schemes will diverge across releases of the same source; this is expected.
 SEER site recode ↔ ICD-O-3 topography/histology ↔ ICD-10 (mortality) ↔ NCIt /
 MONDO. The NCIt/MONDO columns are the **bridge to biocOnIce's `ontology`
 namespace** — the one natural cross-lake join key besides publications.
+`mapping_relation` (`exact` | `broader`, #90) says whether the NCIt/MONDO id
+denotes exactly this site or a broader disease it is a constituent of (a SEER
+subsite folded into an SCP combined category, e.g. Cecum → "colorectal
+cancer"), the same vocabulary and purpose as `measure.stratum_map`'s
+`relation` column above — a consumer choosing to join on exact ontology
+matches only does it visibly, rather than silently inheriting a broader
+term's burden.
 
 ## Facilities
 
