@@ -3166,6 +3166,58 @@ TABLES = {
                 "publishes (bls_laus.py's FOOTNOTE_TEXT mirrors it and SystemExits on a code "
                 "not in this table).",
     ),
+
+    # --- raw: cdc teenvaxview ---
+    # CDC TeenVaxView / NIS-Teen HPV vaccination coverage (#105).
+    "raw.teenvaxview__coverage": TableDef(
+        schema=Schema(
+            NestedField(1, "vaccine", StringType(), required=True,
+                        doc="Which vaccine/sample this row covers, e.g. 'HPV', "
+                            "'≥1 Dose MenACWY', 'Tetanus' -- as published."),
+            NestedField(2, "dose", StringType(),
+                        doc="Dose family plus sex, comma-joined, e.g. '≥1 Dose, Males "
+                            "and Females' (teenvaxview.py splits this on the last ', ' -- "
+                            "see its module docstring). Blank for a handful of `vaccine` "
+                            "values that pack the dose into `vaccine` instead."),
+            NestedField(3, "geography_type", StringType(), required=True,
+                        doc="'States/Local Areas' or 'HHS Regions/National', as published."),
+            NestedField(4, "geography", StringType(), required=True,
+                        doc="State/territory name, local area name (e.g. 'TX-Bexar "
+                            "County'), 'Region N', or 'United States', as published."),
+            NestedField(5, "year_season", StringType(), required=True,
+                        doc="Survey year, e.g. '2022', or a pooled window, e.g. "
+                            "'2018-2022' -- teenvaxview.py splits this on '-' for "
+                            "period_start/period_end."),
+            NestedField(6, "dimension_type", StringType(), required=True,
+                        doc="'Overall' | 'Age' | 'Race and Ethnicity' | 'Insurance "
+                            "Coverage' | 'Poverty' | 'Urbanicity', as published."),
+            NestedField(7, "dimension", StringType(), required=True,
+                        doc="The category within dimension_type, e.g. '13-17 Years', "
+                            "'Uninsured', as published."),
+            NestedField(8, "coverage_estimate", StringType(), required=True,
+                        doc="The published percent, or the literal sentinel 'NA' when "
+                            "withheld (module docstring: no separate footnote column)."),
+            NestedField(9, "ci_95", StringType(),
+                        doc="95% CI as published, e.g. '60.3 to 68.3'; NULL when "
+                            "coverage_estimate is 'NA'."),
+            NestedField(10, "sample_size", StringType(),
+                        doc="Unweighted NIS-Teen survey respondent count underlying the "
+                            "estimate (not a numerator/denominator pair for it -- module "
+                            "docstring's ponytail note); NULL when suppressed."),
+            NestedField(11, "teenvax_vintage", StringType(), required=True,
+                        doc="Retrieval-date vintage this row was landed under, e.g. "
+                            "'2026-09-19' (SPEC.md's vintage rule). Raw is replaced "
+                            "wholesale per value of this column."),
+            NestedField(12, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("teenvax_vintage", "vaccine", "geography", "dose", "year_season"),
+        comment="CDC TeenVaxView / NIS-Teen vaccination coverage among adolescents "
+                "13-17 years, landed verbatim and whole, every vaccine and survey year "
+                "(SPEC.md § Sources; #105). U.S. Government work; public domain per "
+                "CDC's site-wide content-usage policy (teenvaxview.py's module "
+                "docstring).",
+    ),
 }
 
 
