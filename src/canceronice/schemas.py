@@ -1985,9 +1985,9 @@ TABLES = {
     # EPA SDWIS Federal (via ECHO's SDWA bulk download): public water systems,
     # their violations, and the counties/areas they serve, refreshed quarterly
     # (SPEC.md § Sources — second tranche). Public domain (17 U.S.C. § 105).
-    # ADMIN_NAME/EMAIL_ADDR/PHONE_NUMBER/PHONE_EXT_NUMBER/FAX_NUMBER/
-    # ALT_PHONE_NUMBER are excluded from raw.sdwis__pub_water_systems -- see
-    # epa_sdwis.py's module docstring.
+    # ORG_NAME/ADMIN_NAME/EMAIL_ADDR/PHONE_NUMBER/PHONE_EXT_NUMBER/FAX_NUMBER/
+    # ALT_PHONE_NUMBER/ADDRESS_LINE1/ADDRESS_LINE2 are excluded from
+    # raw.sdwis__pub_water_systems -- see epa_sdwis.py's module docstring.
     "raw.sdwis__pub_water_systems": TableDef(
         schema=Schema(
             NestedField(1, "SUBMISSIONYEARQUARTER", StringType(), required=True,
@@ -2044,48 +2044,40 @@ TABLES = {
                         doc="Number of service connections."),
             NestedField(28, "SUBMISSION_STATUS_CODE", StringType(),
                         doc="Reported/unreported/rejected submission status."),
-            NestedField(29, "ORG_NAME", StringType(),
-                        doc="The organization (legal entity) associated with the system. For "
-                            "many small systems the legal entity IS a sole proprietor and this "
-                            "is that person's name as publicly filed with EPA -- unlike "
-                            "ADMIN_NAME/EMAIL_ADDR/PHONE_NUMBER (excluded from this table), this "
-                            "is the organizational-identity field itself, the same kind of public "
-                            "business-registration fact any facility source in this lake carries."),
-            NestedField(30, "ADDRESS_LINE1", StringType(), doc="Address line 1."),
-            NestedField(31, "ADDRESS_LINE2", StringType(), doc="Address line 2."),
-            NestedField(32, "CITY_NAME", StringType(), doc="City."),
-            NestedField(33, "ZIP_CODE", StringType(), doc="USPS ZIP code."),
-            NestedField(34, "COUNTRY_CODE", StringType(), doc="Two-character country code."),
-            NestedField(35, "FIRST_REPORTED_DATE", StringType(), doc="First reported date for the system."),
-            NestedField(36, "LAST_REPORTED_DATE", StringType(), doc="Last reported date for the system."),
-            NestedField(37, "STATE_CODE", StringType(),
+            NestedField(29, "CITY_NAME", StringType(), doc="City."),
+            NestedField(30, "ZIP_CODE", StringType(), doc="USPS ZIP code."),
+            NestedField(31, "COUNTRY_CODE", StringType(), doc="Two-character country code."),
+            NestedField(32, "FIRST_REPORTED_DATE", StringType(), doc="First reported date for the system."),
+            NestedField(33, "LAST_REPORTED_DATE", StringType(), doc="Last reported date for the system."),
+            NestedField(34, "STATE_CODE", StringType(),
                         doc="USPS state abbreviation of the system's address -- a mailing "
                             "address, not necessarily the state of the geography it serves (see "
                             "raw.sdwis__geographic_areas); can be NULL or non-US for a handful of "
                             "systems."),
-            NestedField(38, "SOURCE_WATER_PROTECTION_CODE", StringType(),
+            NestedField(35, "SOURCE_WATER_PROTECTION_CODE", StringType(),
                         doc="Source water protection implementation status."),
-            NestedField(39, "SOURCE_PROTECTION_BEGIN_DATE", StringType(),
+            NestedField(36, "SOURCE_PROTECTION_BEGIN_DATE", StringType(),
                         doc="Date source water protection was substantially implemented."),
-            NestedField(40, "OUTSTANDING_PERFORMER", StringType(),
+            NestedField(37, "OUTSTANDING_PERFORMER", StringType(),
                         doc="Outstanding-performer criteria compliance."),
-            NestedField(41, "OUTSTANDING_PERFORM_BEGIN_DATE", StringType(),
+            NestedField(38, "OUTSTANDING_PERFORM_BEGIN_DATE", StringType(),
                         doc="Date outstanding-performer criteria was met."),
-            NestedField(42, "REDUCED_RTCR_MONITORING", StringType(),
+            NestedField(39, "REDUCED_RTCR_MONITORING", StringType(),
                         doc="Reduced Revised Total Coliform Rule monitoring frequency."),
-            NestedField(43, "REDUCED_MONITORING_BEGIN_DATE", StringType(),
+            NestedField(40, "REDUCED_MONITORING_BEGIN_DATE", StringType(),
                         doc="Start date of reduced monitoring."),
-            NestedField(44, "REDUCED_MONITORING_END_DATE", StringType(),
+            NestedField(41, "REDUCED_MONITORING_END_DATE", StringType(),
                         doc="End date of reduced monitoring."),
-            NestedField(45, "SEASONAL_STARTUP_SYSTEM", StringType(),
+            NestedField(42, "SEASONAL_STARTUP_SYSTEM", StringType(),
                         doc="Seasonal pressurization/startup status."),
-            NestedField(46, "landed_in", StringType(), required=True,
+            NestedField(43, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
-        comment="EPA SDWIS Federal public water systems, landed verbatim and whole (minus six "
-                "individual-contact columns, excluded -- see epa_sdwis.py). One row per PWSID, "
-                "replaced wholesale per SUBMISSIONYEARQUARTER (SPEC.md § Sources — second "
-                "tranche). Public domain (17 U.S.C. § 105).",
+        comment="EPA SDWIS Federal public water systems, landed verbatim and whole (minus nine "
+                "individual columns -- ORG_NAME, ADDRESS_LINE1/2 and six admin-contact fields -- "
+                "excluded -- see epa_sdwis.py). One row per PWSID, replaced wholesale per "
+                "SUBMISSIONYEARQUARTER (SPEC.md § Sources — second tranche). Public domain "
+                "(17 U.S.C. § 105).",
     ),
 
     "raw.sdwis__geographic_areas": TableDef(

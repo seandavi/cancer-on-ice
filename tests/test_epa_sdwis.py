@@ -59,11 +59,14 @@ def test_raw_is_verbatim_and_whole(cat):
     assert len(pws) == 4
     assert {r["PWSID"] for r in pws} == {"PA4340323", "CT1680051", "MI2293063", "NJ1219304"}
     assert {r["landed_in"] for r in pws} == {REL}
-    # A real sole-proprietor row: ORG_NAME kept, the six contact columns gone.
+    # A real sole-proprietor row (its real ORG_NAME/ADMIN_NAME was "KLINGMAN,
+    # KEN", its real ADDRESS_LINE1 a street address): PWS_NAME kept, all nine
+    # individual columns gone.
     woodbury = next(r for r in pws if r["PWSID"] == "CT1680051")
-    assert woodbury["ORG_NAME"] == "KLINGMAN, KEN"
-    for excluded in ("ADMIN_NAME", "EMAIL_ADDR", "PHONE_NUMBER",
-                     "PHONE_EXT_NUMBER", "FAX_NUMBER", "ALT_PHONE_NUMBER"):
+    assert woodbury["PWS_NAME"] == "WOODBURY KNOLL, LLC."
+    for excluded in ("ORG_NAME", "ADMIN_NAME", "EMAIL_ADDR", "PHONE_NUMBER",
+                     "PHONE_EXT_NUMBER", "FAX_NUMBER", "ALT_PHONE_NUMBER",
+                     "ADDRESS_LINE1", "ADDRESS_LINE2"):
         assert excluded not in woodbury
 
     viol = rows(cat, "raw.sdwis__violations_enforcement")

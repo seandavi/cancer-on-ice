@@ -51,19 +51,35 @@ preference over name-matching) resolvable to a full county FIPS: see
 `SDWA_SERVICE_AREAS.csv` and `SDWA_SITE_VISITS.csv` are also in the zip and
 are NOT landed -- out of scope for this issue's violations-by-county ask.
 
-**Individual-contact columns excluded.** `SDWA_PUB_WATER_SYSTEMS.csv`'s real
-header carries `ADMIN_NAME`, `EMAIL_ADDR`, `PHONE_NUMBER`,
-`PHONE_EXT_NUMBER`, `FAX_NUMBER` and `ALT_PHONE_NUMBER` -- verified against
-the real download to hold individual people's names, emails and phone
-numbers (e.g. `ADMIN_NAME` "KLINGMAN, KEN" with a personal-looking email;
-many small systems' admin contact is a named individual). All six are
-excluded from `raw.sdwis__pub_water_systems` (SPEC.md/AGENTS.md: public
-aggregates and organisations only, never individuals). `ORG_NAME` is kept:
-it is documented as the system's legal-entity/organisation field, not a
-contact field, even though for small sole-proprietor systems the legal
-entity's registered name happens to be a person's name (the same public
-business-registration fact any facility list in this lake would carry, not
-an act of extracting personal data from a private list).
+**Individual columns excluded.** `SDWA_PUB_WATER_SYSTEMS.csv`'s real header
+carries an administrative-contact block that is personal data for a large
+share of the ~434,000 systems in the real download, not just its obviously-named
+contact fields. Nine columns are excluded from `raw.sdwis__pub_water_systems`
+entirely (SPEC.md/AGENTS.md: public aggregates and organisations only, never
+individuals):
+  - `ADMIN_NAME`, `EMAIL_ADDR`, `PHONE_NUMBER`, `PHONE_EXT_NUMBER`,
+    `FAX_NUMBER`, `ALT_PHONE_NUMBER` -- verified to hold individual people's
+    names, emails and phone numbers directly (e.g. `ADMIN_NAME` "KLINGMAN,
+    KEN" with a personal-looking email).
+  - `ORG_NAME` -- verified NOT to be reliably an organisation name: of the
+    276,273 systems that are both privately owned (`OWNER_TYPE_CODE = 'P'`)
+    and small (`POPULATION_SERVED_COUNT <= 500`), 84,140 (30%) have an
+    `ORG_NAME` matching a `"LASTNAME, FIRSTNAME"` pattern rather than a
+    business name; across the whole file, 123,992 rows (29%) match that
+    pattern, and of those, 116,976 (94%) have `ORG_NAME` identical to
+    `ADMIN_NAME` -- the same individual, not a coincidentally name-shaped
+    company. This reverses an earlier version of this module, which kept
+    `ORG_NAME` reasoning it was purely an organisational field; the real
+    prevalence here says otherwise.
+  - `ADDRESS_LINE1`, `ADDRESS_LINE2` -- of those same personal-`ORG_NAME`
+    rows, 116,370 (94%) carry a populated `ADDRESS_LINE1`, which for a
+    small, individually-owned system (a private well, a mobile-home park)
+    is very often that person's own mailing address, not a facility address
+    distinct from a residence.
+`PWS_NAME` (the system's own name), `CITY_NAME`, `STATE_CODE`, `ZIP_CODE`
+and every geography/derivation field are kept -- the system itself is an
+organisation and a place, and nothing derived here reads any of the nine
+excluded columns.
 
 **Geography: PWSIDs are not counties, and this module counts violations
 against counties served.** `SDWA_GEOGRAPHIC_AREAS.csv` gives each PWSID's
@@ -174,10 +190,10 @@ MEMBERS = {
     "ansi": "SDWA_REF_ANSI_AREAS.csv",
 }
 
-# The six individual-contact columns excluded from raw.sdwis__pub_water_systems
+# The nine individual columns excluded from raw.sdwis__pub_water_systems
 # (module docstring). Every other real header column lands, in file order.
-PWS_EXCLUDE = ("ADMIN_NAME", "EMAIL_ADDR", "PHONE_NUMBER", "PHONE_EXT_NUMBER",
-               "FAX_NUMBER", "ALT_PHONE_NUMBER")
+PWS_EXCLUDE = ("ORG_NAME", "ADMIN_NAME", "EMAIL_ADDR", "PHONE_NUMBER", "PHONE_EXT_NUMBER",
+               "FAX_NUMBER", "ALT_PHONE_NUMBER", "ADDRESS_LINE1", "ADDRESS_LINE2")
 
 # The real headers, in file order -- the drift-detection contract (verified
 # 2026-09-18 against the actual 2026Q2 download, not the summary page).
@@ -333,7 +349,7 @@ def _land_violations(cat, release, path, quarter):
 
 def land_raw(cat, release, url=None, pws_url=None, geo_url=None, viol_url=None, ansi_url=None):
     """Phase 1: this quarter's four SDWA files, landed verbatim and whole
-    (minus the six excluded personal-contact columns -- module docstring).
+    (minus the nine excluded individual columns -- module docstring).
     Returns `(quarter, {identifier: rows})`.
     """
     with tempfile.TemporaryDirectory() as tmp:
