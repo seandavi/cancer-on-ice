@@ -77,15 +77,12 @@ def test_a_curated_field_missing_from_the_csv_fails_before_landing(cat, tmp_path
         hrsa_ahrf.land_raw(cat, REL, csv_url=str(bad), techdoc_url=TECHDOC)
 
 
-def test_a_broken_techdoc_parse_is_a_hard_stop(cat, tmp_path):
-    """If the technical-documentation copyright lookup ever returned an empty
-    exclusion set (a broken parse), landing raw would silently include
-    AMA/AHA/ADA copyrighted data -- this must never happen quietly. Built with
-    DuckDB's own excel extension (no new test dependency) rather than a
-    checked-in binary fixture, since this is a synthetic edge case (a broken
-    parse), not a real excerpt."""
+def _write_xlsx(path, rows):
+    """A tiny FIELD/CAT/YEAR OF DATA/VARIABLE NAME/CHARACTERISTICS/SOURCE/DATE ON
+    workbook, built with DuckDB's own excel extension (no new test dependency)
+    rather than a checked-in binary fixture -- used only for synthetic edge
+    cases below, not real excerpts (those are tests/tiny_hrsa_ahrf_techdoc.xlsx)."""
     import duckdb as ddb
-    empty = tmp_path / "empty.xlsx"
     con = ddb.connect()
     con.execute("INSTALL excel; LOAD excel;")
     con.execute("""
@@ -93,11 +90,58 @@ def test_a_broken_techdoc_parse_is_a_hard_stop(cat, tmp_path):
                        "VARIABLE NAME" VARCHAR, CHARACTERISTICS VARCHAR, SOURCE VARCHAR,
                        "DATE ON" VARCHAR)
     """)
-    con.execute("INSERT INTO t VALUES ('fips_st_cnty', 'GEO', NULL, ' Header', '', "
-               "'Derived From GSA', NULL)")
-    con.execute(f"COPY t TO '{empty}' WITH (FORMAT xlsx, HEADER true)")
-    with pytest.raises(SystemExit, match="copyrighted"):
+    for row in rows:
+        con.execute("INSERT INTO t VALUES (?, ?, ?, ?, ?, ?, ?)", row)
+    con.execute(f"COPY t TO '{path}' WITH (FORMAT xlsx, HEADER false)")
+
+
+def test_a_broken_techdoc_parse_is_a_hard_stop(cat, tmp_path):
+    """If the technical-documentation parse ever silently returned zero field
+    rows (a broken parse: wrong range, wrong sheet, corrupt file), landing raw
+    would have nothing to check any column's licence against -- this must
+    never proceed quietly."""
+    empty = tmp_path / "empty.xlsx"
+    _write_xlsx(empty, [(None, None, None, None, None, None, None),
+                        ("", "", None, "", "", "", None)])
+    with pytest.raises(SystemExit, match="no field rows at all"):
         hrsa_ahrf.land_raw(cat, REL, csv_url=CSV, techdoc_url=str(empty))
+
+
+def test_an_unrecognised_source_is_excluded_and_reported(cat, tmp_path, capsys):
+    """A column sourced from something not on ALLOWED_SOURCES or
+    EXCLUDED_SOURCES -- a source this module has never been told about, e.g.
+    a future AHRF release adding a new commercial data partner -- must be
+    excluded by default (fail closed) rather than landed, and reported so a
+    human notices and classifies it. Synthetic: no such field exists in the
+    real 2024-2025 file (every one of its 45 real sources is already
+    classified, see the module docstring's table)."""
+    csv_with_extra = tmp_path / "extra.csv"
+    header = Path(CSV).read_text().splitlines()[0]
+    lines = Path(CSV).read_text().splitlines()[1:]
+    csv_with_extra.write_text(
+        header + ",unknown_src_field_24\n" +
+        "\n".join(f"{line},{n}" for line, n in zip(lines, [99, 1, 5, "", ""])) + "\n")
+
+    techdoc_with_extra = tmp_path / "extra_techdoc.xlsx"
+    real_rows = [(col, "HP", 2024, " placeholder", "", " CMS Provider of Services", "07/25")
+                for col, _, _ in hrsa_ahrf.CURATED_FIELDS] + [
+        ("fips_st_cnty", "GEO", None, " Header", "", " Derived From GSA", None),
+        ("cnty_name_st_abbrev", "GEO", None, " County Name", "", " Derived From GSA", None),
+        ("md_nf_23", "HP", 2023, " Total M.D.'s", "", " AMA Phys Master File", "07/25"),
+        ("hosp_23", "HF", 2023, " Total Number Hospitals", "", " AHA Survey Database 23", "07/25"),
+        ("unknown_src_field_24", "HP", 2024, " Synthetic Unrecognised Field", "",
+         " Fictional Vendor Database", "07/25"),
+    ]
+    _write_xlsx(techdoc_with_extra, real_rows)
+
+    ahrf_release, n = hrsa_ahrf.land_raw(cat, REL, csv_url=str(csv_with_extra),
+                                         techdoc_url=str(techdoc_with_extra))
+    out = capsys.readouterr().out
+    assert "Fictional Vendor Database" in out
+    assert "unknown_src_field_24" in out
+
+    raw = rows(cat, "raw.hrsa__ahrf")
+    assert "unknown_src_field_24" not in {r["column_name"] for r in raw}
 
 
 def test_derives_curated_measures_with_correct_period_and_geo_vintage(cat):

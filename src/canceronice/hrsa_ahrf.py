@@ -57,52 +57,109 @@ and its own source-abbreviation glossary, in the same file:
 
 The per-field data dictionary in the same document (columns FIELD/CAT/YEAR OF
 DATA/VARIABLE NAME/CHARACTERISTICS/SOURCE/DATE ON) names, for every one of
-AHRF's ~4,352 county columns, which of ~50 sources it came from. Checked
-programmatically against the real 2024-2025 file: 2,653 of the 4,352 columns
-are sourced from `AMA Phys Master File`, `AHA Survey Database 22/23`, or `ADA
-Masterfile` -- copyrighted, third-party, and (per the quote above) NOT
-redistributable without that owner's consent. This includes essentially
-every physician-specialty count (oncology, radiation oncology, gastroenterology,
-radiology, dermatology, total M.D.s -- all `AMA Phys Master File`) and every
-hospital/bed count (`hosp_*`, `*_beds_*` -- all `AHA Survey Database`).
+AHRF's 4,352 county columns, which of 45 distinct sources it came from (6
+more columns list no source at all). **The gate below is an ALLOWLIST, not a
+blocklist**: a column lands only if its source is on `ALLOWED_SOURCES` (or is
+one of the 6 no-source structural fields, `NO_SOURCE_LISTED_ALLOWED`) --
+anything else is excluded by default, whether this module has a documented
+reason for it (`EXCLUDED_SOURCES`) or has simply never seen that source
+before (reported by `land_raw`, never landed silently). Every one of the 45
+distinct sources in the real 2024-2025 file, checked 2026-09-18:
+
+| Source (as the documentation spells it) | Cols | Verdict | Why |
+| --- | ---: | --- | --- |
+| AMA Phys Master File | 1815 | EXCLUDED | American Medical Association Physician Masterfile -- glossary-flagged `(Copyright)`; named in the cover-page restriction quoted above. Every physician-specialty count (oncology, radiation oncology, gastroenterology, radiology, dermatology, total M.D.s) is this source. |
+| AHA Survey Database 23 | 493 | EXCLUDED | American Hospital Association survey -- `(Copyright)`, same restriction. Every hospital/bed count is this source. |
+| AHA Survey Database 22 | 295 | EXCLUDED | as above. |
+| ADA Masterfile | 50 | EXCLUDED | American Dental Association Masterfile -- named directly in the cover-page restriction (its glossary entry omits the `(Copyright)` tag the other two carry, but the prose names it all the same). |
+| County Health Rankings File | 2 | EXCLUDED | Third party (County Health Rankings & Roadmaps, U Wisconsin PHI / RWJF) -- SPEC.md's Licence gate already lists this source as "Needs review before ingest ... confirm the record's licence", repo-wide and unresolved. |
+| System Sciences Study | 1 | EXCLUDED | One 1976-77 elevation field from a private contractor's environmental-mortality study -- no redistribution terms found. |
+| DDH,9-33 | 1 | EXCLUDED | One field (`cnty_name`) citing an internal document code not resolved in the documentation's own glossary -- excluded for lack of a verifiable source, not suspected proprietary (the county name is also carried, allowed, as part of `cnty_name_st_abbrev`, "Derived From GSA"). |
+| 2019-23 Census ACS | 338 | allowed | U.S. Census Bureau, federal. |
+| 2018-22 Census ACS | 338 | allowed | ditto. |
+| Census SAHIE | 152 | allowed | ditto (Small Area Health Insurance Estimates). |
+| 2010 Census SF1 | 129 | allowed | ditto. |
+| 2020 Census DHC | 124 | allowed | ditto. |
+| NCHS Mortality File | 88 | allowed | National Center for Health Statistics (CDC/HHS), federal. NCHS's own release policy already suppresses county cells under 10 occurrences before AHRF ever receives the data (confirmed in the AHRF User Guide) -- a publication-threshold policy, not a redistribution restriction; nothing here is `(Copyright)`-tagged. |
+| CMS NPI File | 60 | allowed | CMS NPPES provider registry, federal. |
+| Census County Char File | 54 | allowed | U.S. Census Bureau, federal. |
+| 2020 Census Redistrict | 48 | allowed | ditto (PL 94-171). |
+| CMS Marketplace | 44 | allowed | CMS, federal. |
+| 2010 Census Redistrict | 42 | allowed | ditto. |
+| NCHS Natality File | 42 | allowed | as NCHS Mortality File above. |
+| Medicare Geographic Var | 40 | allowed | CMS, federal. |
+| CMS Provider of Services | 24 | allowed | CMS, federal (already used for FQHC/RHC/hospice/ASC counts). |
+| HRSA DNHSC | 18 | allowed | HRSA, federal. |
+| ERS Dept of Agriculture | 16 | allowed | USDA, federal (same source `ers_rucc.py` already treats as public domain). |
+| Census Map | 14 | allowed | U.S. Census Bureau, federal. |
+| Census SAIPE | 14 | allowed | ditto. |
+| Dept of Veterans Affairs | 10 | allowed | federal. |
+| OMB-23-01 | 8 | allowed | Office of Management and Budget, federal. |
+| HRSA Data Warehouse | 8 | allowed | HRSA, federal (already used for HPSA codes). |
+| Census County Pop Est | 8 | allowed | U.S. Census Bureau, federal. |
+| Bureau of Labor Stats | 8 | allowed | federal. |
+| CMS | 7 | allowed | federal. |
+| LAPI | 6 | allowed | U.S. Bureau of Economic Analysis, federal (Local Area Personal Income). |
+| CMS Monthly Enroll Dashbrd | 6 | allowed | CMS, federal. |
+| CMS MA Penetration | 6 | allowed | CMS, federal. |
+| EPA | 6 | allowed | federal. |
+| EPA Air Qual Index Rep | 6 | allowed | federal. |
+| Derived From GSA | 5 | allowed | General Services Administration, federal -- includes `fips_st_cnty` itself, which becomes raw's `fips` key column rather than a `column_name`/`value` cell. |
+| Census Bureau | 4 | allowed | federal. |
+| CMS PDP Penetration | 4 | allowed | CMS, federal. |
+| CDC EPH Tracking Network | 4 | allowed | federal. |
+| NCHS Mort/Nat File | 2 | allowed | a combined mortality/natality-file citation, same NCHS reasoning above. |
+| Census SNAP File | 2 | allowed | U.S. Census Bureau, federal. |
+| Census Housing Unit File | 2 | allowed | ditto. |
+| U.S. Post Office | 1 | allowed | USPS state abbreviations -- standard postal codes, the same ones `census_gazetteer.py`/`ers_rucc.py` already carry unremarked. |
+| DHHS | 1 | allowed | federal. |
+| *(no source listed)* | 6 | allowed | AHRF's own file-structural fields (`blank`, `date_cretn`, `date_file`, `entity_file`, `file_length`, `st_name`) -- not content from any dataset. |
+
+2,657 excluded + 1,695 allowed = 4,352, the whole header. `raw.hrsa__ahrf` lands
+1,694 of the 1,695 allowed columns as `(column_name, value)` cells -- the
+1,695th, `fips_st_cnty`, becomes the `fips` key column instead (see the
+`Derived From GSA` row). Checked against the real 2024-2025 file
+programmatically (not just this table by hand): zero columns fell into the
+"unrecognised source" bucket -- every one of the 45 distinct sources above
+is accounted for by `ALLOWED_SOURCES` or `EXCLUDED_SOURCES`.
 
 **Consequence for this module, and for the issue that asked for it (#39):**
 the issue's requested curated list -- "active MDs, primary-care physicians,
 oncologists, gastroenterologists, radiologists, dermatologists, hospitals,
-hospital beds" -- is drawn entirely from these two copyrighted sources and is
-NOT landed here, in raw or derived, under any circumstance (AGENTS.md hard
-gate: "License before ingest... license:unknown is a hard stop"; here the
-finding is stronger than "unknown" -- it is affirmatively NOT cleared for
-these fields). What ships instead is the curated set built from AHRF's
-genuinely public-domain columns: HRSA's own program data, and other federal
-agencies' (see `MEASURE_DEFINITIONS` below and the PR description).
+hospital beds" -- is drawn entirely from the AMA/AHA rows above and is NOT
+landed here, in raw or derived, under any circumstance (AGENTS.md hard gate:
+"License before ingest... license:unknown is a hard stop"; here the finding
+is stronger than "unknown" -- it is affirmatively not cleared). What ships
+instead is the curated set built from AHRF's genuinely allowed columns (see
+`MEASURE_DEFINITIONS` below and the PR description).
 
-The remaining ~1,699 columns (geography/administrative fields with no listed
-source, plus fields sourced from the Census Bureau, CMS, USDA ERS, HRSA's own
-Data Warehouse/NHSC, EPA, NCHS, BLS, the VA, etc.) are U.S. government work,
-public domain per 17 U.S.C. Sec 105 ("Data and content created by government
-employees within the scope of their employment are not subject to domestic
-copyright protection... Government works are by default in the U.S. Public
-Domain.", https://resources.data.gov/open-licenses/) -- the same standing
-quote the other sources in this repo cite. `land_raw` computes this
-column split itself, at ingest time, straight from the release's own
-technical documentation (see `_excluded_columns`), rather than a hand-copied
-list going stale.
+The allowed sources above are U.S. government work, public domain per 17
+U.S.C. Sec 105 ("Data and content created by government employees within the
+scope of their employment are not subject to domestic copyright
+protection... Government works are by default in the U.S. Public Domain.",
+https://resources.data.gov/open-licenses/) -- the same standing quote the
+other sources in this repo cite -- except `U.S. Post Office`, treated as
+allowed for the same reason the repo's other sources already carry USPS
+state codes unremarked (a standardized, non-creative 2-letter code, not the
+Postal Service's copyrightable content). `land_raw` computes the eligible
+column set itself, at ingest time, straight from the release's own technical
+documentation (see `_classify_columns`), rather than trusting a hand-copied
+list to stay in sync with it.
 
 ## Landing WHOLE, in LONG form
 
-AHRF is very wide even after removing the copyrighted third: 1,699 public
-columns x 3,235 counties. Measured locally against the real file: declaring
-one NestedField (with a `doc`, per house rule) for each of ~1,700 columns is
-not a schema anyone could review or maintain, and the vast majority would
-never be read by anything this repo derives. So raw lands LONG instead --
-`(ahrf_release, file, fips, column_name, value)`, one row per (county,
-field) cell, verbatim strings -- which is still landing every eligible cell
-of the release whole (SPEC.md ADR-0002's "land raw whole", just at cell
-rather than wide-row granularity; ADR-0002 doesn't mandate one physical
-column per source field, only that nothing is thrown away or pre-filtered by
-guessing what will matter later). Measured: unpivoting the real release
-takes ~5s and produces 5,493,030 rows locally.
+AHRF is very wide even after the licence gate: 1,694 allowed columns x 3,235
+counties. Measured locally against the real file: declaring one NestedField
+(with a `doc`, per house rule) for each of ~1,700 columns is not a schema
+anyone could review or maintain, and the vast majority would never be read
+by anything this repo derives. So raw lands LONG instead -- `(ahrf_release,
+file, fips, column_name, value)`, one row per (county, field) cell, verbatim
+strings -- which is still landing every eligible cell of the release whole
+(SPEC.md ADR-0002's "land raw whole", just at cell rather than wide-row
+granularity; ADR-0002 doesn't mandate one physical column per source field,
+only that nothing is thrown away or pre-filtered by guessing what will
+matter later). Measured: unpivoting the real release takes ~5s and produces
+5,480,090 rows locally (1,694 columns x 3,235 counties).
 
 ponytail: because raw is long and every cell is addressed by name rather than
 position, this module's header check does NOT reproduce AHRF's 4,352-column
@@ -110,9 +167,9 @@ header verbatim the way the other sources' COLUMNS contracts do (that would
 be ~100KB of literal column names for no real safety gain here: a reordered
 or additional column is harmless to a name-addressed unpivot). Instead
 `land_raw` checks that `fips_st_cnty` exists and that every column this
-module actually reads (`CURATED_FIELDS`, below) is present and not excluded
-as copyrighted, and fails loudly naming exactly which ones are not -- the
-part of "drift" that would actually break something downstream.
+module actually reads (`CURATED_FIELDS`, below) is present and allowed, and
+fails loudly naming exactly which ones are not -- the part of "drift" that
+would actually break something downstream.
 
 ## Version axis and the three time axes (SPEC.md § Versioning)
 
@@ -197,12 +254,68 @@ CSV_MEMBER = re.compile(r"^AHRF\d{4}\.csv$", re.IGNORECASE)
 # extension.
 TECHDOC_MEMBER = re.compile(r"Technical Documentation.*\.xlsx$", re.IGNORECASE)
 
-# Sources the release's own technical documentation flags as copyrighted
-# third-party content (see module docstring) -- never landed, in raw or
-# anywhere else. Matched as a prefix against the documentation's own SOURCE
-# column (e.g. "AHA Survey Database 23"), not a fixed list of column names,
-# so this stays correct without hand-maintaining it.
-COPYRIGHT_SOURCE_PREFIXES = ("AMA ", "AHA ", "ADA ")
+# ALLOWLIST, not a blocklist: a column lands only if its SOURCE (from the
+# release's own technical documentation) is one of these -- U.S. federal
+# government sources this module has verified as public domain, per column
+# count against the real 2024-2025 file (2026-09-18). See module docstring
+# for the full source -> {allowed | excluded: reason} table and the evidence
+# for each row. A source not in EITHER this set or EXCLUDED_SOURCES below is
+# unrecognised and excluded by default (fails closed) -- see _classify_columns.
+ALLOWED_SOURCES = frozenset({
+    "2018-22 Census ACS", "2019-23 Census ACS", "2010 Census SF1", "2020 Census DHC",
+    "2010 Census Redistrict", "2020 Census Redistrict", "Census Bureau", "Census Map",
+    "Census SAHIE", "Census SAIPE", "Census SNAP File", "Census Housing Unit File",
+    "Census County Char File", "Census County Pop Est",
+    "NCHS Mortality File", "NCHS Natality File", "NCHS Mort/Nat File",
+    "CMS", "CMS NPI File", "CMS Provider of Services", "CMS Marketplace",
+    "CMS MA Penetration", "CMS PDP Penetration", "CMS Monthly Enroll Dashbrd",
+    "Medicare Geographic Var",
+    "HRSA Data Warehouse", "HRSA DNHSC",
+    "ERS Dept of Agriculture", "Bureau of Labor Stats", "LAPI",
+    "EPA", "EPA Air Qual Index Rep", "CDC EPH Tracking Network",
+    "Dept of Veterans Affairs", "DHHS", "OMB-23-01", "Derived From GSA",
+    "U.S. Post Office",
+})
+
+# Sources checked and found NOT landable, with why -- kept distinct from an
+# unrecognised source (see _classify_columns) so the reason is on record
+# rather than folded into a generic "unknown" bucket.
+EXCLUDED_SOURCES = {
+    "AMA Phys Master File": "American Medical Association Physician Masterfile -- "
+        "flagged '(Copyright)' in the documentation's own source glossary; the "
+        "documentation's cover page names the AMA explicitly as one of three sources "
+        "whose data 'may not be copied or reproduced in whole or in part without the "
+        "prior consent of the copyright owner' (see module docstring).",
+    "AHA Survey Database 22": "American Hospital Association hospital survey -- same "
+        "copyright restriction as AMA Phys Master File above.",
+    "AHA Survey Database 23": "American Hospital Association hospital survey -- same "
+        "copyright restriction as AMA Phys Master File above.",
+    "ADA Masterfile": "American Dental Association Masterfile -- the documentation's "
+        "cover page names the ADA explicitly in the same copyright restriction as AMA "
+        "and AHA above (its glossary entry omits the '(Copyright)' tag the other two "
+        "carry, but the cover-page prose names it directly).",
+    "County Health Rankings File": "third-party (County Health Rankings & Roadmaps, "
+        "University of Wisconsin Population Health Institute / RWJF) -- SPEC.md's "
+        "Licence gate already lists 'County Health Rankings' under 'Needs review before "
+        "ingest: now on Zenodo; confirm the record's licence', repo-wide, unresolved.",
+    "System Sciences Study": "a single 1976-77 elevation-data field (elevtn_feet_76) "
+        "from an environmental-correlates-of-mortality study by System Sciences, Inc., "
+        "a private contractor -- no redistribution terms found for that study.",
+    "DDH,9-33": "a single field (cnty_name) citing an internal document code not "
+        "resolved anywhere in the technical documentation's own source glossary -- "
+        "excluded for lack of a verifiable source/licence, not because it's suspected "
+        "proprietary (cnty_name_st_abbrev, landed separately, is the same name, "
+        "'Derived From GSA' and allowed).",
+}
+
+# Columns the technical documentation lists with NO source at all (verified
+# 2026-09-18): AHRF's own file-structural/administrative fields, not content
+# from any dataset -- not third-party in any sense, so allowed by name rather
+# than by an empty SOURCE value (an empty SOURCE elsewhere would be surprising
+# and is NOT auto-allowed; see _classify_columns).
+NO_SOURCE_LISTED_ALLOWED = frozenset({
+    "blank", "date_cretn", "date_file", "entity_file", "file_length", "st_name",
+})
 
 # Connecticut's 8 pre-2022 counties and Alaska's pre-2019 Valdez-Cordova --
 # still carried as separate rows in the current file by some source feeds
@@ -326,31 +439,54 @@ def _fetch_member(url, tmpdir, pattern, tag):
         return Path(tmpdir) / names[0]
 
 
-def _excluded_columns(con, techdoc_path):
-    """Column names the release's own technical documentation attributes to
-    a copyrighted third-party source (see module docstring) -- read straight
-    from the documentation's per-field SOURCE column rather than a hand-kept
-    list, so this can't silently go stale."""
+def _classify_columns(con, techdoc_path, header):
+    """Split `header` (minus the fips key) into (eligible, excluded_unknown),
+    per-column, against the release's own technical documentation's SOURCE
+    field -- an ALLOWLIST, not a blocklist: a column lands only if its source
+    is in `ALLOWED_SOURCES` (or it's one of the no-source structural fields in
+    `NO_SOURCE_LISTED_ALLOWED`). Anything else is excluded, whether that's a
+    documented reason in `EXCLUDED_SOURCES` or a source this module has never
+    seen before -- `excluded_unknown` carries only the latter, for `land_raw`
+    to report (SPEC.md/AGENTS.md: license:unknown is a hard stop, so an
+    unrecognised source must never silently land).
+    """
     con.execute("INSTALL excel; LOAD excel;")
-    prefixes = " OR ".join(f"trim(F) LIKE '{p}%'" for p in COPYRIGHT_SOURCE_PREFIXES)
-    rows = con.sql(f"""
-        SELECT DISTINCT trim(A) AS field
+    doc_rows = con.sql(f"""
+        SELECT trim(A) AS field, trim(F) AS source
         FROM read_xlsx('{techdoc_path}', all_varchar=true, header=false, range='A1:G8000')
-        WHERE {prefixes}
+        WHERE trim(A) IS NOT NULL AND trim(A) != ''
     """).fetchall()
-    excluded = {r[0] for r in rows}
-    if not excluded:
-        raise SystemExit(f"hrsa_ahrf: no column in {techdoc_path} matched a copyrighted "
-                         f"source ({COPYRIGHT_SOURCE_PREFIXES}); the technical documentation "
-                         f"parse is probably broken -- refusing to land, since that would "
-                         f"silently include copyrighted AMA/AHA/ADA data")
-    return excluded
+    if not doc_rows:
+        raise SystemExit(f"hrsa_ahrf: {techdoc_path} yielded no field rows at all -- the "
+                         f"technical documentation parse is probably broken -- refusing to "
+                         f"land, since that would silently include unlicensed data")
+    source_of = {field: source for field, source in doc_rows if source}
+
+    eligible, excluded_unknown = [], {}
+    for c in header:
+        if c == "fips_st_cnty":
+            continue
+        source = source_of.get(c)
+        if source is None:
+            if c in NO_SOURCE_LISTED_ALLOWED:
+                eligible.append(c)
+            else:
+                excluded_unknown.setdefault("(no source listed)", []).append(c)
+        elif source in ALLOWED_SOURCES:
+            eligible.append(c)
+        elif source in EXCLUDED_SOURCES:
+            pass  # documented and deliberate; nothing to report
+        else:
+            excluded_unknown.setdefault(source, []).append(c)
+    return eligible, excluded_unknown
 
 
 def land_raw(cat, release, ahrf_release=None, csv_url=None, techdoc_url=None):
     """Phase 1: the master county CSV, landed LONG and whole -- every column
-    except the ones the release's own technical documentation flags as
-    copyrighted (see module docstring). Returns (ahrf_release, rows).
+    whose source (per the release's own technical documentation) is on the
+    `ALLOWED_SOURCES` allowlist (see module docstring). A column with no
+    listed source, or an unrecognised one, is excluded and reported, never
+    landed by default. Returns (ahrf_release, rows).
     """
     ahrf_release = ahrf_release or max(RELEASES)
     if ahrf_release not in RELEASES:
@@ -369,12 +505,17 @@ def land_raw(cat, release, ahrf_release=None, csv_url=None, techdoc_url=None):
         if "fips_st_cnty" not in header:
             raise SystemExit(f"hrsa_ahrf: {csv_url} has no fips_st_cnty column")
 
-        excluded = _excluded_columns(con, techdoc_path)
-        eligible = [c for c in header if c != "fips_st_cnty" and c not in excluded]
+        eligible, excluded_unknown = _classify_columns(con, techdoc_path, header)
+        for source, cols in sorted(excluded_unknown.items()):
+            print(f"hrsa_ahrf: excluding {len(cols)} column(s) with an unrecognised "
+                 f"source ({source!r}), not on ALLOWED_SOURCES or EXCLUDED_SOURCES -- "
+                 f"check its licence and add it to one of those before landing it: "
+                 f"{cols[:5]}{', ...' if len(cols) > 5 else ''}")
+
         bad = sorted({f for f, _, _ in CURATED_FIELDS} - set(eligible))
         if bad:
             raise SystemExit(f"hrsa_ahrf: curated field(s) {bad} are not landable from "
-                             f"{csv_url} (missing from the file, or excluded as copyrighted) "
+                             f"{csv_url} (missing from the file, or not on ALLOWED_SOURCES) "
                              f"-- update CURATED_FIELDS/MEASURE_DEFINITIONS")
 
         # coalesce/CASE round-trip keeps a blank source cell as NULL through
