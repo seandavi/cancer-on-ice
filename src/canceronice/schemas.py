@@ -474,10 +474,140 @@ TABLES = {
     # independent branches merge cleanly.
 
     # --- raw: usda ers ruca ---
-    # USDA ERS Rural-Urban Commuting Area codes, tract level (#41).
-    # The table declaration(s) goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    # USDA ERS Rural-Urban Commuting Area codes, tract level (#41). Public
+    # domain; two genuinely different upstream layouts (2010 xlsx, 2020 csv)
+    # share this table via ruca_edition, each edition's own columns NULL on
+    # the other's rows -- see ers_ruca.py's docstring.
+    "raw.ers__ruca_tract": TableDef(
+        schema=Schema(
+            NestedField(1, "ruca_edition", StringType(), required=True,
+                        doc="The RUCA edition this row was published in, '2010' or '2020' -- "
+                            "the version axis for this source. Raw is replaced wholesale per "
+                            "value of this column."),
+            NestedField(2, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+            # --- 2010 edition only (NULL on 2020 rows); from the revised (3 Jul
+            # 2019) workbook's 'Data' sheet, 9 columns, header on row 2.
+            NestedField(3, "fips_2010", StringType(),
+                        doc="5-digit county FIPS code ('State-County FIPS Code' column). "
+                            "2010 edition only."),
+            NestedField(4, "state_2010", StringType(),
+                        doc="USPS state abbreviation ('Select State' column). 2010 edition only."),
+            NestedField(5, "county_name_2010", StringType(),
+                        doc="County (or equivalent) name ('Select County' column). 2010 "
+                            "edition only."),
+            NestedField(6, "tract_fips_2010", StringType(),
+                        doc="11-digit tract FIPS code on 2010-vintage county codes "
+                            "('State-County-Tract FIPS Code' column) -- the geo_id source for "
+                            "the 2010 edition. 2010 edition only."),
+            NestedField(7, "primary_ruca_2010", StringType(),
+                        doc="Primary RUCA code ('Primary RUCA Code 2010' column): 1-10 or 99 "
+                            "(not coded). See measure.definition RUCA:primary for the scheme. "
+                            "2010 edition only."),
+            NestedField(8, "secondary_ruca_2010", StringType(),
+                        doc="Secondary RUCA code ('Secondary RUCA Code, 2010 (see errata)' "
+                            "column) -- the workbook's own errata note says this reflects a "
+                            "3 Jul 2019 correction to 10,909 of 74,002 tracts' secondary codes; "
+                            "primary codes were unaffected. See measure.definition "
+                            "RUCA:secondary for the scheme. 2010 edition only."),
+            NestedField(9, "population_2010", StringType(),
+                        doc="2010 Census tract population ('Tract Population, 2010' column). "
+                            "2010 edition only."),
+            NestedField(10, "land_area_2010", StringType(),
+                        doc="Land area, square miles ('Land Area (square miles), 2010' "
+                            "column). 2010 edition only."),
+            NestedField(11, "pop_density_2010", StringType(),
+                        doc="Population per square mile ('Population Density (per square "
+                            "mile), 2010' column); NULL where land area is 0. 2010 edition only."),
+            # --- 2020 edition only (NULL on 2010 rows); column names kept as
+            # published (already clean identifiers), 27 columns, plain CSV.
+            NestedField(12, "TractFIPS23", StringType(),
+                        doc="11-digit tract FIPS code on the county-equivalent codes ERS uses "
+                            "as of 2023 (Connecticut's nine planning regions, 09110-09190, in "
+                            "place of its eight legacy counties); 'N/A' for a handful of "
+                            "zero-population Connecticut water tracts with no 2023 county "
+                            "assignment. NOT used as geo_id -- see ers_ruca.py's docstring. "
+                            "2020 edition only."),
+            NestedField(13, "CountyFIPS23", StringType(),
+                        doc="5-digit county-equivalent FIPS code paired with TractFIPS23, or "
+                            "'N/A'. 2020 edition only."),
+            NestedField(14, "CountyCode23", StringType(),
+                        doc="3-digit county code (no state prefix) paired with TractFIPS23, "
+                            "or 'N/A'. 2020 edition only."),
+            NestedField(15, "CountyName23", StringType(),
+                        doc="County or county-equivalent name (e.g. a Connecticut planning "
+                            "region) paired with TractFIPS23, or 'N/A'. 2020 edition only."),
+            NestedField(16, "TractFIPS20", StringType(),
+                        doc="11-digit tract FIPS code on 2020-vintage county codes "
+                            "(Connecticut's eight legacy counties, Alaska's post-2019 areas) -- "
+                            "the geo_id source for the 2020 edition (see ers_ruca.py's "
+                            "docstring). Always populated, unlike TractFIPS23. 2020 edition only."),
+            NestedField(17, "TractCode20", StringType(),
+                        doc="6-digit tract code (no state/county prefix) paired with "
+                            "TractFIPS20. 2020 edition only."),
+            NestedField(18, "TractName20", StringType(),
+                        doc="Census tract name, e.g. 'Census Tract 9781'. 2020 edition only."),
+            NestedField(19, "CountyFIPS20", StringType(),
+                        doc="5-digit county FIPS code paired with TractFIPS20. 2020 edition only."),
+            NestedField(20, "CountyCode20", StringType(),
+                        doc="3-digit county code (no state prefix) paired with TractFIPS20. "
+                            "2020 edition only."),
+            NestedField(21, "CountyName20", StringType(),
+                        doc="County name paired with TractFIPS20. 2020 edition only."),
+            NestedField(22, "StateFIPS20", StringType(),
+                        doc="2-digit state FIPS code. 2020 edition only."),
+            NestedField(23, "StateName20", StringType(),
+                        doc="State name. 2020 edition only."),
+            NestedField(24, "UrbanAreaCode20", StringType(),
+                        doc="Census urban area code the tract's core belongs to, or blank when "
+                            "the tract is not an urban core. 2020 edition only."),
+            NestedField(25, "UrbanAreaName20", StringType(),
+                        doc="Census urban area name (may carry non-ASCII characters), or "
+                            "blank. 2020 edition only."),
+            NestedField(26, "UrbanCore", StringType(),
+                        doc="'1' if the tract is part of an urban core, else '0'. 2020 "
+                            "edition only."),
+            NestedField(27, "UrbanCoreType", StringType(),
+                        doc="Urban core classification driving PrimaryRUCA, e.g. 'Rural', "
+                            "'Micro core'; 'Water' on every code-99 (not coded) tract checked. "
+                            "2020 edition only."),
+            NestedField(28, "PrimaryRUCA", StringType(),
+                        doc="Primary RUCA code: 1-10 or 99 (not coded). See "
+                            "measure.definition RUCA:primary for the scheme. 2020 edition only."),
+            NestedField(29, "PrimaryRUCADescription", StringType(),
+                        doc="ERS's own short label for PrimaryRUCA, e.g. 'Micropolitan high "
+                            "commuting'. 2020 edition only."),
+            NestedField(30, "PrimaryDestinationCode", StringType(),
+                        doc="Urban area (or micro/small-town core tract) code the primary "
+                            "commuting flow is measured against, or blank. 2020 edition only."),
+            NestedField(31, "PrimaryDestinationName", StringType(),
+                        doc="Name paired with PrimaryDestinationCode (may carry non-ASCII "
+                            "characters). 2020 edition only."),
+            NestedField(32, "SecondaryRUCA", StringType(),
+                        doc="Secondary RUCA code: 1-10, 99, or a decimal sub-flag (e.g. "
+                            "'7.2'). See measure.definition RUCA:secondary for the scheme. "
+                            "2020 edition only."),
+            NestedField(33, "SecondaryRUCADescription", StringType(),
+                        doc="ERS's own short label for SecondaryRUCA, e.g. 'Small town core, "
+                            "secondary flow to micro UA'. 2020 edition only."),
+            NestedField(34, "SecondaryDestinationCode", StringType(),
+                        doc="Destination code the secondary commuting flow is measured "
+                            "against, or blank. 2020 edition only."),
+            NestedField(35, "SecondaryDestinationName", StringType(),
+                        doc="Name paired with SecondaryDestinationCode. 2020 edition only."),
+            NestedField(36, "Population", StringType(),
+                        doc="2020 Census tract population. 2020 edition only."),
+            NestedField(37, "LandArea", StringType(),
+                        doc="Land area, square miles. 2020 edition only."),
+            NestedField(38, "PopDensity", StringType(),
+                        doc="Population per square mile. 2020 edition only."),
+        ),
+        comment="USDA ERS Rural-Urban Commuting Area codes landed verbatim and whole, one row "
+                "per census tract per edition. Public domain (U.S. Government work, 17 U.S.C. "
+                "Sec 105). The 2010 and 2020 editions are different upstream layouts sharing "
+                "this table via ruca_edition; each edition's own columns are NULL on the "
+                "other's rows.",
+    ),
 
     # --- raw: usda ers food access ---
     # USDA ERS Food Access Research Atlas (#42).

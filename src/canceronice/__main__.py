@@ -57,10 +57,12 @@ def main():
     # independent branches merge cleanly.
 
     # --- raw: usda ers ruca ---
-    # USDA ERS Rural-Urban Commuting Area codes, tract level (#41).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import ers_ruca
+    ru = sub.add_parser("ruca", help="land a USDA ERS RUCA tract edition, then derive")
+    ru.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    ru.add_argument("--edition", choices=sorted(ers_ruca.EDITIONS),
+                    help="RUCA edition (default: latest known)")
+    ru.add_argument("--url", help="an already-downloaded file or alternate URL")
 
     # --- raw: usda ers food access ---
     # USDA ERS Food Access Research Atlas (#42).
@@ -120,10 +122,8 @@ def main():
     # independent branches merge cleanly.
 
     # --- raw: usda ers ruca ---
-    # USDA ERS Rural-Urban Commuting Area codes, tract level (#41).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "ruca":
+        _print(ers_ruca.ingest(cat, args.release, args.edition, args.url))
 
     # --- raw: usda ers food access ---
     # USDA ERS Food Access Research Atlas (#42).
