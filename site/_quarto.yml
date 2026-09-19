@@ -1,0 +1,31 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Catchment Lake (prototype)"
+  navbar:
+    left:
+      - text: Home
+        href: index.qmd
+      - text: Start here
+        href: start-here.qmd
+      - text: Concepts
+        href: concepts.qmd
+      - text: Dictionary
+        href: dictionary.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: false
+
+# freeze: auto means Quarto caches each .qmd's *rendered* code output (not the .qmd
+# source) under _freeze/ and commits it. A CI render with no network access reuses the
+# frozen output for any page whose source hasn't changed, and only re-executes pages
+# that did change (and only if the runner has network + the venv/kernel available).
+# Practical effect here: commit _freeze/ alongside the source so `quarto render` in CI
+# doesn't require hitting the live catalog, while a local `quarto render --execute-daemon
+# restart` (or touching dictionary.qmd) still re-runs the real queries.
+execute:
+  freeze: auto

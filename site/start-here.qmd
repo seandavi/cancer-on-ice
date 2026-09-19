@@ -1,0 +1,5 @@
+---
+title: "Start here"
+---
+
+Not part of this prototype. See [Home](index.qmd) for the thing being tested.

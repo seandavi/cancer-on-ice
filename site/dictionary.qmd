@@ -1,0 +1,50 @@
+---
+title: "Dictionary"
+jupyter: coi-proto
+---
+
+This page is generated at *build* time by querying the live catalog directly — the
+tables below are real output, not hand-copied documentation, so the docs double as a
+smoke test: if a release breaks or a measure gets renamed, this page's next render
+shows it.
+
+```{python}
+#| echo: false
+import duckdb
+import pandas as pd
+
+pd.set_option("display.max_rows", 200)
+
+con = duckdb.connect()
+con.execute("INSTALL iceberg; LOAD iceberg; INSTALL httpfs; LOAD httpfs;")
+con.execute(
+    "ATTACH 'canceronice' AS coi (TYPE ICEBERG, "
+    "ENDPOINT 'https://icegate-canceronice.seandavi.workers.dev', "
+    "AUTHORIZATION_TYPE 'none');"
+)
+```
+
+## Measures
+
+```{python}
+#| echo: false
+con.sql("""
+    SELECT source, measure_id, label, units, method
+    FROM coi.measure.definition
+    ORDER BY source, measure_id
+""").df()
+```
+
+## Releases
+
+What each catalog release was built from — source, upstream version, and when it was
+retrieved.
+
+```{python}
+#| echo: false
+con.sql("""
+    SELECT source, source_version, version_method, retrieved_at, row_count, url
+    FROM coi.provenance.release
+    ORDER BY source, source_version
+""").df()
+```
