@@ -50,6 +50,9 @@ ORDER BY pct LIMIT 10;
 never reads as a number. The geography join names a vintage explicitly because
 `geo_vintage` assignment is still being settled (#21).
 
+Working from R, SAS or SEER\*Stat instead of raw SQL? See
+[docs/CLIENTS.md](docs/CLIENTS.md).
+
 ## Status
 
 Bootstrap catalog live since 2026-09-18, first loaded as catalog release
