@@ -28,51 +28,48 @@ Naming and labels follow `monode/infrastructure/terraform/README.md`.
 | `canceronice-cf-vending-rw` | bucket-scoped RW backend token (`icegate-canceronice-rw`) | minted 2026-09-18 |
 | `cdsci-cloudflare-workers-token`, `cdsci-r2-account-id` | shared deploy credentials | pre-existing |
 
-Worker secrets (set by `scripts/provision-vending-tokens.sh`):
+Worker secrets (set by icegate's `scripts/deploy-catalog.sh`):
 `CF_ACCOUNT_ID`, `R2_CATALOG_PREFIX`, `CF_API_TOKEN_RO`, `CF_API_TOKEN_RW`.
 Unlike `icegate-bioconice`, no Admin-level token enters this Worker.
 
 ## Runbook
 
-All Cloudflare calls below used `cdsci-cloudflare-api-token` (R2:Edit). The
-icegate checkout's pinned wrangler (3.114) predates `r2 bucket catalog` and
-`cors put`, so CORS and catalog enablement went through the REST API.
+Standing up (or re-deploying) this catalog is two commands from a sibling
+checkout of [icegate](https://github.com/seandavi/icegate), which owns the
+generic scripts since icegate#36; this repo keeps only `icegate.yaml`.
 
 ```sh
-export CLOUDFLARE_API_TOKEN=$(gcloud secrets versions access latest --secret cdsci-cloudflare-api-token --project cdsci-infra)
-export CLOUDFLARE_ACCOUNT_ID=$(gcloud secrets versions access latest --secret cdsci-r2-account-id --project cdsci-infra)
-API=https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID
-H="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
-
-# 1. bucket (from the icegate checkout, for its wrangler)
-npx wrangler r2 bucket create canceronice --location wnam
-
-# 2. CORS at creation — DuckDB-WASM reads data files straight from R2, and
-#    icegate's CORS covers metadata only (this is bioconice's open explorer bug)
-curl -X PUT -H "$H" -H 'Content-Type: application/json' $API/r2/buckets/canceronice/cors --data \
- '{"rules":[{"allowed":{"origins":["*"],"methods":["GET","HEAD"],"headers":["*"]},"exposeHeaders":["ETag","Content-Length","Content-Range","Accept-Ranges"],"maxAgeSeconds":3600}]}'
-
-# 3. Data Catalog
-curl -X POST -H "$H" $API/r2-catalog/canceronice/enable
-curl -H "$H" $API/r2-catalog/canceronice      # status: active
+# once: bucket, bucket CORS, R2 Data Catalog, icegate API keys -> starter config
+../icegate/scripts/new-catalog.sh canceronice provenance raw geography population \
+    measure facility catchment resource > icegate.yaml
+# every config change: commit icegate.yaml, then
+../icegate/scripts/deploy-catalog.sh canceronice icegate.yaml            # --dry-run to bundle only
+../icegate/scripts/deploy-catalog.sh canceronice icegate.yaml --secrets  # re-push Worker secrets (rotation)
 ```
 
-4. **icegate API keys** — minted per icegate `docs/operators.md` §3 (`icegate_`
-   + 32 base62), plaintext to Secret Manager, SHA-256 digest into
-   `icegate.yaml`. To rotate: mint, `gcloud secrets versions add`, replace the
+The first `deploy-catalog.sh` run minted the bucket-scoped backend tokens and
+set the Worker secrets; later runs only deploy. Both scripts are idempotent —
+on 2026-09-18 `new-catalog.sh` was re-run against this catalog, found every
+resource present, and regenerated a config equal to the deployed one.
+
+What they do, for the record (this catalog was provisioned by hand on
+2026-09-18, before the scripts existed, with the equivalent calls):
+
+1. `POST /accounts/<id>/r2/buckets` — bucket `canceronice`, location `wnam`.
+2. `PUT  …/r2/buckets/canceronice/cors` — GET/HEAD from any origin. DuckDB-WASM
+   reads data files straight from R2, and icegate's CORS covers metadata only.
+3. `POST …/r2-catalog/canceronice/enable`.
+4. icegate API keys (`icegate_` + 32 base62) → Secret Manager; SHA-256 digests
+   into `icegate.yaml`. To rotate: `gcloud secrets versions add`, replace the
    digest, redeploy.
-5. **First deploy** — `scripts/deploy-icegate.sh` (refuses uncommitted
-   `icegate.yaml`). Must precede step 6: wrangler will not set a secret on a
-   Worker that does not exist. Until step 6 the Worker answers 500.
-6. **Vending tokens and Worker secrets** —
-   `TOKEN_MINTER=<token> scripts/provision-vending-tokens.sh`. Needs a
-   Cloudflare token with *Account · API Tokens · Edit*. On 2026-09-18 that
-   permission was added to `monode-infra-tofu` (`cdsci-cloudflare-api-token`)
-   and the script was run with it; a short-lived dashboard token works too.
-7. **Verify** — rerun the verification block of `scripts/deploy-icegate.sh`,
-   then reproduce biocOnIce ADR-0011's four-check evidence table against this
-   bucket (vended read allowed; write 403; foreign bucket 403; catalog mutation
-   via RO principal 403).
+5. `wrangler deploy --name icegate-canceronice` with `icegate.yaml` baked in —
+   before any secret, because wrangler will not set a secret on a Worker that
+   does not exist.
+6. Backend tokens `icegate-canceronice-ro` / `-rw` (biocOnIce ADR-0011) minted
+   with a token holding *Account · API Tokens · Edit*, archived in Secret
+   Manager, and pushed as Worker secrets with the discovered catalog prefix.
+7. Verify: `/health`, `/v1/config`, anonymous namespace listing; access-control
+   evidence is on issue #15.
 
 ## Ingest
 
@@ -85,8 +82,8 @@ uv run canceronice init
 ## Known gaps
 
 1. Steps 1–7 done 2026-09-18; access-control evidence is recorded on issue #15.
-2. Bucket was created by hand, while `monode/infrastructure/INDEX.md` says
-   OpenTofu owns R2 buckets — import or amend the convention (tracked).
+2. The bucket is not in OpenTofu, on purpose (#18): icegate buckets are
+   created by icegate's `new-catalog.sh`; OpenTofu owns the uptime check.
 3. No GCP uptime check on `/health` yet (tracked).
 4. `icegate-canceronice` not yet listed in `INDEX.md`'s Cloudflare-hosted table (tracked).
 5. `logpush: true` is uncommitted in the local icegate checkout; a deploy from
