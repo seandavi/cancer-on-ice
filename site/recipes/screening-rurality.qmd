@@ -1,0 +1,89 @@
+---
+title: "Screening in a state's counties, with rurality"
+---
+
+This is the same measure/release query the [Home](/index.qmd) map's data
+was built from — run here **live**, against the real, 23-million-row
+`measure.observation` table, through DuckDB-WASM in your own browser.
+Scoped to one state rather than the whole country: PLACES's own PLACES
+partition is written as one very large Parquet file per release, and a
+national-scope live read of it is exactly the pattern that fails
+intermittently in this DuckDB-WASM build
+([cancer-on-ice#120](https://github.com/seandavi/cancer-on-ice/issues/120)).
+One state at a time stays well inside the sizes that read reliably.
+
+{{< include _duckdb-shared.qmd >}}
+
+```{ojs}
+//| echo: false
+MEASURES = [
+  { measure_id: "PLACES:CANCER:age_adjusted", label: "Cancer (non-skin) or melanoma" },
+  { measure_id: "PLACES:COLON_SCREEN:age_adjusted", label: "Colorectal cancer screening" },
+  { measure_id: "PLACES:MAMMOUSE:age_adjusted", label: "Mammography use" },
+  { measure_id: "PLACES:CSMOKING:age_adjusted", label: "Current cigarette smoking" },
+  { measure_id: "PLACES:CHECKUP:age_adjusted", label: "Annual checkup" }
+]
+RELEASES = ["2025", "2024"]
+```
+
+```{ojs}
+//| echo: false
+viewof stateChoice = Inputs.select(US_STATES, {
+  label: "State",
+  format: (d) => d.name,
+  value: US_STATES.find((s) => s.fips === "08")
+})
+viewof measureChoice = Inputs.select(MEASURES, { label: "Measure", format: (d) => d.label, value: MEASURES[0] })
+viewof releaseChoice = Inputs.select(RELEASES, { label: "Release" })
+```
+
+```{ojs}
+//| echo: false
+sql = `SELECT u.name, o.value AS pct, o.lower, o.upper, o.value_status, r.value AS rucc_code
+FROM coi.measure.observation o
+JOIN coi.geography.unit u
+  ON u.geo_id = o.geo_id AND u.vintage = 2026 AND u.valid_to IS NULL
+LEFT JOIN coi.measure.observation r
+  ON r.geo_id = o.geo_id AND r.source = 'RUCC' AND r.valid_to IS NULL
+WHERE o.source = 'PLACES' AND o.measure_id = '${measureChoice.measure_id}'
+  AND o.source_release = '${releaseChoice}' AND u.parent_geo_id = 'state:${stateChoice.fips}'
+  AND o.valid_to IS NULL
+ORDER BY pct`
+```
+
+```{ojs}
+//| echo: false
+queryState = {
+  sql; // reactive dependency
+  if (dbState.status !== "ready") return dbState;
+  const t0 = performance.now();
+  try {
+    const result = await dbState.conn.query(sql);
+    return { status: "ready", rows: rowsFromArrow(result), ms: performance.now() - t0 };
+  } catch (error) {
+    return { status: "error", error };
+  }
+}
+```
+
+```{ojs}
+//| echo: false
+renderStatus(dbState, queryState)
+```
+
+```{ojs}
+//| echo: false
+queryState.status === "ready"
+  ? Inputs.table(queryState.rows, { columns: ["name", "pct", "lower", "upper", "value_status", "rucc_code"] })
+  : html`<p><em>Table will render once the query returns.</em></p>`
+```
+
+<details>
+<summary>SQL run for this table</summary>
+
+```{ojs}
+//| echo: false
+html`<pre><code>${sql}</code></pre>`
+```
+
+</details>

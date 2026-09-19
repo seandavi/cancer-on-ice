@@ -1,0 +1,92 @@
+---
+title: "The licence gate"
+jupyter: coi-docs
+---
+
+A source is admitted only if it's redistributable by a third party,
+published as a complete dump per release, and aggregate-only. The check
+happens *before* ingest, not after — a source with an unresolved licence
+question doesn't land partially and get fixed later; it doesn't land.
+
+## What AHRF taught us
+
+HRSA's Area Health Resources Files (AHRF) topic page states, generically,
+"Usage limitations: None." Taken at face value, that would clear the whole
+4,352-column release. Reading AHRF's *own* bundled technical documentation
+instead of the topic page found something narrower — the documentation
+states that data from the American Medical Association, American Hospital
+Association, and American Dental Association carry their own copyright and
+"may not be copied or reproduced in whole or in part without the prior
+consent of the copyright owner."
+
+`src/canceronice/hrsa_ahrf.py` checks AHRF's own per-field source attribution
+for every one of its 45 distinct upstream sources and builds an **allowlist**
+— a column lands only if its source is confirmed clear, not by default:
+
+```{python}
+#| echo: false
+import duckdb
+
+con = duckdb.connect()
+con.execute("INSTALL iceberg; LOAD iceberg; INSTALL httpfs; LOAD httpfs;")
+con.execute(
+    "ATTACH 'canceronice' AS coi (TYPE ICEBERG, "
+    "ENDPOINT 'https://icegate-canceronice.seandavi.workers.dev', "
+    "AUTHORIZATION_TYPE 'none');"
+)
+n = con.sql("SELECT count(distinct column_name) FROM coi.raw.hrsa__ahrf").fetchone()[0]
+print(f"Columns actually landed in raw.hrsa__ahrf today: {n}")
+```
+
+That allowlist excludes 2,789 of AHRF's 4,352 columns, including **every**
+physician-specialty count (oncology, radiation oncology, gastroenterology —
+the AMA Physician Masterfile) and **every** hospital/bed count (the AHA
+Survey Database) — the exact fields the original ingest issue asked for.
+They're not landed, in raw or derived, under any circumstance. A handful of
+other sources sit on a **review hold** rather than a finding of restriction:
+NCHS mortality and natality data (a vital-statistics data-use agreement,
+separate from federal copyright) and County Health Rankings (SPEC.md already
+flags this source as unresolved repo-wide). See
+[`hrsa_ahrf.py`'s own docstring](/sources.qmd#src-hrsa_ahrf) for the full
+45-source table.
+
+## SDWIS: excluding personal data, not just copyrighted data
+
+The licence gate isn't only about copyright. EPA's SDWIS public water
+systems file bundles an administrative-contact block — names, emails, phone
+numbers — for roughly half a million water systems, many of them small,
+privately owned systems where the "organization" field turns out to be a
+person's own name rather than a business. `src/canceronice/epa_sdwis.py`
+checked this directly rather than assuming a column named `ORG_NAME` is
+organizational: of systems that are both privately owned and small, 30%
+have an `ORG_NAME` matching a `"LASTNAME, FIRSTNAME"` pattern, and 94% of
+those match the system's own personal `ADMIN_NAME` field exactly. Nine
+columns are excluded entirely — never landed, in raw or anywhere else:
+
+```{python}
+#| echo: false
+cols = con.sql("DESCRIBE coi.raw.sdwis__pub_water_systems").df()["column_name"].tolist()
+excluded = ["ADMIN_NAME", "EMAIL_ADDR", "PHONE_NUMBER", "PHONE_EXT_NUMBER",
+            "FAX_NUMBER", "ALT_PHONE_NUMBER", "ORG_NAME", "ADDRESS_LINE1", "ADDRESS_LINE2"]
+present = [c for c in excluded if c in cols]
+print(f"Of {len(excluded)} columns excluded for personal data, {len(present)} are present in the live table.")
+```
+
+SPEC.md and AGENTS.md both call for public *aggregates* only — this is that
+rule applied at the column level, not just the source level.
+
+## What's excluded repo-wide, and why
+
+From SPEC.md's own licence gate, unchanged by anything landed since:
+
+- **USCS county incidence via special access** — RDC-only or bilateral
+  access, the reason Cancer InFocus has county cancer incidence and a
+  public lake structurally cannot ([Cancer InFocus](cancer-infocus.qmd)
+  covers what this means for the two projects' relationship).
+- **SEER Research / Research Plus data** — DUA per user.
+- **Registry microdata of any kind.**
+- **Area Deprivation Index** (Neighborhood Atlas) — registration-gated,
+  redistribution terms unresolved; SPEC.md proposes a transparent,
+  ACS-derived alternative instead of waiting on it.
+- **NaNDA, NHGIS crosswalks** — ICPSR/IPUMS terms; pointer-only until
+  cleared.

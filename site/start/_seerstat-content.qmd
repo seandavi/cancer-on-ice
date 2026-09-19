@@ -1,0 +1,17 @@
+<!-- Placeholder for docs/CLIENTS.md (#115)'s SEER*Stat section, being
+     written on a separate branch and not yet on main. When it lands,
+     replace this file's body with that section (or an {{< include >}}
+     pointing straight at it) — seerstat.qmd itself needs no change either
+     way. -->
+
+## What's coming in #115
+
+SEER\*Stat doesn't query an external database directly — it imports its own
+session and export formats. The likely path (an extract recipe that writes
+a SEER\*Stat-compatible file for a chosen catchment or measure) is being
+worked out in [cancer-on-ice#115](https://github.com/seandavi/cancer-on-ice/issues/115),
+not invented here.
+
+If you can reach a DuckDB CLI or Python environment in the meantime, the
+[DuckDB CLI](duckdb-cli.qmd) page can write any query's result to a CSV
+(`COPY (...) TO 'out.csv'`) as a starting point.
