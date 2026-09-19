@@ -538,9 +538,129 @@ TABLES = {
 
     # --- derived: measure cancer site ---
     # measure.cancer_site — SEER site recode <-> ICD-O-3 <-> ICD-10 <-> NCIt / MONDO (#31).
-    # The table declaration(s) goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    "raw.seer__site_recode": TableDef(
+        schema=Schema(
+            NestedField(1, "site_group", StringType(), required=True,
+                        doc="Site/group label, exactly as published -- including the source's "
+                            "own leading-space indentation (4 spaces per nesting level), its "
+                            "only hierarchy marker."),
+            NestedField(2, "icdo3_site", StringType(),
+                        doc="ICD-O-3 topography range for this row, unparsed. Blank for a group "
+                            "heading rather than a site (e.g. 'Colon and Rectum')."),
+            NestedField(3, "icdo3_histology", StringType(),
+                        doc="ICD-O-3 histology qualifier for this row, unparsed -- an exclusion "
+                            "range (e.g. 'excluding 9050-9055, 9140, 9590-9993') for most codes, "
+                            "an inclusion range for a few (e.g. Melanoma's '8720-8790')."),
+            NestedField(4, "recode", StringType(),
+                        doc="The numeric site-recode code, as published (a trailing space on "
+                            "some rows is a real upstream artifact, kept verbatim). Blank for a "
+                            "group heading. A code can be defined by more than one row (e.g. "
+                            "31040 has two: see module docstring); all land here."),
+            NestedField(5, "row_order", IntegerType(), required=True,
+                        doc="0-based position in the source file, preserved so multi-row code "
+                            "definitions concatenate in publication order."),
+            NestedField(6, "site_recode_edition", StringType(), required=True,
+                        doc="Which SEER site-recode edition this row came from, e.g. "
+                            "'icdo3_dwhoheme' (Site Recode ICD-O-3/WHO 2008 -- the edition "
+                            "State Cancer Profiles' own FAQ names for incidence). Raw is "
+                            "replaced wholesale per value of this column."),
+            NestedField(7, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="SEER Site Recode ICD-O-3/WHO 2008, landed verbatim and whole from the "
+                "source's own semicolon-delimited text file (SPEC.md § measure.cancer_site). "
+                "Public domain (NCI/U.S. Government work).",
+    ),
+
+    "raw.seer__cod_recode": TableDef(
+        schema=Schema(
+            NestedField(1, "cod_group", StringType(), required=True,
+                        doc="Cause-of-death group label, exactly as published -- including the "
+                            "source's own leading-space indentation."),
+            NestedField(2, "icd8", StringType(), doc="ICD-8 range, unparsed. Usually blank -- "
+                                                     "this table's own header carries the column "
+                                                     "but most rows only state ICD-9/ICD-10."),
+            NestedField(3, "icd9", StringType(), doc="ICD-9 (1979-1998) range, unparsed."),
+            NestedField(4, "icd10", StringType(), doc="ICD-10 (1999+) range, unparsed."),
+            NestedField(5, "recode", StringType(),
+                        doc="The numeric recode code, as published. Blank for a group heading; "
+                            "the literal sentinel '--' for 'All Malignant Cancers', which has no "
+                            "code of its own (SCP's FAQ: 'All Cancers refers to all invasive "
+                            "cancers combined')."),
+            NestedField(6, "row_order", IntegerType(), required=True,
+                        doc="0-based position within the 'Neoplasm Causes of Death' table in the "
+                            "source file."),
+            NestedField(7, "cod_recode_edition", StringType(), required=True,
+                        doc="Which SEER Cause of Death Recode edition this row came from, e.g. "
+                            "'1969_d03012018' (COD Recode 1969+, current as of 03/01/2018 -- the "
+                            "edition State Cancer Profiles' own FAQ names for mortality). Raw is "
+                            "replaced wholesale per value of this column."),
+            NestedField(8, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="SEER Cause of Death Recode 1969+, 'Neoplasm Causes of Death' table only "
+                "(the source file's other two tables -- non-neoplasm causes, and "
+                "administrative codes -- are out of scope for a cancer-site bridge), landed "
+                "verbatim and whole (SPEC.md § measure.cancer_site). Public domain "
+                "(NCI/U.S. Government work).",
+    ),
+
+    "measure.cancer_site": TableDef(
+        schema=Schema(
+            NestedField(1, "cancer_site_code", StringType(), required=True,
+                        doc="The SEER site-recode numeric code (raw.seer__site_recode.recode), "
+                            "e.g. '26000' for Breast. Business key together with source_release."),
+            NestedField(2, "label", StringType(), required=True, doc="Site/group name, as SEER "
+                                                                      "publishes it."),
+            NestedField(3, "parent_code", StringType(),
+                        doc="Another row's cancer_site_code, for SEER's own nested groupings "
+                            "(e.g. Cecum under 'Colon excluding Rectum' under 'Colon and "
+                            "Rectum'). Always NULL for this edition: SEER's table assigns no "
+                            "numeric code to any group heading, at any depth, so there is no "
+                            "coded ancestor to record -- see module docstring."),
+            NestedField(4, "icdo3_topography", StringType(),
+                        doc="ICD-O-3 topography range(s), verbatim from raw.seer__site_recode "
+                            "(joined with '; ' when a code's definition spans more than one "
+                            "published row)."),
+            NestedField(5, "icdo3_histology_exclusions", StringType(),
+                        doc="ICD-O-3 histology qualifier(s), verbatim from "
+                            "raw.seer__site_recode (an exclusion range for most codes, an "
+                            "inclusion range for a few -- see that table's own column doc)."),
+            NestedField(6, "icd10_mortality", StringType(),
+                        doc="ICD-10 mortality range, verbatim from raw.seer__cod_recode, filled "
+                            "only where that table's label matches this row's label exactly "
+                            "(module docstring: 56 of 81 codes align this way). NULL where COD "
+                            "groups this site more coarsely than incidence does, or the labels "
+                            "genuinely differ, rather than guessed."),
+            NestedField(7, "ncit_id", StringType(),
+                        doc="NCI Thesaurus id (e.g. 'NCIT:C9335'), from the curated bridge "
+                            "(src/canceronice/data/cancer_site_ontology.csv) for the State "
+                            "Cancer Profiles sites it covers. NULL elsewhere -- never guessed "
+                            "(module docstring lists the sites left unmapped and why)."),
+            NestedField(8, "mondo_id", StringType(),
+                        doc="MONDO Disease Ontology id (e.g. 'MONDO:0007254'), from the same "
+                            "curated bridge. NULL elsewhere."),
+            NestedField(9, "mapping_basis", StringType(),
+                        doc="'curated' when ncit_id or mondo_id is filled (this project's own "
+                            "researched mapping -- no official SEER-recode-to-ontology crosswalk "
+                            "exists, checked 2026-09-18); NULL when neither is filled. No row "
+                            "here is 'published' -- that value is reserved should SEER, NCIt or "
+                            "MONDO ever publish such a mapping themselves."),
+            NestedField(10, "source", StringType(), required=True,
+                        doc="Always 'SEER' -- the recode's own publisher."),
+            NestedField(11, "source_release", StringType(), required=True,
+                        doc="The site-recode edition this row's cancer_site_code is defined "
+                            "under, e.g. 'icdo3_dwhoheme'. Business key together with "
+                            "cancer_site_code -- a later SEER edition never retires this one's "
+                            "rows."),
+            NestedField(12, "valid_from", StringType(), required=True, doc=VALID_FROM),
+            NestedField(13, "valid_to", StringType(), doc=VALID_TO),
+        ),
+        business_key=("cancer_site_code", "source_release"),
+        comment="SEER site recode <-> ICD-O-3 topography/histology <-> ICD-10 (mortality) <-> "
+                "NCIt/MONDO (SPEC.md § measure.cancer_site) -- the bridge to biocOnIce's "
+                "`ontology` namespace. Full Type-2 history via valid_from/valid_to.",
+    ),
 
     # --- raw: cdc atsdr svi ---
     # CDC/ATSDR Social Vulnerability Index, every published edition (#40).

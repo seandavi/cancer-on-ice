@@ -47,10 +47,12 @@ def main():
     ga.add_argument("--path", help="an alternate curated CSV; defaults to the packaged one")
 
     # --- derived: measure cancer site ---
-    # measure.cancer_site — SEER site recode <-> ICD-O-3 <-> ICD-10 <-> NCIt / MONDO (#31).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import cancer_site
+    cs = sub.add_parser("cancer-site", help="land the SEER site recode + cause-of-death recode, "
+                        "then derive measure.cancer_site")
+    cs.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    cs.add_argument("--site-url", help="an already-downloaded site-recode text file or alternate URL")
+    cs.add_argument("--cod-url", help="an already-downloaded cause-of-death recode text file or alternate URL")
 
     # --- raw: cdc atsdr svi ---
     # CDC/ATSDR Social Vulnerability Index, every published edition (#40).
@@ -118,10 +120,8 @@ def main():
         _print(geography_alias.ingest(cat, args.release, args.path))
 
     # --- derived: measure cancer site ---
-    # measure.cancer_site — SEER site recode <-> ICD-O-3 <-> ICD-10 <-> NCIt / MONDO (#31).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "cancer-site":
+        _print(cancer_site.ingest(cat, args.release, args.site_url, args.cod_url))
 
     # --- raw: cdc atsdr svi ---
     # CDC/ATSDR Social Vulnerability Index, every published edition (#40).
