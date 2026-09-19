@@ -1,0 +1,70 @@
+---
+title: "Sources"
+jupyter: coi-docs
+---
+
+Every section below is generated at *build* time from the ingest module's
+own docstring (`ast.get_docstring`) — the licence quote, version axis,
+geography vintage, and deliberate omissions are written once, in the code
+that does the ingest, and reproduced here rather than retyped. Nothing on
+this page is hand-copied licence text.
+
+```{python}
+#| echo: false
+#| output: asis
+import ast
+import re
+from pathlib import Path
+
+from canceronice import schemas
+
+# Module -> its `canceronice` CLI subcommand (src/canceronice/__main__.py).
+# Hardcoded rather than parsed out of __main__.py's argparse calls: it's a
+# short, stable list, and regexing argparse construction for this would be
+# more code than the mapping itself.
+CLI_SUBCOMMAND = {
+    "census_gazetteer": "gazetteer",
+    "places": "places",
+    "ers_rucc": "rucc",
+    "geography_alias": "geo-alias",
+    "cancer_site": "cancer-site",
+    "cdc_svi": "svi",
+    "ers_ruca": "ruca",
+    "ers_food_access": "food-access",
+    "hrsa_ahrf": "ahrf",
+    "hrsa_sites": "hrsa-sites",
+    "scp": "scp",
+    "fda_mqsa": "mqsa",
+    "epa_sdwis": "sdwis",
+    "bls_laus": "laus",
+}
+
+SRC_DIR = Path("../src/canceronice")
+KNOWN_TABLES = set(schemas.TABLES)
+TABLE_RE = re.compile(r'"([a-z_]+\.[a-zA-Z0-9_]+)"')
+
+def markdownify(docstring):
+    """Docstrings already read as Markdown prose; only bump heading levels
+    so a module's own '##'/'###' nest under this page's '##' per-source
+    heading instead of colliding with it."""
+    def bump(m):
+        return "#" * (len(m.group(1)) + 2) + m.group(2)
+    return re.sub(r"^(#{1,4})( .*)$", bump, docstring, flags=re.MULTILINE)
+
+for module_name in sorted(CLI_SUBCOMMAND):
+    path = SRC_DIR / f"{module_name}.py"
+    source = path.read_text()
+    doc = ast.get_docstring(ast.parse(source))
+    tables_written = [t for t in dict.fromkeys(TABLE_RE.findall(source)) if t in KNOWN_TABLES]
+
+    title = module_name.replace("_", " ")
+    print(f"## {title} {{#src-{module_name}}}\n")
+    print(f"`uv run canceronice {CLI_SUBCOMMAND[module_name]}` "
+          f"([`src/canceronice/{module_name}.py`]"
+          f"(https://github.com/seandavi/cancer-on-ice/blob/main/src/canceronice/{module_name}.py))\n")
+    if tables_written:
+        table_links = ", ".join(f"[`{t}`](/dictionary/index.qmd)" for t in tables_written)
+        print(f"**Tables written:** {table_links}\n")
+    print(markdownify(doc))
+    print("\n---\n")
+```

@@ -1,0 +1,13 @@
+---
+title: "What changed across State Cancer Profiles vintages"
+---
+
+::: {.stub-callout}
+**Stub.** State Cancer Profiles publishes one vintage today (`V3`); this
+recipe needs at least two landed vintages to show a real diff, and the
+scraper/backfill work that lands prior vintages is tracked in
+[cancer-on-ice#117](https://github.com/seandavi/cancer-on-ice/issues/117).
+Once that lands, this page will run the same "diff two releases" pattern as
+[What changed between PLACES 2024 and 2025](places-diff.qmd), scoped to SCP's
+own vintages instead.
+:::
