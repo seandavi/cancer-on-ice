@@ -315,6 +315,12 @@ Arrow's C++ validator fails a check ("Map array keys array should have no
 nulls") that is not a catchable Python exception, reproduced with a minimal
 example. `attributes_json` (a JSON string column) replaces it.
 
+`source_release` is NULL for a continuously-refreshed snapshot source (its
+retrieval date is recorded in `provenance.release` and the source's own raw
+version column instead): repeating it here would make an unchanged row look
+changed on every ingest, which is a stopgap under issue #19, not that issue's
+resolution.
+
 Facility lists are the clearest case for history: "which certified mammography
 facilities existed in this county in 2023" is unanswerable from any live
 source.

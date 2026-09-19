@@ -91,14 +91,18 @@ than raising -- that combination doesn't exist in the real file today, and
 would be a HRSA data-quality anomaly if it appeared, not something this
 ingest should hard-stop on.
 
-ponytail: facility.site's business key is (facility_id, source) --
-source_release is deliberately excluded (issue #19), so a HRSA_HC site that
-hasn't changed still opens a new Type-2 version every day this runs, purely
-because source_release (the retrieval date) differs from the prior run.
-That's the accepted state of the unsettled versioning question, not a bug
-introduced here -- see merge.py's own docstring. What this module's tests
-actually prove is the acceptance criterion issue #38 asks for: a site
-dropped from a later snapshot gets retired, and every other site stays live.
+**facility.site.source_release is NULL for HRSA_HC.** facility.site's
+business key is (facility_id, source) -- source_release is deliberately
+excluded from it (issue #19). An earlier version of this module set
+source_release to the retrieval date, which -- since merge.merge diffs every
+non-key column -- made every unchanged site open a fresh Type-2 version on
+every single ingest: 19k rows of churn per run for zero real change. HRSA_HC
+writes NULL there instead: the snapshot date is already recorded in
+provenance.release and in raw.hrsa__health_center_sites.retrieved_on, so an
+unchanged site now merges as 'unchanged' across retrieval dates the way
+RUCC/PLACES rows do, and a site's *actual* content change still opens a new
+version. This is an interim fix under issue #19, not a resolution of it --
+see merge.py's and schemas.py's own notes on that.
 """
 
 import urllib.request
@@ -241,7 +245,7 @@ def transform(cat, release, retrieved_on):
 
     site = con.sql(f"""
         SELECT "BPHC Assigned Number" AS facility_id, 'HRSA_HC' AS source,
-               '{retrieved_on}' AS source_release, 'fqhc' AS kind, "Site Name" AS name,
+               NULL::VARCHAR AS source_release, 'fqhc' AS kind, "Site Name" AS name,
                "Site Address" || ', ' || "Site City" || ', ' || "Site State Abbreviation"
                    || ' ' || "Site Postal Code" AS address,
                TRY_CAST("Geocoding Artifact Address Primary Y Coordinate" AS DOUBLE) AS lat,

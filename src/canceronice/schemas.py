@@ -705,14 +705,14 @@ TABLES = {
                         doc="Asserting provider, e.g. 'HRSA_HC'. Part of the business key and of every "
                             "writer's merge scope, so sources stack in one table without one retiring "
                             "another's rows."),
-            NestedField(3, "source_release", StringType(), required=True,
-                        doc="The retrieval date (or edition) this version of the row came from. NOT part "
-                            "of the business key -- versioning here is deliberately unsettled (issue "
-                            "#19); for a daily-refreshed source like HRSA_HC this changes on every "
-                            "ingest even when nothing else about the site did, which is why an unchanged "
-                            "site still opens a new valid_from each day rather than staying 'unchanged' "
-                            "-- what matters is that a site absent from a later snapshot still gets "
-                            "retired (see tests/test_hrsa_sites.py)."),
+            NestedField(3, "source_release", StringType(),
+                        doc="The source's own release label, when it publishes one. NOT part of the "
+                            "business key -- versioning here is deliberately unsettled (issue #19). NULL "
+                            "for a continuously-refreshed snapshot source like HRSA_HC: the snapshot date "
+                            "is recorded in provenance.release and raw's own version column instead, "
+                            "since repeating it here would make every unchanged row look changed on every "
+                            "ingest; when cancerOnIce saw a given version of the row is "
+                            "valid_from/valid_to, not source_release."),
             NestedField(4, "kind", StringType(), required=True,
                         doc="'fqhc' | 'rhc' | 'mammography' | 'lung_screening' | 'provider' | 'hospital'. "
                             "HRSA_HC rows are 'fqhc' for both true FQHCs and FQHC Look-Alikes."),

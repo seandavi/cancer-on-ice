@@ -74,7 +74,11 @@ def test_derives_facility_site(cat):
 
     plain = sites["BPS-H80-000078"]
     assert plain["source"] == "HRSA_HC"
-    assert plain["source_release"] == "2026-09-18"
+    # NULL, not the retrieval date: source_release isn't part of the business
+    # key, and repeating the retrieval date here would make every unchanged
+    # site look changed on every ingest (see hrsa_sites.py docstring). The
+    # snapshot date lives in provenance.release / raw's own retrieved_on.
+    assert plain["source_release"] is None
     assert plain["kind"] == "fqhc"
     assert plain["geo_id"] == "county:12031"
     assert plain["geo_vintage"] == 2020
@@ -102,28 +106,61 @@ def test_derives_facility_site(cat):
     assert lookalike["kind"] == "fqhc"  # both FQHC and Look-Alike land as 'fqhc'
 
 
-def test_facility_site_retires_a_dropped_site(cat, tmp_path):
-    """SPEC.md's facility history case, issue #38: a site absent from a later
-    snapshot is retired by the merge; every other site stays live."""
+def test_facility_site_retires_dropped_and_versions_changed_sites_only(cat, tmp_path):
+    """SPEC.md's facility history case, issue #38, with the issue #19 interim
+    fix (source_release NULL for HRSA_HC): two snapshots on different
+    retrieval dates where one site is dropped and one site's own data
+    changes must produce exactly one retirement, exactly one new version --
+    and every other, truly-unchanged site must stay on its original row
+    (same valid_from, still live), not churn a fresh version just because
+    the retrieval date moved."""
     hrsa_sites.ingest(cat, REL, HC_CSV, HPSA_CSV, retrieved_on="2026-09-18")
     live_day1 = {r["facility_id"] for r in rows(cat, "facility.site", row_filter="valid_to IS NULL")}
     assert live_day1 == {"BPS-H80-000078", "BPS-H80-000090", "BPS-H80-041998",
                          "BPS-H80-029419", "BPS-LAL-038982"}
 
-    # Day 2's snapshot: BPS-H80-029419 (COSSMA San Lorenzo) has closed.
-    dropped = tmp_path / "day2.csv"
+    # Day 2's snapshot: BPS-H80-029419 (COSSMA San Lorenzo) has closed, and
+    # BPS-H80-000078 (Duval) was renamed -- everything else is byte-identical.
     lines = Path(HC_CSV).read_text(encoding="utf-8").splitlines(keepends=True)
-    dropped.write_text("".join(l for l in lines if "BPS-H80-029419" not in l), encoding="utf-8")
+    lines = [l for l in lines if "BPS-H80-029419" not in l]
+    lines = [l.replace('"Duval Family Health Center - Enterprise"',
+                       '"Duval Family Health Center - Enterprise (Renamed)"') for l in lines]
+    day2 = tmp_path / "day2.csv"
+    day2.write_text("".join(lines), encoding="utf-8")
 
-    hrsa_sites.ingest(cat, "2026.10", str(dropped), HPSA_CSV, retrieved_on="2026-09-19")
+    counts = hrsa_sites.ingest(cat, "2026.10", str(day2), HPSA_CSV, retrieved_on="2026-09-19")
+
+    # One retirement (closing) + one new version + its closing companion = 3
+    # written rows; the three genuinely untouched sites are 'unchanged'.
+    assert counts["facility.site"]["written"] == 3
+    assert counts["facility.site"]["unchanged"] == 3
+    assert counts["facility.site"]["retired"] == 1
+    assert counts["facility.site"]["changed"] == 1
+    assert counts["facility.site"]["superseded"] == 1
 
     live_day2 = {r["facility_id"] for r in rows(cat, "facility.site", row_filter="valid_to IS NULL")}
     assert live_day2 == {"BPS-H80-000078", "BPS-H80-000090", "BPS-H80-041998", "BPS-LAL-038982"}
 
-    closed = rows(cat, "facility.site",
-                  row_filter="facility_id = 'BPS-H80-029419' AND valid_to IS NOT NULL")
-    assert len(closed) == 1
-    assert closed[0]["valid_to"] == "2026.10"
+    # The dropped site: exactly one row, now closed.
+    dropped = rows(cat, "facility.site", row_filter="facility_id = 'BPS-H80-029419'")
+    assert len(dropped) == 1
+    assert dropped[0]["valid_to"] == "2026.10"
+
+    # The changed site: exactly one new version, the old one closed at day 2.
+    changed = rows(cat, "facility.site", row_filter="facility_id = 'BPS-H80-000078'")
+    assert len(changed) == 2
+    old, new = sorted(changed, key=lambda r: r["valid_from"])
+    assert old["valid_from"] == REL and old["valid_to"] == "2026.10"
+    assert new["valid_from"] == "2026.10" and new["valid_to"] is None
+    assert new["name"] == "Duval Family Health Center - Enterprise (Renamed)"
+
+    # Every genuinely untouched site: still exactly one row, still open from
+    # day 1 -- no version churn just because the retrieval date moved.
+    for facility_id in ("BPS-H80-000090", "BPS-H80-041998", "BPS-LAL-038982"):
+        untouched = rows(cat, "facility.site", row_filter=f"facility_id = '{facility_id}'")
+        assert len(untouched) == 1
+        assert untouched[0]["valid_from"] == REL
+        assert untouched[0]["valid_to"] is None
 
 
 def test_derives_hpsa_county_measures(cat):
