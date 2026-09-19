@@ -75,18 +75,19 @@ distinct sources in the real 2024-2025 file, checked 2026-09-18:
 | County Health Rankings File | 2 | EXCLUDED | Third party (County Health Rankings & Roadmaps, U Wisconsin PHI / RWJF) -- SPEC.md's Licence gate already lists this source as "Needs review before ingest ... confirm the record's licence", repo-wide and unresolved. |
 | System Sciences Study | 1 | EXCLUDED | One 1976-77 elevation field from a private contractor's environmental-mortality study -- no redistribution terms found. |
 | DDH,9-33 | 1 | EXCLUDED | One field (`cnty_name`) citing an internal document code not resolved in the documentation's own glossary -- excluded for lack of a verifiable source, not suspected proprietary (the county name is also carried, allowed, as part of `cnty_name_st_abbrev`, "Derived From GSA"). |
+| NCHS Mortality File | 88 | EXCLUDED (pending review) | National Center for Health Statistics (CDC/HHS) -- federal settles copyright but NOT NCHS's own vital-statistics data-use agreement: the AHRF User Guide confirms "NCHS restrictions prohibit release of any subnational data with fewer than 10 occurrences". SPEC.md's Licence gate already treats CDC WONDER as "Needs review before ingest" for exactly this restriction. This is a review hold, not a finding that the data is actually restricted -- revisit once that agreement's redistribution terms (as opposed to its publication-threshold rule) are checked. |
+| NCHS Natality File | 42 | EXCLUDED (pending review) | same NCHS vital-statistics data-use agreement as NCHS Mortality File above. |
+| NCHS Mort/Nat File | 2 | EXCLUDED (pending review) | same, a combined mortality/natality-file citation. |
 | 2019-23 Census ACS | 338 | allowed | U.S. Census Bureau, federal. |
 | 2018-22 Census ACS | 338 | allowed | ditto. |
 | Census SAHIE | 152 | allowed | ditto (Small Area Health Insurance Estimates). |
 | 2010 Census SF1 | 129 | allowed | ditto. |
 | 2020 Census DHC | 124 | allowed | ditto. |
-| NCHS Mortality File | 88 | allowed | National Center for Health Statistics (CDC/HHS), federal. NCHS's own release policy already suppresses county cells under 10 occurrences before AHRF ever receives the data (confirmed in the AHRF User Guide) -- a publication-threshold policy, not a redistribution restriction; nothing here is `(Copyright)`-tagged. |
 | CMS NPI File | 60 | allowed | CMS NPPES provider registry, federal. |
 | Census County Char File | 54 | allowed | U.S. Census Bureau, federal. |
 | 2020 Census Redistrict | 48 | allowed | ditto (PL 94-171). |
 | CMS Marketplace | 44 | allowed | CMS, federal. |
 | 2010 Census Redistrict | 42 | allowed | ditto. |
-| NCHS Natality File | 42 | allowed | as NCHS Mortality File above. |
 | Medicare Geographic Var | 40 | allowed | CMS, federal. |
 | CMS Provider of Services | 24 | allowed | CMS, federal (already used for FQHC/RHC/hospice/ASC counts). |
 | HRSA DNHSC | 18 | allowed | HRSA, federal. |
@@ -108,20 +109,21 @@ distinct sources in the real 2024-2025 file, checked 2026-09-18:
 | Census Bureau | 4 | allowed | federal. |
 | CMS PDP Penetration | 4 | allowed | CMS, federal. |
 | CDC EPH Tracking Network | 4 | allowed | federal. |
-| NCHS Mort/Nat File | 2 | allowed | a combined mortality/natality-file citation, same NCHS reasoning above. |
 | Census SNAP File | 2 | allowed | U.S. Census Bureau, federal. |
 | Census Housing Unit File | 2 | allowed | ditto. |
 | U.S. Post Office | 1 | allowed | USPS state abbreviations -- standard postal codes, the same ones `census_gazetteer.py`/`ers_rucc.py` already carry unremarked. |
 | DHHS | 1 | allowed | federal. |
 | *(no source listed)* | 6 | allowed | AHRF's own file-structural fields (`blank`, `date_cretn`, `date_file`, `entity_file`, `file_length`, `st_name`) -- not content from any dataset. |
 
-2,657 excluded + 1,695 allowed = 4,352, the whole header. `raw.hrsa__ahrf` lands
-1,694 of the 1,695 allowed columns as `(column_name, value)` cells -- the
-1,695th, `fips_st_cnty`, becomes the `fips` key column instead (see the
+2,789 excluded + 1,563 allowed = 4,352, the whole header. `raw.hrsa__ahrf` lands
+1,562 of the 1,563 allowed columns as `(column_name, value)` cells -- the
+1,563rd, `fips_st_cnty`, becomes the `fips` key column instead (see the
 `Derived From GSA` row). Checked against the real 2024-2025 file
 programmatically (not just this table by hand): zero columns fell into the
 "unrecognised source" bucket -- every one of the 45 distinct sources above
-is accounted for by `ALLOWED_SOURCES` or `EXCLUDED_SOURCES`.
+is accounted for by `ALLOWED_SOURCES` or `EXCLUDED_SOURCES`. Three of those
+45 (the NCHS rows above, 132 columns) are a deliberate REVIEW HOLD, not a
+finding of restriction -- see their row for why.
 
 **Consequence for this module, and for the issue that asked for it (#39):**
 the issue's requested curated list -- "active MDs, primary-care physicians,
@@ -148,7 +150,7 @@ list to stay in sync with it.
 
 ## Landing WHOLE, in LONG form
 
-AHRF is very wide even after the licence gate: 1,694 allowed columns x 3,235
+AHRF is very wide even after the licence gate: 1,562 allowed columns x 3,235
 counties. Measured locally against the real file: declaring one NestedField
 (with a `doc`, per house rule) for each of ~1,700 columns is not a schema
 anyone could review or maintain, and the vast majority would never be read
@@ -159,7 +161,7 @@ strings -- which is still landing every eligible cell of the release whole
 granularity; ADR-0002 doesn't mandate one physical column per source field,
 only that nothing is thrown away or pre-filtered by guessing what will
 matter later). Measured: unpivoting the real release takes ~5s and produces
-5,480,090 rows locally (1,694 columns x 3,235 counties).
+5,053,070 rows locally (1,562 columns x 3,235 counties).
 
 ponytail: because raw is long and every cell is addressed by name rather than
 position, this module's header check does NOT reproduce AHRF's 4,352-column
@@ -266,7 +268,6 @@ ALLOWED_SOURCES = frozenset({
     "2010 Census Redistrict", "2020 Census Redistrict", "Census Bureau", "Census Map",
     "Census SAHIE", "Census SAIPE", "Census SNAP File", "Census Housing Unit File",
     "Census County Char File", "Census County Pop Est",
-    "NCHS Mortality File", "NCHS Natality File", "NCHS Mort/Nat File",
     "CMS", "CMS NPI File", "CMS Provider of Services", "CMS Marketplace",
     "CMS MA Penetration", "CMS PDP Penetration", "CMS Monthly Enroll Dashbrd",
     "Medicare Geographic Var",
@@ -306,6 +307,18 @@ EXCLUDED_SOURCES = {
         "excluded for lack of a verifiable source/licence, not because it's suspected "
         "proprietary (cnty_name_st_abbrev, landed separately, is the same name, "
         "'Derived From GSA' and allowed).",
+    "NCHS Mortality File": "pending licence review -- NOT a finding of restriction, a "
+        "review hold: NCHS vital statistics (mortality/natality) carry their own "
+        "data-use agreement on small-cell county data (the AHRF User Guide confirms "
+        "NCHS 'restrictions prohibit release of any subnational data with fewer than "
+        "10 occurrences'), and 'federal' settles copyright but not that separate "
+        "agreement's terms. SPEC.md's Licence gate already treats CDC WONDER -- "
+        "governed by the same NCHS vital-statistics restrictions -- as 'Needs review "
+        "before ingest' for exactly this reason.",
+    "NCHS Natality File": "pending licence review -- same NCHS vital-statistics "
+        "data-use agreement as NCHS Mortality File above.",
+    "NCHS Mort/Nat File": "pending licence review -- same NCHS vital-statistics "
+        "data-use agreement as NCHS Mortality File above (a combined citation).",
 }
 
 # Columns the technical documentation lists with NO source at all (verified
