@@ -698,9 +698,255 @@ TABLES = {
 
     # --- raw: hrsa hpsa and health centers ---
     # HRSA HPSA designations and health-center sites; declares facility.site (#38).
-    # The table declaration(s) goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    # Both files are daily-refreshed dumps that overwrite themselves in place
+    # (no edition label) -- version axis is retrieval date, landed as
+    # `retrieved_on`. Both real headers end in a stray trailing comma that
+    # produces a spurious empty final column name while every data row has one
+    # fewer field than the header; `null_padding=true` in hrsa_sites.py's
+    # read_csv call pads that phantom trailing field with NULL rather than
+    # shifting every real column over, so the 55 (health centers) / 65 (HPSA)
+    # real columns below land at their correct values -- see hrsa_sites.py.
+    "raw.hrsa__health_center_sites": TableDef(
+        schema=Schema(
+            NestedField(1, "Health Center Type", StringType(), required=True,
+                        doc="'Federally Qualified Health Center (FQHC)' or '...FQHC) Look-Alike'."),
+            NestedField(2, "Health Center Number", StringType(), doc="Grantee's HRSA-assigned number, e.g. 'H80CS00305'."),
+            NestedField(3, "BHCMIS Organization Identification Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(4, "BPHC Assigned Number", StringType(), required=True,
+                        doc="Per-site identifier, e.g. 'BPS-H80-000078' -- verified unique across "
+                            "every row of the file (2026-09-18); this is facility.site.facility_id."),
+            NestedField(5, "Site Name", StringType(), doc="Site's own name; facility.site.name."),
+            NestedField(6, "Site Address", StringType(), doc="Street address; part of facility.site.address."),
+            NestedField(7, "Site City", StringType(), doc="Part of facility.site.address."),
+            NestedField(8, "Site State Abbreviation", StringType(), doc="Part of facility.site.address."),
+            NestedField(9, "Site Postal Code", StringType(), doc="Part of facility.site.address."),
+            NestedField(10, "Site Telephone Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(11, "Site Web Address", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(12, "Operating Hours per Week", StringType(),
+                        doc="Unparsed; NULL for some Administrative sites. facility.site.attributes_json's "
+                            "'operating_hours_reported' flag is true iff this is non-NULL here."),
+            NestedField(13, "Health Center Location Setting Identification Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(14, "Health Center Service Delivery Site Location Setting Description", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(15, "Health Center Status Identification Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(16, "Site Status Description", StringType(),
+                        doc="Always 'Active' in this file (it lists current sites only); "
+                            "facility.site.attributes_json's 'status' key."),
+            NestedField(17, "FQHC Site Medicare Billing Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(18, "FQHC Site NPI Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(19, "Health Center Location Identification Number", StringType(),
+                        doc="A lookup code (only 3 distinct values file-wide, 2026-09-18) -- "
+                            "not a per-site id; see 'BPHC Assigned Number' for that."),
+            NestedField(20, "Health Center Location Type Description", StringType(),
+                        doc="'Permanent' | 'Seasonal' | 'Mobile Van'; facility.site.attributes_json's 'site_type' key."),
+            NestedField(21, "Health Center Type Identification Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(22, "Health Center Type Description", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(23, "Health Center Operator Identification Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(24, "Health Center Operator Description", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(25, "Health Center Operating Schedule Identification Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(26, "Health Center Operational Schedule Description", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(27, "Health Center Operating Calendar Surrogate Key", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(28, "Health Center Operating Calendar", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(29, "Site Added to Scope this Date", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(30, "Health Center Name", StringType(),
+                        doc="Grantee organization's name; facility.site.attributes_json's 'grantee_name' key."),
+            NestedField(31, "Health Center Organization Street Address", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(32, "Health Center Organization City", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(33, "Health Center Organization State", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(34, "Health Center Organization ZIP Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(35, "Grantee Organization Type Description", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(36, "Geocoding Artifact Address Primary X Coordinate", StringType(),
+                        doc="Longitude, unparsed; facility.site.lon (TRY_CAST to double -- 73 rows are blank, "
+                            "2026-09-18)."),
+            NestedField(37, "Geocoding Artifact Address Primary Y Coordinate", StringType(),
+                        doc="Latitude, unparsed; facility.site.lat."),
+            NestedField(38, "U.S. - Mexico Border 100 Kilometer Indicator", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(39, "U.S. - Mexico Border County Indicator", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(40, "State and County Federal Information Processing Standard Code", StringType(), required=True,
+                        doc="5-digit county FIPS, e.g. '12031'; facility.site.geo_id is 'county:'+this. "
+                            "The file carries current (2020-vintage) codes only -- Connecticut's nine "
+                            "planning regions 09110-09190 and Alaska's current census areas (e.g. 02063 "
+                            "Chugach, 02066 Copper River), no legacy codes seen (2026-09-18)."),
+            NestedField(41, "Complete County Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(42, "County Equivalent Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(43, "County Description", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(44, "HHS Region Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(45, "HHS Region Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(46, "State FIPS Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(47, "State Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(48, "State FIPS and Congressional District Number Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(49, "Congressional District Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(50, "Congressional District Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(51, "Congressional District Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(52, "U.S. Congressional Representative Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(53, "Name of U.S. Senator Number One", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(54, "Name of U.S. Senator Number Two", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(55, "Data Warehouse Record Create Date", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(56, "retrieved_on", StringType(), required=True,
+                        doc="Date this daily-refreshed dump was fetched, ISO YYYY-MM-DD -- the version "
+                            "axis for this source (it publishes no edition label). Raw is replaced "
+                            "wholesale per value of this column."),
+            NestedField(57, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="HRSA Health Center Service Delivery and Look-Alike Sites, landed verbatim and whole "
+                "(SPEC.md § Sources — first tranche). Public domain; HRSA's own Data Usage Terms & "
+                "Conditions for this dataset state 'Usage limitations: None' "
+                "(https://data.hrsa.gov/data/download, checked 2026-09-18).",
+    ),
+
+    "raw.hrsa__hpsa_primary_care": TableDef(
+        schema=Schema(
+            NestedField(1, "HPSA Name", StringType(), doc="Shortage area's own name -- an organisation/place name, never an individual."),
+            NestedField(2, "HPSA ID", StringType(), required=True, doc="HRSA's designation id."),
+            NestedField(3, "Designation Type", StringType(), required=True,
+                        doc="'Geographic HPSA' | 'High Needs Geographic HPSA' (the only two counted into "
+                            "measure.observation) | 'HPSA Population' | 'Federally Qualified Health "
+                            "Center' | '...Look A Like' | 'Rural Health Clinic' | 'Correctional "
+                            "Facility' | 'Other Facility' | 'Indian Health Service, Tribal Health, and "
+                            "Urban Indian Health Organizations' -- the rest are population-group or "
+                            "facility designations that don't carry a usable geo_id (SPEC.md gap noted "
+                            "in issue #38); landed here but not derived."),
+            NestedField(4, "HPSA Discipline Class", StringType(), required=True, doc="'Primary Care' for every row in this file."),
+            NestedField(5, "HPSA Score", StringType(),
+                        doc="HRSA's shortage-severity score, unparsed; feeds "
+                            "measure.observation's HPSA:pc_max_score."),
+            NestedField(6, "PC MCTA Score", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(7, "Primary State Abbreviation", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(8, "HPSA Status", StringType(), required=True,
+                        doc="'Designated' | 'Withdrawn' | 'Proposed For Withdrawal'. Withdrawn / "
+                            "proposed-for-withdrawal is a real status, not suppression -- carried as-is; "
+                            "only 'Designated' rows feed measure.observation."),
+            NestedField(9, "HPSA Designation Date", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(10, "HPSA Designation Last Update Date", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(11, "Metropolitan Indicator", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(12, "HPSA Geography Identification Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(13, "HPSA Degree of Shortage", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(14, "Withdrawn Date", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(15, "HPSA FTE", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(16, "HPSA Designation Population", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(17, "% of Population Below 100% Poverty", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(18, "HPSA Formal Ratio", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(19, "HPSA Population Type", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(20, "Rural Status", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(21, "Longitude", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(22, "Latitude", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(23, "BHCMIS Organization Identification Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(24, "Break in Designation", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(25, "Common County Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(26, "Common Postal Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(27, "Common Region Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(28, "Common State Abbreviation", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(29, "Common State County FIPS Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(30, "Common State FIPS Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(31, "Common State Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(32, "County Equivalent Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(33, "County or County Equivalent Federal Information Processing Standard Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(34, "Discipline Class Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(35, "HPSA Address", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(36, "HPSA City", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(37, "HPSA Component Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(38, "HPSA Component Source Identification Number", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(39, "HPSA Component State Abbreviation", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(40, "HPSA Component Type Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(41, "HPSA Component Type Description", StringType(),
+                        doc="'Single County' | 'County Subdivision' | 'Census Tract' -- the HPSA's own "
+                            "sub-county component granularity; a multi-component HPSA has one row per "
+                            "component, all sharing the same county FIPS (deduplicated by HPSA ID + FIPS "
+                            "before counting, see hrsa_sites.py)."),
+            NestedField(42, "HPSA Designation Population Type Description", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(43, "HPSA Estimated Served Population", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(44, "HPSA Estimated Underserved Population", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(45, "HPSA Metropolitan Indicator Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(46, "HPSA Population Type Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(47, "HPSA Postal Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(48, "HPSA Provider Ratio Goal", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(49, "HPSA Resident Civilian Population", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(50, "HPSA Shortage", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(51, "HPSA Status Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(52, "HPSA Type Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(53, "HPSA Withdrawn Date String", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(54, "Primary State FIPS Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(55, "Primary State Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(56, "Provider Type", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(57, "Rural Status Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(58, "State Abbreviation", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(59, "State and County Federal Information Processing Standard Code", StringType(), required=True,
+                        doc="5-digit county FIPS for a real designation, but 'XXXXX' / 'XXX' for some "
+                            "Withdrawn / Proposed For Withdrawal rows (masked, not a real code -- verified "
+                            "2026-09-18; none seen on a currently-Designated Geographic/High Needs row). "
+                            "measure.observation's geo_id is 'county:'+this, restricted to rows matching "
+                            "5 digits."),
+            NestedField(60, "State FIPS Code", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(61, "State Name", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(62, "U.S. - Mexico Border 100 Kilometer Indicator", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(63, "U.S. - Mexico Border County Indicator", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(64, "Data Warehouse Record Create Date", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(65, "Data Warehouse Record Create Date Text", StringType(), doc="As published by HRSA; not used downstream."),
+            NestedField(66, "retrieved_on", StringType(), required=True,
+                        doc="Date this daily-refreshed dump was fetched, ISO YYYY-MM-DD -- the version "
+                            "axis for this source. Raw is replaced wholesale per value of this column."),
+            NestedField(67, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="HRSA primary-care Health Professional Shortage Area designations "
+                "(BCD_HPSA_FCT_DET_PC.csv), landed verbatim and whole, every status including "
+                "Withdrawn (SPEC.md § Sources — first tranche). Public domain; HRSA's own Data Usage "
+                "Terms & Conditions for this dataset state 'Usage limitations: None' "
+                "(https://data.hrsa.gov/data/download, checked 2026-09-18). Dental and mental-health "
+                "HPSA files are not landed by this module (issue #38 asks for primary care at minimum).",
+    ),
+
+    # facility.site (SPEC.md § Facilities) -- first facility source declares the shared table.
+    # `attributes` was specified as map<string,string>; a DuckDB MAP -> Arrow -> this Iceberg
+    # schema round-trip aborts the process (Arrow C++ validator: "Map array keys array should
+    # have no nulls", not a catchable Python exception -- confirmed with a minimal repro
+    # 2026-09-18), so it is a JSON string column here instead; SPEC.md is updated to match.
+    "facility.site": TableDef(
+        schema=Schema(
+            NestedField(1, "facility_id", StringType(), required=True,
+                        doc="Source's own stable per-site id. For HRSA_HC, HRSA's 'BPHC Assigned "
+                            "Number' -- verified unique across the whole file. Part of the business key."),
+            NestedField(2, "source", StringType(), required=True,
+                        doc="Asserting provider, e.g. 'HRSA_HC'. Part of the business key and of every "
+                            "writer's merge scope, so sources stack in one table without one retiring "
+                            "another's rows."),
+            NestedField(3, "source_release", StringType(),
+                        doc="The source's own release label, when it publishes one. NOT part of the "
+                            "business key -- versioning here is deliberately unsettled (issue #19). NULL "
+                            "for a continuously-refreshed snapshot source like HRSA_HC: the snapshot date "
+                            "is recorded in provenance.release and raw's own version column instead, "
+                            "since repeating it here would make every unchanged row look changed on every "
+                            "ingest; when cancerOnIce saw a given version of the row is "
+                            "valid_from/valid_to, not source_release."),
+            NestedField(4, "kind", StringType(), required=True,
+                        doc="'fqhc' | 'rhc' | 'mammography' | 'lung_screening' | 'provider' | 'hospital'. "
+                            "HRSA_HC rows are 'fqhc' for both true FQHCs and FQHC Look-Alikes."),
+            NestedField(5, "name", StringType(), doc="Site's own name."),
+            NestedField(6, "address", StringType(), doc="Single-line street address, city, state, postal code."),
+            NestedField(7, "lat", DoubleType(), doc="Latitude, WGS84, as published by the source."),
+            NestedField(8, "lon", DoubleType(), doc="Longitude, WGS84, as published by the source."),
+            NestedField(9, "geo_id", StringType(),
+                        doc="FK geography.unit. SPEC.md calls for tract-level geo_id here; HRSA_HC "
+                            "publishes only county FIPS, so this is 'county:'+FIPS for that source -- a "
+                            "documented gap, not a tract lookup this module performs."),
+            NestedField(10, "geo_vintage", IntegerType(),
+                        doc="FK geography.unit's vintage. 2020 for HRSA_HC: the file's Connecticut rows "
+                            "carry the nine 2022 planning regions (09110-09190) and its Alaska rows carry "
+                            "the current census areas (e.g. 02063, 02066), never a legacy code (verified "
+                            "2026-09-18)."),
+            NestedField(11, "attributes_json", StringType(),
+                        doc="JSON object of source-specific attributes, keys documented per source. "
+                            "HRSA_HC keys: site_type ('Permanent'|'Seasonal'|'Mobile Van'), "
+                            "operating_hours_reported ('true'|'false'), grantee_name, grantee_id, status."),
+            NestedField(12, "valid_from", StringType(), required=True, doc=VALID_FROM),
+            NestedField(13, "valid_to", StringType(), doc=VALID_TO),
+        ),
+        business_key=("facility_id", "source"),
+        comment="Places care happens (SPEC.md § Facilities). First writer: HRSA_HC (health-center "
+                "service delivery / look-alike sites). Full Type-2 history via valid_from/valid_to -- a "
+                "site absent from a later snapshot is retired by the merge, which is the point for a "
+                "source that only ever serves today's list.",
+    ),
 }
 
 
