@@ -480,10 +480,535 @@ TABLES = {
     # independent branches merge cleanly.
 
     # --- raw: usda ers food access ---
-    # USDA ERS Food Access Research Atlas (#42).
-    # The table declaration(s) goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    # USDA ERS Food Access Research Atlas (#42): census-tract low-income/low-access
+    # ("food desert") flags and the population counts behind them, one row per
+    # (tract, edition) landed whole -- all 147 published columns, verbatim. Public
+    # domain (17 U.S.C. Sec 105); see ers_food_access.py's docstring for the two
+    # editions' real headers, the 2010-tract geo_vintage evidence, and the
+    # missing-value / share-scale differences between them.
+    "raw.ers__food_access": TableDef(
+        schema=Schema(
+            NestedField(1, "CensusTract", StringType(), required=True,
+                        doc="Census tract: Census tract number."),
+            NestedField(2, "State", StringType(), doc="State: State name."),
+            NestedField(3, "County", StringType(), doc="County: County name."),
+            NestedField(4, "Urban", StringType(), doc="Urban tract: Flag for urban tract."),
+            NestedField(5, "Pop2010", StringType(),
+                        doc="Population, tract total: Population count from 2010 census."),
+            NestedField(6, "OHU2010", StringType(),
+                        doc="Housing units, total: Occupied housing unit count from 2010 census."),
+            NestedField(7, "GroupQuartersFlag", StringType(),
+                        doc="Group quarters, tract with high share: Flag for tract where >=67%."),
+            NestedField(8, "NUMGQTRS", StringType(),
+                        doc="Group quarters, tract population residing in, number: Count of tract "
+                            "population residing in group quarters."),
+            NestedField(9, "PCTGQTRS", StringType(),
+                        doc="Group quarters, tract population residing in, share: Percent of tract "
+                            "population residing in group quarters."),
+            NestedField(10, "LILATracts_1And10", StringType(),
+                        doc="Low income and low access tract measured at 1 mile for urban areas and "
+                            "10 miles for rural areas: Flag for low-income and low access when "
+                            "considering low accessibilty at 1 and 10 miles."),
+            NestedField(11, "LILATracts_halfAnd10", StringType(),
+                        doc="Low income and low access tract measured at 1/2 mile for urban areas "
+                            "and 10 miles for rural areas: Flag for low-income and low access "
+                            "when considering low accessibilty at 1/2 and 10 miles."),
+            NestedField(12, "LILATracts_1And20", StringType(),
+                        doc="Low income and low access tract measured at 1 mile for urban areas and "
+                            "20 miles for rural areas: Flag for low-income and low access when "
+                            "considering low accessibilty at 1 and 20 miles."),
+            NestedField(13, "LILATracts_Vehicle", StringType(),
+                        doc="Low income and low access tract using vehicle access or low income and "
+                            "low access tract measured at 20 miles: Flag for low-income and low "
+                            "access when considering vehicle access or at 20 miles."),
+            NestedField(14, "HUNVFlag", StringType(),
+                        doc="Vehicle access, tract with low vehicle access: Flag for tract where >= "
+                            "100 of households do not have a vehicle, and beyond 1/2 mile from "
+                            "supermarket."),
+            NestedField(15, "LowIncomeTracts", StringType(),
+                        doc="Low income tract: Flag for low income tract."),
+            NestedField(16, "PovertyRate", StringType(),
+                        doc="Tract poverty rate: Share of the tract population living with income at "
+                            "or below the Federal poverty thresholds for family size."),
+            NestedField(17, "MedianFamilyIncome", StringType(),
+                        doc="Tract median family income: Tract median family income."),
+            NestedField(18, "LA1and10", StringType(),
+                        doc="Low access tract at 1 mile for urban areas and 10 miles for rural "
+                            "areas: Flag for low access tract at 1 mile for urban areas or 10 "
+                            "miles for rural areas."),
+            NestedField(19, "LAhalfand10", StringType(),
+                        doc="Low access tract at 1/2 mile for urban areas and 10 miles for rural "
+                            "areas: Flag for low access tract at 1/2 mile for urban areas or 10 "
+                            "miles for rural areas."),
+            NestedField(20, "LA1and20", StringType(),
+                        doc="Low access tract at 1 mile for urban areas and 20 miles for rural "
+                            "areas: Flag for low access tract at 1 mile for urban areas or 20 "
+                            "miles for rural areas."),
+            NestedField(21, "LATracts_half", StringType(),
+                        doc="Low access tract at 1/2 mile: Flag for low access tract when "
+                            "considering 1/2 mile distance."),
+            NestedField(22, "LATracts1", StringType(),
+                        doc="Low access tract at 1 mile: Flag for low access tract when considering "
+                            "1 mile distance."),
+            NestedField(23, "LATracts10", StringType(),
+                        doc="Low access tract at 10 miles: Flag for low access tract when "
+                            "considering 10 mile distance."),
+            NestedField(24, "LATracts20", StringType(),
+                        doc="Low access tract at 20 miles: Flag for low access tract when "
+                            "considering 20 mile distance."),
+            NestedField(25, "LATractsVehicle_20", StringType(),
+                        doc="Low access tract using vehicle access and at 20 miles in rural areas: "
+                            "Flag for tract where >= 100 of households do not have a vehicle, "
+                            "and beyond 1/2 mile from supermarket; or >= 500 individuals are "
+                            "beyond 20 miles from supermarket ; or >= 33% of individuals are "
+                            "beyond 20 miles from supermarket."),
+            NestedField(26, "LAPOP1_10", StringType(),
+                        doc="Low access, population at 1 mile for urban areas and 10 miles for rural "
+                            "areas, number: Population count beyond 1 mile for urban areas or 10 "
+                            "miles for rural areas from supermarket."),
+            NestedField(27, "LAPOP05_10", StringType(),
+                        doc="Low access, population at 1/2 mile for urban areas and 10 miles for "
+                            "rural areas, number: Population count beyond 1/2 mile for urban "
+                            "areas or 10 miles for rural areas from supermarket."),
+            NestedField(28, "LAPOP1_20", StringType(),
+                        doc="Low access, population at 1 mile for urban areas and 20 miles for rural "
+                            "areas, number: Population count beyond 1 mile for urban areas or 20 "
+                            "miles for rural areas from supermarket."),
+            NestedField(29, "LALOWI1_10", StringType(),
+                        doc="Low access, low-income population at 1 mile for urban areas and 10 "
+                            "miles for rural areas, number: Low income population count beyond 1 "
+                            "mile for urban areas or 10 miles for rural areas from supermarket."),
+            NestedField(30, "LALOWI05_10", StringType(),
+                        doc="Low access, low-income population at 1/2 mile for urban areas and 10 "
+                            "miles for rural areas, number: Low income population count beyond "
+                            "1/2 mile for urban areas or 10 miles for rural areas from "
+                            "supermarket."),
+            NestedField(31, "LALOWI1_20", StringType(),
+                        doc="Low access, low-income population at 1 mile for urban areas and 20 "
+                            "miles for rural areas, number: Low income population count beyond 1 "
+                            "mile for urban areas or 20 miles for rural areas from supermarket."),
+            NestedField(32, "lapophalf", StringType(),
+                        doc="Low access, population at 1/2 mile, number: Population count beyond 1/2 "
+                            "mile from supermarket."),
+            NestedField(33, "lapophalfshare", StringType(),
+                        doc="Low access, population at 1/2 mile, share: Share of tract population "
+                            "that are beyond 1/2 mile from supermarket."),
+            NestedField(34, "lalowihalf", StringType(),
+                        doc="Low access, low-income population at 1/2 mile, number: Low income "
+                            "population count beyond 1/2 mile from supermarket."),
+            NestedField(35, "lalowihalfshare", StringType(),
+                        doc="Low access, low-income population at 1/2 mile, share: Share of tract "
+                            "population that are low income individuals beyond 1/2 mile from "
+                            "supermarket."),
+            NestedField(36, "lakidshalf", StringType(),
+                        doc="Low access, children age 0-17 at 1/2 mile, number: Kids population "
+                            "count beyond 1/2 mile from supermarket."),
+            NestedField(37, "lakidshalfshare", StringType(),
+                        doc="Low access, children age 0-17 at 1/2 mile, share: Share of tract "
+                            "population that are kids beyond 1/2 mile from supermarket."),
+            NestedField(38, "laseniorshalf", StringType(),
+                        doc="Low access, seniors age 65+ at 1/2 mile, number: Seniors population "
+                            "count beyond 1/2 mile from supermarket."),
+            NestedField(39, "laseniorshalfshare", StringType(),
+                        doc="Low access, seniors age 65+ at 1/2 mile, share: Share of tract "
+                            "population that are seniors beyond 1/2 mile from supermarket."),
+            NestedField(40, "lawhitehalf", StringType(),
+                        doc="Low access, White population at 1/2 mile, number: White population "
+                            "count beyond 1/2 mile from supermarket."),
+            NestedField(41, "lawhitehalfshare", StringType(),
+                        doc="Low access, White population at 1/2 mile, share: Share of tract "
+                            "population that are white beyond 1/2 mile from supermarket."),
+            NestedField(42, "lablackhalf", StringType(),
+                        doc="Low access, Black or African American population at 1/2 mile, number: "
+                            "Black or African American population count beyond 1/2 mile from "
+                            "supermarket."),
+            NestedField(43, "lablackhalfshare", StringType(),
+                        doc="Low access, Black or African American population at 1/2 mile, share: "
+                            "Share of tract population that are Black or African American beyond "
+                            "1/2 mile from supermarket."),
+            NestedField(44, "laasianhalf", StringType(),
+                        doc="Low access, Asian population at 1/2 mile, number: Asian population "
+                            "count beyond 1/2 mile from supermarket."),
+            NestedField(45, "laasianhalfshare", StringType(),
+                        doc="Low access, Asian population at 1/2 mile, share: Share of tract "
+                            "population that are Asian beyond 1/2 mile from supermarket."),
+            NestedField(46, "lanhopihalf", StringType(),
+                        doc="Low access, Native Hawaiian or Other Pacific Islander population at 1/2 "
+                            "mile, number: Native Hawaiian or Other Pacific Islander population "
+                            "count beyond 1/2 mile from supermarket."),
+            NestedField(47, "lanhopihalfshare", StringType(),
+                        doc="Low access, Native Hawaiian or Other Pacific Islander population at 1/2 "
+                            "mile, share: Share of tract population that are Native Hawaiian or "
+                            "Other Pacific Islander beyond 1/2 mile from supermarket."),
+            NestedField(48, "laaianhalf", StringType(),
+                        doc="Low access, American Indian or Alaska Native population at 1/2 mile, "
+                            "number: American Indian or Alaska Native population count beyond "
+                            "1/2 mile from supermarket."),
+            NestedField(49, "laaianhalfshare", StringType(),
+                        doc="Low access, American Indian or Alaska Native population at 1/2 mile, "
+                            "share: Share of tract population that are American Indian or Alaska "
+                            "Native beyond 1/2 mile from supermarket."),
+            NestedField(50, "laomultirhalf", StringType(),
+                        doc="Low access, Other/Multiple race population at 1/2 mile, number: "
+                            "Other/Multiple race population count beyond 1/2 mile from "
+                            "supermarket."),
+            NestedField(51, "laomultirhalfshare", StringType(),
+                        doc="Low access, Other/Multiple race population at 1/2 mile, share: Share of "
+                            "tract population that are Other/Multiple race beyond 1/2 mile from "
+                            "supermarket."),
+            NestedField(52, "lahisphalf", StringType(),
+                        doc="Low access, Hispanic or Latino population at 1/2 mile, number: Hispanic "
+                            "or Latino ethnicity population count beyond 1/2 mile from "
+                            "supermarket."),
+            NestedField(53, "lahisphalfshare", StringType(),
+                        doc="Low access, Hispanic or Latino population at 1/2 mile, share: Share of "
+                            "tract population that are of Hispanic or Latino ethnicity beyond "
+                            "1/2 mile from supermarket."),
+            NestedField(54, "lahunvhalf", StringType(),
+                        doc="Vehicle access, housing units without and low access at 1/2 mile, "
+                            "number: Housing units without vehicle count beyond 1/2 mile from "
+                            "supermarket."),
+            NestedField(55, "lahunvhalfshare", StringType(),
+                        doc="Vehicle access, housing units without and low access at 1/2 mile, "
+                            "share: Share of tract housing units that are without vehicle and "
+                            "beyond 1/2 mile from supermarket."),
+            NestedField(56, "lasnaphalf", StringType(),
+                        doc="Low access, housing units receiving SNAP benefits at 1/2 mile, number: "
+                            "Housing units receiving SNAP benefits count beyond 1/2 mile from "
+                            "supermarket."),
+            NestedField(57, "lasnaphalfshare", StringType(),
+                        doc="Low access, housing units receiving SNAP benefits at 1/2 mile, share: "
+                            "Share of tract housing units receiving SNAP benefits count beyond "
+                            "1/2 mile from supermarket."),
+            NestedField(58, "lapop1", StringType(),
+                        doc="Low access, population at 1 mile, number: Population count beyond 1 "
+                            "mile from supermarket."),
+            NestedField(59, "lapop1share", StringType(),
+                        doc="Low access, population at 1 mile, share: Share of tract population that "
+                            "are beyond 1 mile from supermarket."),
+            NestedField(60, "lalowi1", StringType(),
+                        doc="Low access, low-income population at 1 mile, number: Low income "
+                            "population count beyond 1 mile from supermarket."),
+            NestedField(61, "lalowi1share", StringType(),
+                        doc="Low access, low-income population at 1 mile, share: Share of tract "
+                            "population that are low income individuals beyond 1 mile from "
+                            "supermarket."),
+            NestedField(62, "lakids1", StringType(),
+                        doc="Low access, children age 0-17 at 1 mile, number: Kids population count "
+                            "beyond 1 mile from supermarket."),
+            NestedField(63, "lakids1share", StringType(),
+                        doc="Low access, children age 0-17 at 1 mile, share: Share of tract "
+                            "population that are kids beyond 1 mile from supermarket."),
+            NestedField(64, "laseniors1", StringType(),
+                        doc="Low access, seniors age 65+ at 1 mile, number: Seniors population count "
+                            "beyond 1 mile from supermarket."),
+            NestedField(65, "laseniors1share", StringType(),
+                        doc="Low access, seniors age 65+ at 1 mile, share: Share of tract population "
+                            "that are seniors beyond 1 mile from supermarket."),
+            NestedField(66, "lawhite1", StringType(),
+                        doc="Low access, White population at 1 mile, number: White population count "
+                            "beyond 1 mile from supermarket."),
+            NestedField(67, "lawhite1share", StringType(),
+                        doc="Low access, White population at 1 mile, share: Share of tract "
+                            "population that are white beyond 1 mile from supermarket."),
+            NestedField(68, "lablack1", StringType(),
+                        doc="Low access, Black or African American population at 1 mile, number: "
+                            "Black or African American population count beyond 1 mile from "
+                            "supermarket."),
+            NestedField(69, "lablack1share", StringType(),
+                        doc="Low access, Black or African American population at 1 mile, share: "
+                            "Share of tract population that are Black or African American beyond "
+                            "1 mile from supermarket."),
+            NestedField(70, "laasian1", StringType(),
+                        doc="Low access, Asian population at 1 mile, number: Asian population count "
+                            "beyond 1 mile from supermarket."),
+            NestedField(71, "laasian1share", StringType(),
+                        doc="Low access, Asian population at 1 mile, share: Share of tract "
+                            "population that are Asian beyond 1 mile from supermarket."),
+            NestedField(72, "lanhopi1", StringType(),
+                        doc="Low access, Native Hawaiian and Other Pacific Islander population at 1 "
+                            "mile, number: Native Hawaiian or Other Pacific Islander population "
+                            "count beyond 1 mile from supermarket."),
+            NestedField(73, "lanhopi1share", StringType(),
+                        doc="Low access, Native Hawaiian and Other Pacific Islander population at 1 "
+                            "mile, share: Share of tract population that are Native Hawaiian or "
+                            "Other Pacific Islander beyond 1 mile from supermarket."),
+            NestedField(74, "laaian1", StringType(),
+                        doc="Low access, American Indian and Alaska Native population at 1 mile, "
+                            "number: American Indian or Alaska Native population count beyond 1 "
+                            "mile from supermarket."),
+            NestedField(75, "laaian1share", StringType(),
+                        doc="Low access, American Indian and Alaska Native population at 1 mile, "
+                            "share: Share of tract population that are American Indian or Alaska "
+                            "Native beyond 1 mile from supermarket."),
+            NestedField(76, "laomultir1", StringType(),
+                        doc="Low access, Other/Multiple race population at 1 mile, number: "
+                            "Other/Multiple race population count beyond 1 mile from "
+                            "supermarket."),
+            NestedField(77, "laomultir1share", StringType(),
+                        doc="Low access, Other/Multiple race population at 1 mile, share: Share of "
+                            "tract population that are Other/Multiple race beyond 1 mile from "
+                            "supermarket."),
+            NestedField(78, "lahisp1", StringType(),
+                        doc="Low access, Hispanic or Latino population at 1 mile, number: Hispanic "
+                            "or Latino ethnicity population count beyond 1 mile from "
+                            "supermarket."),
+            NestedField(79, "lahisp1share", StringType(),
+                        doc="Low access, Hispanic or Latino population at 1 mile, share: Share of "
+                            "tract population that are of Hispanic or Latino ethnicity beyond 1 "
+                            "mile from supermarket."),
+            NestedField(80, "lahunv1", StringType(),
+                        doc="Vehicle access, housing units without and low access at 1 mile, number: "
+                            "Housing units without vehicle count beyond 1 mile from supermarket."),
+            NestedField(81, "lahunv1share", StringType(),
+                        doc="Vehicle access, housing units without and low access at 1 mile, share: "
+                            "Share of tract housing units that are without vehicle and beyond 1 "
+                            "mile from supermarket."),
+            NestedField(82, "lasnap1", StringType(),
+                        doc="Low access, housing units receiving SNAP benefits at 1 mile, number: "
+                            "Housing units receiving SNAP benefits count beyond 1 mile from "
+                            "supermarket."),
+            NestedField(83, "lasnap1share", StringType(),
+                        doc="Low access, housing units receiving SNAP benefits at 1 mile, share: "
+                            "Share of tract housing units receiving SNAP benefits count beyond 1 "
+                            "mile from supermarket."),
+            NestedField(84, "lapop10", StringType(),
+                        doc="Low access, population at 10 miles, number: Population count beyond 10 "
+                            "miles from supermarket."),
+            NestedField(85, "lapop10share", StringType(),
+                        doc="Low access, population at 10 miles, share: Share of tract population "
+                            "that are beyond 10 miles from supermarket."),
+            NestedField(86, "lalowi10", StringType(),
+                        doc="Low access, low-income population at 10 miles, number: Low income "
+                            "population count beyond 10 miles from supermarket."),
+            NestedField(87, "lalowi10share", StringType(),
+                        doc="Low access, low-income population at 10 miles, share: Share of tract "
+                            "population that are low income individuals beyond 10 miles from "
+                            "supermarket."),
+            NestedField(88, "lakids10", StringType(),
+                        doc="Low access, children age 0-17 at 10 miles, number: Kids population "
+                            "count beyond 10 miles from supermarket."),
+            NestedField(89, "lakids10share", StringType(),
+                        doc="Low access, children age 0-17 at 10 miles, share: Share of tract "
+                            "population that are kids beyond 10 miles from supermarket."),
+            NestedField(90, "laseniors10", StringType(),
+                        doc="Low access, seniors age 65+ at 10 miles, number: Seniors population "
+                            "count beyond 10 miles from supermarket."),
+            NestedField(91, "laseniors10share", StringType(),
+                        doc="Low access, seniors age 65+ at 10 miles, share: Share of tract "
+                            "population that are seniors beyond 10 miles from supermarket."),
+            NestedField(92, "lawhite10", StringType(),
+                        doc="Low access, White population at 10 miles, number: White population "
+                            "count beyond 10 miles from supermarket."),
+            NestedField(93, "lawhite10share", StringType(),
+                        doc="Low access, White population at 10 miles, share: Share of tract "
+                            "population that are white beyond 10 miles from supermarket."),
+            NestedField(94, "lablack10", StringType(),
+                        doc="Low access, Black or African American population at 10 miles, number: "
+                            "Black or African American population count beyond 10 miles from "
+                            "supermarket."),
+            NestedField(95, "lablack10share", StringType(),
+                        doc="Low access, Black or African American population at 10 miles, share: "
+                            "Share of tract population that are Black or African American beyond "
+                            "10 miles from supermarket."),
+            NestedField(96, "laasian10", StringType(),
+                        doc="Low access, Asian population at 10 miles, number: Asian population "
+                            "count beyond 10 miles from supermarket."),
+            NestedField(97, "laasian10share", StringType(),
+                        doc="Low access, Asian population at 10 miles, share: Share of tract "
+                            "population that are Asian beyond 10 miles from supermarket."),
+            NestedField(98, "lanhopi10", StringType(),
+                        doc="Low access, Native Hawaiian and Other Pacific Islander population at 10 "
+                            "miles, number: Native Hawaiian or Other Pacific Islander population "
+                            "count beyond 10 miles from supermarket."),
+            NestedField(99, "lanhopi10share", StringType(),
+                        doc="Low access, Native Hawaiian and Other Pacific Islander population at 10 "
+                            "miles, share: Share of tract population that are Native Hawaiian or "
+                            "Other Pacific Islander beyond 10 miles from supermarket."),
+            NestedField(100, "laaian10", StringType(),
+                        doc="Low access, American Indian and Alaska Native population at 10 miles, "
+                            "number: American Indian or Alaska Native population count beyond 10 "
+                            "miles from supermarket."),
+            NestedField(101, "laaian10share", StringType(),
+                        doc="Low access, American Indian and Alaska Native population at 10 miles, "
+                            "share: Share of tract population that are American Indian or Alaska "
+                            "Native beyond 10 miles from supermarket."),
+            NestedField(102, "laomultir10", StringType(),
+                        doc="Low access, Other/Multiple race population at 10 miles, number: "
+                            "Other/Multiple race population count beyond 10 miles from "
+                            "supermarket."),
+            NestedField(103, "laomultir10share", StringType(),
+                        doc="Low access, Other/Multiple race population at 10 miles, share: Share of "
+                            "tract population that are Other/Multiple race beyond 10 miles from "
+                            "supermarket."),
+            NestedField(104, "lahisp10", StringType(),
+                        doc="Low access, Hispanic or Latino population at 10 miles, number: Hispanic "
+                            "or Latino ethnicity population count beyond 10 miles from "
+                            "supermarket."),
+            NestedField(105, "lahisp10share", StringType(),
+                        doc="Low access, Hispanic or Latino population at 10 miles, share: Share of "
+                            "tract population that are of Hispanic or Latino ethnicity beyond 10 "
+                            "miles from supermarket."),
+            NestedField(106, "lahunv10", StringType(),
+                        doc="Vehicle access, housing units without and low access at 10 miles, "
+                            "number: Housing units without vehicle count beyond 10 miles from "
+                            "supermarket."),
+            NestedField(107, "lahunv10share", StringType(),
+                        doc="Vehicle access, housing units without and low access at 10 miles, "
+                            "share: Share of tract housing units that are without vehicle and "
+                            "beyond 10 miles from supermarket."),
+            NestedField(108, "lasnap10", StringType(),
+                        doc="Low access, housing units receiving SNAP benefits at 10 miles, number: "
+                            "Housing units receiving SNAP benefits count beyond 10 miles from "
+                            "supermarket."),
+            NestedField(109, "lasnap10share", StringType(),
+                        doc="Low access,housing units receiving SNAP benefits at 10 miles, share: "
+                            "Share of tract housing units receiving SNAP benefits count beyond "
+                            "10 miles from supermarket."),
+            NestedField(110, "lapop20", StringType(),
+                        doc="Low access, population at 20 miles, number: Population count beyond 20 "
+                            "miles from supermarket."),
+            NestedField(111, "lapop20share", StringType(),
+                        doc="Low access, population at 20 miles, share: Share of tract population "
+                            "that are beyond 20 miles from supermarket."),
+            NestedField(112, "lalowi20", StringType(),
+                        doc="Low access, low-income population at 20 miles, number: Low income "
+                            "population count beyond 20 miles from supermarket."),
+            NestedField(113, "lalowi20share", StringType(),
+                        doc="Low access, low-income population at 20 miles, share: Share of tract "
+                            "population that are low income individuals beyond 20 miles from "
+                            "supermarket."),
+            NestedField(114, "lakids20", StringType(),
+                        doc="Low access, children age 0-17 at 20 miles, number: Kids population "
+                            "count beyond 20 miles from supermarket."),
+            NestedField(115, "lakids20share", StringType(),
+                        doc="Low access, children age 0-17 at 20 miles, share: Share of tract "
+                            "population that are kids beyond 20 miles from supermarket."),
+            NestedField(116, "laseniors20", StringType(),
+                        doc="Low access, seniors age 65+ at 20 miles, number: Seniors population "
+                            "count beyond 20 miles from supermarket."),
+            NestedField(117, "laseniors20share", StringType(),
+                        doc="Low access, seniors age 65+ at 20 miles, share: Share of tract "
+                            "population that are seniors beyond 20 miles from supermarket."),
+            NestedField(118, "lawhite20", StringType(),
+                        doc="Low access, White population at 20 miles, number: White population "
+                            "count beyond 20 miles from supermarket."),
+            NestedField(119, "lawhite20share", StringType(),
+                        doc="Low access, White population at 20 miles, share: Share of tract "
+                            "population that are white beyond 20 miles from supermarket."),
+            NestedField(120, "lablack20", StringType(),
+                        doc="Low access, Black or African American population at 20 miles, number: "
+                            "Black or African American population count beyond 20 miles from "
+                            "supermarket."),
+            NestedField(121, "lablack20share", StringType(),
+                        doc="Low access, Black or African American population at 20 miles, share: "
+                            "Share of tract population that are Black or African American beyond "
+                            "20 miles from supermarket."),
+            NestedField(122, "laasian20", StringType(),
+                        doc="Low access, Asian population at 20 miles, number: Asian population "
+                            "count beyond 20 miles from supermarket."),
+            NestedField(123, "laasian20share", StringType(),
+                        doc="Low access, Asian population at 20 miles, share: Share of tract "
+                            "population that are Asian beyond 20 miles from supermarket."),
+            NestedField(124, "lanhopi20", StringType(),
+                        doc="Low access, Native Hawaiian and Other Pacific Islander population at 20 "
+                            "miles, number: Native Hawaiian or Other Pacific Islander population "
+                            "count beyond 20 miles from supermarket."),
+            NestedField(125, "lanhopi20share", StringType(),
+                        doc="Low access, Native Hawaiian and Other Pacific Islander population at 20 "
+                            "miles, share: Share of tract population that are Native Hawaiian or "
+                            "Other Pacific Islander beyond 20 miles from supermarket."),
+            NestedField(126, "laaian20", StringType(),
+                        doc="Low access, American Indian and Alaska Native population at 20 miles, "
+                            "number: American Indian or Alaska Native population count beyond 20 "
+                            "miles from supermarket."),
+            NestedField(127, "laaian20share", StringType(),
+                        doc="Low access, American Indian and Alaska Native population at 20 miles, "
+                            "share: Share of tract population that are American Indian or Alaska "
+                            "Native beyond 20 miles from supermarket."),
+            NestedField(128, "laomultir20", StringType(),
+                        doc="Low access, Other/Multiple race population at 20 miles, number: "
+                            "Other/Multiple race population count beyond 20 miles from "
+                            "supermarket."),
+            NestedField(129, "laomultir20share", StringType(),
+                        doc="Low access, Other/Multiple race population at 20 miles, share: Share of "
+                            "tract population that are Other/Multiple race beyond 20 miles from "
+                            "supermarket."),
+            NestedField(130, "lahisp20", StringType(),
+                        doc="Low access, Hispanic or Latino population at 20 miles, number: Hispanic "
+                            "or Latino ethnicity population count beyond 20 miles from "
+                            "supermarket."),
+            NestedField(131, "lahisp20share", StringType(),
+                        doc="Low access, Hispanic or Latino population at 20 miles, share: Share of "
+                            "tract population that are of Hispanic or Latino ethnicity beyond 20 "
+                            "miles from supermarket."),
+            NestedField(132, "lahunv20", StringType(),
+                        doc="Vehicle access, housing units without and low access at 20 miles, "
+                            "number: Housing units without vehicle count beyond 20 miles from "
+                            "supermarket."),
+            NestedField(133, "lahunv20share", StringType(),
+                        doc="Vehicle access, housing units without and low access at 20 miles, "
+                            "share: Share of tract housing units that are without vehicle and "
+                            "beyond 20 miles from supermarket."),
+            NestedField(134, "lasnap20", StringType(),
+                        doc="Low access, housing units receiving SNAP benefits at 20 miles, number: "
+                            "Housing units receiving SNAP benefits count beyond 20 miles from "
+                            "supermarket."),
+            NestedField(135, "lasnap20share", StringType(),
+                        doc="Low access, housing units receiving SNAP benefits at 20 miles, share: "
+                            "Share of tract housing units receiving SNAP benefits count beyond "
+                            "20 miles from supermarket."),
+            NestedField(136, "TractLOWI", StringType(),
+                        doc="Tract low-income population, number: Total count of low-income "
+                            "population in tract."),
+            NestedField(137, "TractKids", StringType(),
+                        doc="Tract children age 0-17, number: Total count of children age 0-17 in "
+                            "tract."),
+            NestedField(138, "TractSeniors", StringType(),
+                        doc="Tract seniors age 65+, number: Total count of seniors age 65+ in tract."),
+            NestedField(139, "TractWhite", StringType(),
+                        doc="Tract White population, number: Total count of White population in "
+                            "tract."),
+            NestedField(140, "TractBlack", StringType(),
+                        doc="Tract Black or African American population, number: Total count of "
+                            "Black or African American population in tract."),
+            NestedField(141, "TractAsian", StringType(),
+                        doc="Tract Asian population, number: Total count of Asian population in "
+                            "tract."),
+            NestedField(142, "TractNHOPI", StringType(),
+                        doc="Tract Native Hawaiian and Other Pacific Islander population, number: "
+                            "Total count of Native Hawaiian and Other Pacific Islander "
+                            "population in tract."),
+            NestedField(143, "TractAIAN", StringType(),
+                        doc="Tract American Indian and Alaska Native population, number: Total count "
+                            "of American Indian and Alaska Native population in tract."),
+            NestedField(144, "TractOMultir", StringType(),
+                        doc="Tract Other/Multiple race population, number: Total count of "
+                            "Other/Multiple race population in tract."),
+            NestedField(145, "TractHispanic", StringType(),
+                        doc="Tract Hispanic or Latino population, number: Total count of Hispanic or "
+                            "Latino population in tract."),
+            NestedField(146, "TractHUNV", StringType(),
+                        doc="Tract housing units without a vehicle, number: Total count of housing "
+                            "units without a vehicle in tract."),
+            NestedField(147, "TractSNAP", StringType(),
+                        doc="Tract housing units receiving SNAP benefits, number: Total count of "
+                            "housing units receiving SNAP benefits in tract."),
+
+            NestedField(148, "atlas_edition", StringType(), required=True,
+                        doc="The Food Access Research Atlas edition this row was published "
+                            "in, e.g. '2019' -- the version axis for this source (SPEC.md "
+                            "Versioning model). Raw is replaced wholesale per value of this "
+                            "column."),
+            NestedField(149, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        comment="USDA ERS Food Access Research Atlas landed verbatim and whole, every "
+                "published column, one row per census tract per edition (SPEC.md § "
+                "Sources -- first tranche). 2019 and 2015 editions only -- 2010 is a real "
+                "third layout and the archived 2006 Food Desert Locator is a legacy .xls "
+                "(see ers_food_access.py docstring). Public domain (17 U.S.C. § 105).",
+    ),
 
     # --- raw: hrsa ahrf ---
     # HRSA Area Health Resources Files, county (#39).
