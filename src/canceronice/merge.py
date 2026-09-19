@@ -50,9 +50,29 @@ from datetime import datetime, timezone
 
 import duckdb
 from pyiceberg.exceptions import CommitFailedException, RESTError
-from pyiceberg.expressions import And, EqualTo
+from pyiceberg.expressions import AlwaysTrue, And, EqualTo
 
 from . import schemas
+
+
+def sort_for_write(identifier, arrow, arrow_schema):
+    """Order `arrow` by the table's declared `sort_by` (issue #120), one DuckDB
+    `ORDER BY ... NULLS LAST`.
+
+    This is the one place both `write` and `merge` funnel through before an
+    Iceberg overwrite, so declaring `sort_by` on a TableDef is all a caller
+    needs to do. PyIceberg records a table sort order in metadata (see
+    `schemas._evolve`) but never enforces it when writing Parquet files — this
+    ORDER BY is what actually makes a sorted column's row-group min/max
+    statistics exclude anything.
+    """
+    keys = schemas.TABLES[identifier].sort_by
+    if not keys:
+        return arrow
+    con = duckdb.connect()
+    con.register("t", arrow)
+    order = ", ".join(f'"{k}" NULLS LAST' for k in keys)
+    return con.sql(f"SELECT * FROM t ORDER BY {order}").to_arrow_table().cast(arrow_schema)
 
 
 def overwrite(cat, identifier, table, arrow, overwrite_filter):
@@ -66,6 +86,7 @@ def overwrite(cat, identifier, table, arrow, overwrite_filter):
     overwrite is a filtered replace of the scope: on a conflict the table is
     reloaded so the retry commits against the new current snapshot.
     """
+    arrow = sort_for_write(identifier, arrow, arrow.schema)
     for attempt in range(8):
         try:
             table.overwrite(arrow, overwrite_filter=overwrite_filter)
@@ -282,3 +303,62 @@ def manifest(cat, release, source, url, rows, version=None, method="retrieval_da
     write(cat, "provenance.release", arrow,
           And(EqualTo("release", release), EqualTo("source", source),
               EqualTo("source_version", source_version)))
+
+
+def _checksum(arrow):
+    """Order-independent (count, hash) fingerprint of every column of every
+    row: bit_xor is commutative, so it doesn't care what order the rows come
+    in, which is exactly what a rewrite that only reorders rows needs."""
+    con = duckdb.connect()
+    con.register("t", arrow)
+    return con.sql("SELECT count(*), bit_xor(hash(t)) FROM t AS t").fetchone()
+
+
+def _partition_scopes(table, d):
+    """One overwrite_filter per distinct value of `d.partition_by`, so
+    `rewrite` can bound memory to one partition's rows at a time. Unpartitioned
+    tables get a single AlwaysTrue() scope."""
+    if not d.partition_by:
+        return [AlwaysTrue()]
+    con = duckdb.connect()
+    con.register("t", table.scan(selected_fields=d.partition_by).to_arrow())
+    cols = ", ".join(f'"{c}"' for c in d.partition_by)
+    combos = con.sql(f"SELECT DISTINCT {cols} FROM t ORDER BY {cols}").fetchall()
+    return [And(*(EqualTo(c, v) for c, v in zip(d.partition_by, combo)))
+            if len(d.partition_by) > 1 else EqualTo(d.partition_by[0], combo[0])
+            for combo in combos]
+
+
+def rewrite(cat, identifier):
+    """One-time PyIceberg-only rewrite of a live table's data files onto its
+    current `sort_by` and row-group-limit properties (issue #120).
+
+    An idempotent re-ingest reports 'unchanged' and touches no data files, so
+    a table written before #120 keeps its old, unsorted physical layout until
+    this runs once. PyIceberg is the only writer touched (AGENTS.md): this
+    reads a scope with `table.scan`, sorts it exactly as `overwrite` would,
+    and commits with `table.overwrite` -- never DELETE/UPDATE/MERGE.
+
+    Before every commit this asserts the sorted data is the identical set of
+    rows (`_checksum`, order-independent) as what was read, and refuses to
+    commit a scope where it isn't -- a rewrite must not change any row, only
+    where it physically lives.
+
+    measure.observation is the only partitioned table today; rewriting it one
+    `source` at a time (`_partition_scopes`) bounds memory to one source's
+    rows rather than the whole ~23M-row table at once.
+    """
+    table = schemas.create(cat, identifier)
+    d = schemas.TABLES[identifier]
+    for scope in _partition_scopes(table, d):
+        arrow = table.scan(row_filter=scope).to_arrow()
+        if arrow.num_rows == 0:
+            continue
+        before = _checksum(arrow)
+        sorted_arrow = sort_for_write(identifier, arrow, table.schema().as_arrow())
+        after = _checksum(sorted_arrow)
+        if before != after:
+            raise RuntimeError(f"{identifier}: rewrite would change the data under {scope} "
+                               f"(before={before}, after={after}); refusing to commit")
+        overwrite(cat, identifier, table, sorted_arrow, scope)
+    return table

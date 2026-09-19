@@ -15,8 +15,20 @@ from dataclasses import dataclass, field
 from pyiceberg.exceptions import RESTError
 from pyiceberg.partitioning import PartitionField, PartitionSpec
 from pyiceberg.schema import Schema
+from pyiceberg.table import TableProperties
 from pyiceberg.transforms import IdentityTransform
 from pyiceberg.types import DoubleType, IntegerType, NestedField, StringType
+
+# DuckDB's own default row-group size (issue #120). Sorted data plus a row
+# group this small is what makes a one-measure, one-state query decode one or
+# two row groups instead of a whole file's worth: Parquet min/max statistics
+# are per row group, so a smaller group is a tighter (and more numerous)
+# set of statistics to prune against. Verified (pyiceberg 0.12.0, io/pyarrow.py):
+# `write.parquet.row-group-limit` is honoured as a ROW count, default 1,048,576
+# -- the byte-based `write.parquet.row-group-size-bytes` property exists as a
+# name but its writer path is not implemented (warns "not implemented" and is
+# ignored), so row count is the only lever that actually works.
+ROW_GROUP_ROWS = 122_880
 
 VALID_FROM = (
     "The cancerOnIce release from which this version of the record is valid. "
@@ -55,6 +67,13 @@ class TableDef:
     # Identity-partition columns, for pruning only: merge-scope containment, not
     # partitioning, is the correctness mechanism.
     partition_by: tuple = ()
+    # Physical clustering, for pruning only (issue #120): merge.overwrite ORDER
+    # BYs the final table by this before every write, so a sorted column's
+    # Parquet row-group min/max statistics actually exclude row groups. PyIceberg
+    # never enforces this on write -- the ORDER BY is what does the work; the
+    # declared Iceberg table sort order (set in schemas.create/_evolve) is only
+    # a hint for a reader that looks at it.
+    sort_by: tuple = ()
     properties: dict = field(default_factory=dict)
 
     def iceberg_schema(self):
@@ -114,6 +133,7 @@ TABLES = {
                         doc="Rows landed from this source, as a cheap integrity check."),
         ),
         business_key=("release", "source", "source_version"),
+        sort_by=("release", "source", "source_version"),
         comment="One row per (cancerOnIce release, source, source_version): what this release "
                 "was built from. This is what makes a release reproducible — resolve it here to "
                 "each source's own version, then query each table at that release. Durable by "
@@ -153,6 +173,7 @@ TABLES = {
             NestedField(13, "valid_to", StringType(), doc=VALID_TO),
         ),
         business_key=("geo_id", "vintage"),
+        sort_by=("vintage", "level", "geo_id"),
         comment="Geography — the spine every fact joins through (SPEC.md § Geography). Every "
                 "level and vintage Census has ever drawn, one row per unit per vintage, with "
                 "full Type-2 history via valid_from/valid_to.",
@@ -180,6 +201,7 @@ TABLES = {
             NestedField(10, "doc", StringType(), doc="Prose description of the measure."),
         ),
         business_key=("measure_id",),
+        sort_by=("measure_id",),
         comment="One row per published measure definition (SPEC.md § Measures). A lookup "
                 "table, not versioned in place — replaced wholesale per source via merge.write.",
     ),
@@ -203,6 +225,7 @@ TABLES = {
                             "across releases of the same source; this is expected."),
         ),
         business_key=("stratum_id",),
+        sort_by=("stratum_id",),
         comment="Source-native stratification, one row per distinct combination a source "
                 "publishes (SPEC.md § Measures). A lookup table, replaced wholesale per source "
                 "via merge.write.",
@@ -257,6 +280,7 @@ TABLES = {
         business_key=("source", "source_release", "measure_id", "geo_id", "geo_vintage",
                       "period_start", "period_end", "stratum_id"),
         partition_by=("source",),
+        sort_by=("source_release", "measure_id", "geo_id", "period_start", "stratum_id"),
         comment="Every published number, one stacked long table across sources (SPEC.md § "
                 "Measures). Merge scope is (source, source_release) — a new SCP vintage never "
                 "retires a PLACES row. Full Type-2 history via valid_from/valid_to.",
@@ -298,6 +322,7 @@ TABLES = {
             NestedField(15, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("gazetteer_year", "geoid"),
         comment="Census Gazetteer county file landed verbatim and whole, every column, one row "
                 "per county-equivalent per vintage year. Three real upstream layouts (2010 with "
                 "POP10/HU10, 2011-2024 without them, 2025+ with GEOIDFQ and a pipe delimiter) "
@@ -334,6 +359,7 @@ TABLES = {
             NestedField(13, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("gazetteer_year", "geoid"),
         comment="Census Gazetteer tract file landed verbatim and whole, every column, one row "
                 "per census tract per vintage year. The tract file carries no NAME column — "
                 "tracts are numbered, not named. Three real upstream layouts, same union-schema "
@@ -351,6 +377,7 @@ TABLES = {
             NestedField(5, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("state",),
         comment="Census's state/state-equivalent FIPS code reference "
                 "(https://www2.census.gov/geo/docs/reference/state.txt), landed whole and replaced "
                 "wholesale each time — not versioned by gazetteer year, since FIPS-to-state "
@@ -421,6 +448,7 @@ TABLES = {
                             "'2025' (a key of places.RELEASES). Raw is replaced wholesale per "
                             "value of this column."),
         ),
+        sort_by=("places_release", "LocationID", "MeasureId", "DataValueTypeID"),
         comment="CDC PLACES county-data release, landed verbatim and whole: one row per "
                 "(county, measure, stratification type) model-based small-area estimate "
                 "(SPEC.md § Sources — first tranche). Public domain.",
@@ -457,6 +485,7 @@ TABLES = {
             NestedField(7, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("rucc_edition", "FIPS", "Attribute"),
         comment="USDA ERS Rural-Urban Continuum Codes landed verbatim and whole, long format: "
                 "one row per (county, attribute) exactly as published. Public domain (U.S. "
                 "Government work, 17 U.S.C. Sec 105).",
@@ -490,6 +519,7 @@ TABLES = {
             NestedField(9, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("old_fips", "new_fips"),
         comment="Curated CSV of Census 'Substantial Changes to Counties' name/code changes "
                 "(county_recodes.csv, committed in the package — the upstream is prose, not a "
                 "data file), landed verbatim and whole. Replaced wholesale each time it is "
@@ -529,6 +559,7 @@ TABLES = {
             NestedField(11, "valid_to", StringType(), doc=VALID_TO),
         ),
         business_key=("old_geo_id", "new_geo_id"),
+        sort_by=("old_geo_id", "new_geo_id"),
         comment="FIPS renames and re-codings that are NOT boundary changes (SPEC.md § "
                 "geography.alias, #26): a join on an old code resolves through here to the "
                 "current one instead of dropping (SPEC.md Acceptance B). Real boundary changes "
@@ -567,6 +598,7 @@ TABLES = {
             NestedField(7, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("site_recode_edition", "row_order"),
         comment="SEER Site Recode ICD-O-3/WHO 2008, landed verbatim and whole from the "
                 "source's own semicolon-delimited text file (SPEC.md § measure.cancer_site). "
                 "Public domain (NCI/U.S. Government work).",
@@ -598,6 +630,7 @@ TABLES = {
             NestedField(8, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("cod_recode_edition", "row_order"),
         comment="SEER Cause of Death Recode 1969+, 'Neoplasm Causes of Death' table only "
                 "(the source file's other two tables -- non-neoplasm causes, and "
                 "administrative codes -- are out of scope for a cancer-site bridge), landed "
@@ -657,6 +690,7 @@ TABLES = {
             NestedField(13, "valid_to", StringType(), doc=VALID_TO),
         ),
         business_key=("cancer_site_code", "source_release"),
+        sort_by=("cancer_site_code", "source_release"),
         comment="SEER site recode <-> ICD-O-3 topography/histology <-> ICD-10 (mortality) <-> "
                 "NCIt/MONDO (SPEC.md § measure.cancer_site) -- the bridge to biocOnIce's "
                 "`ontology` namespace. Full Type-2 history via valid_from/valid_to.",
@@ -849,6 +883,7 @@ TABLES = {
             NestedField(173, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("svi_edition", "FIPS"),
         comment="CDC/ATSDR Social Vulnerability Index county file landed verbatim and "
                 "whole, one row per county per edition (SPEC.md § Sources -- first "
                 "tranche). Union of the two real layouts this module lands (2014-family, "
@@ -1026,6 +1061,7 @@ TABLES = {
             NestedField(160, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("svi_edition", "FIPS"),
         comment="CDC/ATSDR Social Vulnerability Index tract file landed verbatim and "
                 "whole, one row per census tract per edition. Only the 2022 edition is "
                 "landed (module docstring); same '2020' layout as raw.svi__county's "
@@ -1161,6 +1197,7 @@ TABLES = {
             NestedField(38, "PopDensity", StringType(),
                         doc="Population per square mile. 2020 edition only."),
         ),
+        sort_by=("ruca_edition", "fips_2010", "TractFIPS20"),
         comment="USDA ERS Rural-Urban Commuting Area codes landed verbatim and whole, one row "
                 "per census tract per edition. Public domain (U.S. Government work, 17 U.S.C. "
                 "Sec 105). The 2010 and 2020 editions are different upstream layouts sharing "
@@ -1692,6 +1729,7 @@ TABLES = {
             NestedField(149, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("atlas_edition", "CensusTract"),
         comment="USDA ERS Food Access Research Atlas landed verbatim and whole, every "
                 "published column, one row per census tract per edition (SPEC.md § "
                 "Sources -- first tranche). 2019 and 2015 editions only -- 2010 is a real "
@@ -1730,6 +1768,7 @@ TABLES = {
             NestedField(6, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed this row."),
         ),
+        sort_by=("ahrf_release", "fips", "column_name"),
         comment="HRSA Area Health Resources Files (AHRF), county level, landed LONG: one row "
                 "per (county, field) cell rather than one enormously wide row per county "
                 "(SPEC.md § Sources -- first tranche). Landed WHOLE for every field not withheld "
@@ -1832,6 +1871,7 @@ TABLES = {
             NestedField(57, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("retrieved_on", "BPHC Assigned Number"),
         comment="HRSA Health Center Service Delivery and Look-Alike Sites, landed verbatim and whole "
                 "(SPEC.md § Sources — first tranche). Public domain; HRSA's own Data Usage Terms & "
                 "Conditions for this dataset state 'Usage limitations: None' "
@@ -1932,6 +1972,7 @@ TABLES = {
             NestedField(67, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("retrieved_on", "HPSA ID"),
         comment="HRSA primary-care Health Professional Shortage Area designations "
                 "(BCD_HPSA_FCT_DET_PC.csv), landed verbatim and whole, every status including "
                 "Withdrawn (SPEC.md § Sources — first tranche). Public domain; HRSA's own Data Usage "
@@ -1986,6 +2027,7 @@ TABLES = {
             NestedField(13, "valid_to", StringType(), doc=VALID_TO),
         ),
         business_key=("facility_id", "source"),
+        sort_by=("source", "kind", "geo_id", "facility_id"),
         comment="Places care happens (SPEC.md § Facilities). First writer: HRSA_HC (health-center "
                 "service delivery / look-alike sites). Full Type-2 history via valid_from/valid_to -- a "
                 "site absent from a later snapshot is retired by the merge, which is the point for a "
@@ -2119,6 +2161,7 @@ TABLES = {
             NestedField(32, "landed_in", StringType(), required=True,
                         doc="cancerOnIce release that landed this row."),
         ),
+        sort_by=("scp_vintage", "fips", "cancer", "sex"),
         comment="State Cancer Profiles incidence, landed verbatim and whole, one row per "
                 "(geography, cancer site, sex, age, race, stage) query cell, per vintage "
                 "(SPEC.md § Sources -- first tranche, the flagship, #27). This is a "
@@ -2247,6 +2290,7 @@ TABLES = {
             NestedField(31, "landed_in", StringType(), required=True,
                         doc="cancerOnIce release that landed this row."),
         ),
+        sort_by=("scp_vintage", "fips", "cancer", "sex"),
         comment="State Cancer Profiles mortality, landed verbatim and whole, one row per "
                 "(geography, cancer site, sex, age, race[, stage]) query cell, per "
                 "vintage (SPEC.md § Sources -- first tranche, the flagship, #27). This is "
@@ -2330,6 +2374,7 @@ TABLES = {
             NestedField(22, "landed_in", StringType(), required=True,
                         doc="cancerOnIce release that landed this row."),
         ),
+        sort_by=("scp_vintage", "fips", "topic", "sex"),
         comment="State Cancer Profiles screening & risk factors (BRFSS-derived), landed "
                 "verbatim and whole, V3 only -- not published in V1/V2 (SPEC.md § "
                 "Sources, #27). Land-only in this PR: not yet derived into "
@@ -2419,6 +2464,7 @@ TABLES = {
                             "(a key of places.TRACT_RELEASES). Raw is replaced wholesale per "
                             "value of this column."),
         ),
+        sort_by=("places_release", "LocationID", "MeasureId", "DataValueTypeID"),
         comment="CDC PLACES tract-data release, landed verbatim and whole: one row per "
                 "(tract, measure) model-based small-area estimate, crude prevalence only "
                 "(SPEC.md § Sources — first tranche; #30). Public domain.",
@@ -2454,6 +2500,7 @@ TABLES = {
             NestedField(11, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("retrieved_on", "State", "Facility Name", "Address 1"),
         comment="FDA MQSA certified mammography facility list, landed verbatim and whole, replaced "
                 "weekly (SPEC.md § Sources — first tranche). Public domain; FDA's site-wide website "
                 "policy states 'the contents of the FDA website ... are not copyrighted. They are in "
@@ -2554,6 +2601,7 @@ TABLES = {
             NestedField(43, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("SUBMISSIONYEARQUARTER", "PWSID"),
         comment="EPA SDWIS Federal public water systems, landed verbatim and whole (minus nine "
                 "individual columns -- ORG_NAME, ADDRESS_LINE1/2 and six admin-contact fields -- "
                 "excluded -- see epa_sdwis.py). One row per PWSID, replaced wholesale per "
@@ -2596,6 +2644,7 @@ TABLES = {
             NestedField(12, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("SUBMISSIONYEARQUARTER", "PWSID", "GEO_ID"),
         comment="EPA SDWIS Federal: every county/city/zip/tribal area each public water system "
                 "reports serving, landed verbatim and whole, replaced wholesale per "
                 "SUBMISSIONYEARQUARTER (SPEC.md § Sources — second tranche). A system serving "
@@ -2665,6 +2714,7 @@ TABLES = {
             NestedField(39, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("SUBMISSIONYEARQUARTER", "PWSID", "VIOLATION_ID"),
         comment="EPA SDWIS Federal violation+enforcement records, landed verbatim and whole, "
                 "replaced wholesale per SUBMISSIONYEARQUARTER (SPEC.md § Sources — second "
                 "tranche). Grain is (violation, enforcement action) -- see VIOLATION_ID's doc "
@@ -2687,6 +2737,7 @@ TABLES = {
             NestedField(5, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("ANSI_STATE_CODE", "ANSI_ENTITY_CODE"),
         comment="EPA's own ANSI/FIPS county reference table, bundled in the same SDWA bulk "
                 "download -- the authority epa_sdwis.py uses to turn a (PWSID prefix, "
                 "ANSI_ENTITY_CODE) pair into a real county FIPS code, and to catch the ones that "
@@ -2733,6 +2784,7 @@ TABLES = {
             NestedField(7, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("laus_vintage", "series_id", "year", "period"),
         comment="BLS LAUS county-level (area_type_code='F') monthly + annual-average data, "
                 "landed verbatim and whole from la.data.64.County. Public domain (BLS is a "
                 "federal agency).",
@@ -2756,6 +2808,7 @@ TABLES = {
             NestedField(8, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("laus_vintage", "area_type_code", "area_code"),
         comment="BLS LAUS area code lookup (la.area), landed verbatim and whole per vintage.",
     ),
 
@@ -2780,6 +2833,7 @@ TABLES = {
             NestedField(14, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("laus_vintage", "series_id"),
         comment="BLS LAUS series identification lookup (la.series), landed verbatim and whole "
                 "per vintage. Not read by this module's derive step -- the county data file's own "
                 "series_id already encodes area + measure (raw.bls__laus_county's doc) -- landed "
@@ -2795,6 +2849,7 @@ TABLES = {
             NestedField(4, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("laus_vintage", "measure_code"),
         comment="BLS LAUS measure code lookup (la.measure), landed verbatim and whole per vintage.",
     ),
 
@@ -2807,6 +2862,7 @@ TABLES = {
             NestedField(4, "landed_in", StringType(), required=True,
                         doc="The cancerOnIce release whose ingest landed these rows."),
         ),
+        sort_by=("laus_vintage", "footnote_code"),
         comment="BLS LAUS footnote code lookup (la.footnote), landed verbatim and whole per "
                 "vintage -- the real, complete set of sentinel/reliability codes this source "
                 "publishes (bls_laus.py's FOOTNOTE_TEXT mirrors it and SystemExits on a code "
@@ -2865,13 +2921,19 @@ def create(cat, identifier):
         for i, n in enumerate(d.partition_by)])
     table = rate_limited(lambda: cat.create_table_if_not_exists(
         identifier, schema=d.iceberg_schema(), partition_spec=spec,
-        properties={"comment": d.comment, **d.properties}))
+        properties={"comment": d.comment,
+                    TableProperties.PARQUET_ROW_GROUP_LIMIT: str(ROW_GROUP_ROWS),
+                    **d.properties}))
     return _evolve(table, d, identifier)
 
 
 def _evolve(table, d, identifier):
-    """Add columns the declaration has gained since the table was created, and
-    reconcile Iceberg identifier fields when the declared business key changed.
+    """Add columns the declaration has gained since the table was created,
+    reconcile Iceberg identifier fields when the declared business key changed,
+    and (issue #120) bring a live table's row-group-limit property and
+    declared sort order up to date — both are safe to set in place and cheap
+    to check, so this runs on every call rather than only when a column or key
+    changed.
 
     Without the column-add a new column in a TableDef never reaches a live
     table, and the cast in merge.write fails on it. Only optional columns can
@@ -2902,6 +2964,21 @@ def _evolve(table, d, identifier):
         raise ValueError(f"{identifier}: declared required column(s) {required} are not in the "
                          "live table; Iceberg cannot add a required column to existing rows — "
                          "rebuild the table")
+
+    if table.properties.get(TableProperties.PARQUET_ROW_GROUP_LIMIT) != str(ROW_GROUP_ROWS):
+        with table.transaction() as txn:
+            txn.set_properties({TableProperties.PARQUET_ROW_GROUP_LIMIT: str(ROW_GROUP_ROWS)})
+
+    if d.sort_by:
+        # Compare by column name, not by SortOrder equality: a table created
+        # before #120 has no sort order (or an older declared one), and this is
+        # what upgrades it in place. Reader-facing metadata only -- see
+        # TableDef.sort_by; merge.overwrite's ORDER BY is the real work.
+        current = [live_schema.find_field(f.source_id).name for f in table.sort_order().fields]
+        if current != list(d.sort_by):
+            with table.update_sort_order() as update:
+                for col in d.sort_by:
+                    update.asc(col, IdentityTransform())
 
     declared_key = set(d.business_key)
     live_key = {f.name for f in live_schema.fields if f.field_id in live_schema.identifier_field_ids}

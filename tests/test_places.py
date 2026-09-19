@@ -350,10 +350,15 @@ def test_two_releases_coexist_and_first_is_not_retired(cat, csv2024, csv2025):
                rows(cat, "measure.observation", row_filter=EqualTo("source", "PLACES"))}
     assert releases == {"2024", "2025"}
 
+    # geo_id pins this to the Denver, CO county row: several other counties
+    # share this measure_id, and issue #120's sort-by-geo_id write order means
+    # a plain next() would otherwise land on whichever of them sorts first.
     denver_2024 = next(o for o in rows(cat, "measure.observation") if
-                       o["measure_id"] == "PLACES:CSMOKING:crude" and o["source_release"] == "2024")
+                       o["measure_id"] == "PLACES:CSMOKING:crude" and o["source_release"] == "2024"
+                       and o["geo_id"] == "county:08031")
     denver_2025 = next(o for o in rows(cat, "measure.observation") if
-                       o["measure_id"] == "PLACES:CSMOKING:crude" and o["source_release"] == "2025")
+                       o["measure_id"] == "PLACES:CSMOKING:crude" and o["source_release"] == "2025"
+                       and o["geo_id"] == "county:08031")
     assert denver_2024["value"] == 14.2 and denver_2024["valid_to"] is None  # untouched
     assert denver_2025["value"] == 10.3 and denver_2025["valid_to"] is None  # a distinct business key
 

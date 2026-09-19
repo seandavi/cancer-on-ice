@@ -1,6 +1,6 @@
 import argparse
 
-from . import catalog, census_gazetteer, schemas
+from . import catalog, census_gazetteer, merge, schemas
 
 
 def _print(counts):
@@ -15,6 +15,12 @@ def main():
 
     sub.add_parser("init", help="create every declared namespace and table")
     sub.add_parser("tables", help="list catalog tables")
+
+    # core: sort-on-write layout (#120)
+    rw = sub.add_parser("rewrite", help="one-time PyIceberg-only rewrite of a live table onto "
+                        "its current sort_by / row-group-limit properties (#120)")
+    rw.add_argument("identifier", nargs="?", help="table to rewrite, e.g. measure.observation")
+    rw.add_argument("--all", action="store_true", help="rewrite every declared table")
 
     # --- raw: census gazetteer ---
     gz = sub.add_parser("gazetteer", help="land one Census Gazetteer vintage's county + "
@@ -180,6 +186,16 @@ def main():
         for identifier in schemas.TABLES:
             schemas.create(cat, identifier)
         print(f"created {len(schemas.TABLES)} tables across {len(schemas.NAMESPACES)} namespaces")
+
+    # core: sort-on-write layout (#120)
+    elif args.cmd == "rewrite":
+        if not args.all and not args.identifier:
+            p.error("rewrite needs an identifier, or --all")
+        identifiers = list(schemas.TABLES) if args.all else [args.identifier]
+        for identifier in identifiers:
+            print(f"rewriting {identifier}...")
+            merge.rewrite(cat, identifier)
+        print(f"rewrote {len(identifiers)} table(s)")
 
     # --- raw: census gazetteer ---
     elif args.cmd == "gazetteer":
