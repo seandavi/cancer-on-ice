@@ -2005,10 +2005,78 @@ TABLES = {
     # independent branches merge cleanly.
 
     # --- raw: cdc places tract ---
-    # CDC PLACES tract releases (#30).
-    # The table declaration(s) goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    # CDC PLACES tract releases (#30). Own column contract (places.py's
+    # TRACT_COLUMNS): CountyFIPS/CountyName are new; LocationName duplicates
+    # LocationID (both hold the 11-digit tract FIPS) rather than naming
+    # anything, an upstream quirk verified against the real files. Crude
+    # prevalence only -- derives into the SAME `PLACES:<MeasureId>:crude`
+    # measure.definition rows county's crude variant already asserts.
+    "raw.places__tract": TableDef(
+        schema=Schema(
+            NestedField(1, "Year", StringType(), required=True,
+                        doc="BRFSS survey year this row's estimate is based on, e.g. '2022'."),
+            NestedField(2, "StateAbbr", StringType(), doc="Two-letter state postal abbreviation."),
+            NestedField(3, "StateDesc", StringType(), doc="State name."),
+            NestedField(4, "CountyName", StringType(),
+                        doc="County name the tract belongs to. Not present in the county-data "
+                            "contract (raw.places__county), which IS the county."),
+            NestedField(5, "CountyFIPS", StringType(), required=True,
+                        doc="5-digit county FIPS code (leading zero kept) the tract belongs to."),
+            NestedField(6, "LocationName", StringType(),
+                        doc="The 11-digit tract FIPS, verbatim -- an upstream quirk: unlike the "
+                            "county file, where LocationName is a human name, here it duplicates "
+                            "LocationID rather than naming anything."),
+            NestedField(7, "DataSource", StringType(),
+                        doc="Survey the estimate is modeled from, e.g. 'BRFSS'."),
+            NestedField(8, "Category", StringType(),
+                        doc="Measure category, e.g. 'Health Outcomes', 'Disability'."),
+            NestedField(9, "Measure", StringType(),
+                        doc="Full measure description including its universe, e.g. 'Current "
+                            "cigarette smoking among adults'."),
+            NestedField(10, "Data_Value_Unit", StringType(), doc="Unit of Data_Value, e.g. '%'."),
+            NestedField(11, "Data_Value_Type", StringType(),
+                        doc="Always 'Crude prevalence' in the tract data -- PLACES publishes no "
+                            "age-adjusted variant at tract grain (verified via the Socrata SODA "
+                            "API against every landed release)."),
+            NestedField(12, "Data_Value", StringType(),
+                        doc="The published estimate, unparsed; empty (NULL) when suppressed -- "
+                            "see Data_Value_Footnote. Every row is 'reported' in the releases "
+                            "actually landed here (places.py module docstring)."),
+            NestedField(13, "Data_Value_Footnote_Symbol", StringType(),
+                        doc="Footnote marker on Data_Value, or NULL."),
+            NestedField(14, "Data_Value_Footnote", StringType(),
+                        doc="Footnote text explaining a missing Data_Value, or NULL."),
+            NestedField(15, "Low_Confidence_Limit", StringType(),
+                        doc="95% CI lower bound, unparsed."),
+            NestedField(16, "High_Confidence_Limit", StringType(),
+                        doc="95% CI upper bound, unparsed."),
+            NestedField(17, "TotalPopulation", StringType(),
+                        doc="Total population of the tract, per the source's own population "
+                            "estimate. NOT this measure's denominator, same as the county table."),
+            NestedField(18, "TotalPop18plus", StringType(),
+                        doc="Adult (18+) population of the tract, per the source's own population "
+                            "estimate. Not used as a denominator, same as the county table."),
+            NestedField(19, "Geolocation", StringType(),
+                        doc="Tract centroid as a WKT POINT string."),
+            NestedField(20, "LocationID", StringType(), required=True,
+                        doc="11-digit tract FIPS code (leading zero kept)."),
+            NestedField(21, "CategoryID", StringType(), doc="Short code for Category."),
+            NestedField(22, "MeasureId", StringType(), required=True,
+                        doc="Short code for Measure, e.g. 'CSMOKING' -- the same code space as "
+                            "the county table; derived observations reuse the county crude "
+                            "measure_id rather than minting a tract-specific one."),
+            NestedField(23, "DataValueTypeID", StringType(), doc="Always 'CrdPrv' in tract data."),
+            NestedField(24, "Short_Question_Text", StringType(),
+                        doc="Short label for Measure, e.g. 'Current Smoking'."),
+            NestedField(25, "places_release", StringType(), required=True,
+                        doc="The PLACES tract-data release year this row came from, e.g. '2025' "
+                            "(a key of places.TRACT_RELEASES). Raw is replaced wholesale per "
+                            "value of this column."),
+        ),
+        comment="CDC PLACES tract-data release, landed verbatim and whole: one row per "
+                "(tract, measure) model-based small-area estimate, crude prevalence only "
+                "(SPEC.md § Sources — first tranche; #30). Public domain.",
+    ),
 
     # --- raw: fda mqsa ---
     # FDA MQSA certified mammography facilities (#36).
