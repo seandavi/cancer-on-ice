@@ -1,0 +1,6 @@
+County,Year of Diagnosis,Site,Count,Population,Age-Adjusted Rate,Rate Std Err
+"Adams County, CO (08001)",2022,Female Breast,142,522000,127.4,10.8
+"Alamosa County, CO (08003)",2022,Female Breast,,16200,^,^
+"Boulder County, CO (08013)",2022,Female Breast,238,336000,131.2,8.5
+"Denver County, CO (08031)",2022,Female Breast,412,731000,129.8,6.4
+"Kiowa County, CO (08061)",2022,Female Breast,,1400,^,^
