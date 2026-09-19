@@ -1,0 +1,17 @@
+Site Recode ICD-O-3/WHO 2008 Definition*^
+
+Site Group;ICD-O-3 Site;ICD-O-3 Histology (Type);Recode
+Oral Cavity and Pharynx; ; ; ;
+Digestive System; ; ; ;
+    Esophagus;C150-C159;excluding 9050-9055, 9140, 9590-9993;21010;
+    Colon and Rectum; ; ; ;
+        Colon excluding Rectum; ; ; ;
+            Cecum;C180;excluding 9050-9055, 9140, 9590-9993;21041;
+Brain and Other Nervous System; ; ;  ;
+    Cranial Nerves Other Nervous System;C710-C719;9530-9539;31040 ;
+    Cranial Nerves Other Nervous System;C700-C709, C720-C729;excluding 9050-9055, 9140, 9590-9993;31040 ;
+Myeloma; ;9731-9732, 9734;34000;
+Invalid;Site or histology code not within valid range or site code not found in this table.;;99999;
+
+'*' This table was updated for Hematopoietic codes based on WHO Classification of Tumours of Haematopoietic and Lymphoid Tissues (2008).
+'^' Subject to change based on evolving ICD-O-3 coding rules.

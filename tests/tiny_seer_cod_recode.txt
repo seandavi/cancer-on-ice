@@ -1,0 +1,10 @@
+SEER Cause of Death Recode 1969+ (03/01/2018)
+For ICD-8 (1968-1978), All Malignant Cancers is defined as 140-207.  Individual ICD-8 cancer codes are converted to ICD-9 prior to creating this variable.
+
+Neoplasm Causes of Death
+Neoplasm Causes of Death;ICD-8;ICD-9 (1979-1998) #;ICD-10 (1999+) #;Recode
+All Malignant Cancers;;140-208, 238.6;C00-C97;--;
+Oral Cavity and Pharynx;
+    Esophagus;;150;C15;21010;
+    Colon and Rectum;
+        Colon excluding Rectum;;153, 159.0;C18, C26.0;21040;
