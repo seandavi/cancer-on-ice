@@ -2688,6 +2688,7 @@ TABLES = {
                     "error variable of each requested table, as the jam-value strings ACS "
                     "publishes (see census_acs.py for the sentinel meanings and the CIF-indicator "
                     "decision). Public domain (U.S. Government work, 17 U.S.C. Sec 105).",
+            sort_by=("acs_year", "geo_id"),
         )
         for _level in ("county", "tract")
     },
