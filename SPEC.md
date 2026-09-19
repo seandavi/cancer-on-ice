@@ -304,9 +304,16 @@ facility_id, source, source_release
 kind                -- mammography | fqhc | rhc | lung_screening | provider | hospital
 name, address, lat, lon
 geo_id (tract), geo_vintage
-attributes          -- map<string,string>, keys documented
+attributes_json     -- JSON string, keys documented per source
 first_seen, retired_in
 ```
+
+`attributes` was originally specified as `map<string,string>`; implementing
+the first writer (HRSA health-center sites, #38) found that a DuckDB MAP
+value cast through Arrow into that Iceberg column type aborts the process —
+Arrow's C++ validator fails a check ("Map array keys array should have no
+nulls") that is not a catchable Python exception, reproduced with a minimal
+example. `attributes_json` (a JSON string column) replaces it.
 
 Facility lists are the clearest case for history: "which certified mammography
 facilities existed in this county in 2023" is unanswerable from any live

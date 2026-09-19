@@ -76,9 +76,14 @@ def main():
 
     # --- raw: hrsa hpsa and health centers ---
     # HRSA HPSA designations and health-center sites; declares facility.site (#38).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import hrsa_sites
+    hs = sub.add_parser("hrsa-sites", help="land HRSA health-center sites + primary-care HPSA "
+                        "designations, then derive facility.site and county HPSA measures")
+    hs.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    hs.add_argument("--hc-url", dest="hc_url", help="an already-downloaded health-center sites CSV or alternate URL")
+    hs.add_argument("--hpsa-url", dest="hpsa_url", help="an already-downloaded HPSA primary-care CSV or alternate URL")
+    hs.add_argument("--retrieved-on", dest="retrieved_on",
+                    help="ISO date to record as the version (default: today)")
 
     args = p.parse_args()
 
@@ -139,9 +144,8 @@ def main():
 
     # --- raw: hrsa hpsa and health centers ---
     # HRSA HPSA designations and health-center sites; declares facility.site (#38).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "hrsa-sites":
+        _print(hrsa_sites.ingest(cat, args.release, args.hc_url, args.hpsa_url, args.retrieved_on))
 
     else:
         for ns in cat.list_namespaces():
