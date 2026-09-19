@@ -100,6 +100,48 @@ def main():
     hs.add_argument("--retrieved-on", dest="retrieved_on",
                     help="ISO date to record as the version (default: today)")
 
+    # --- raw: state cancer profiles ---
+    # State Cancer Profiles, all vintages (#27).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: census acs ---
+    # ACS 5-year, the Cancer InFocus indicator subset (#29).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: cdc places tract ---
+    # CDC PLACES tract releases (#30).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: fda mqsa ---
+    # FDA MQSA certified mammography facilities (#36).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: epa sdwis ---
+    # EPA SDWIS drinking-water violations (#53).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: fcc broadband ---
+    # FCC Broadband Data Collection (#54).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: bls laus ---
+    # BLS Local Area Unemployment Statistics, county (#94).
+    # The local `from . import <module>` and the subparser goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
     args = p.parse_args()
 
     cat = catalog()
@@ -151,6 +193,48 @@ def main():
     # HRSA HPSA designations and health-center sites; declares facility.site (#38).
     elif args.cmd == "hrsa-sites":
         _print(hrsa_sites.ingest(cat, args.release, args.hc_url, args.hpsa_url, args.retrieved_on))
+
+    # --- raw: state cancer profiles ---
+    # State Cancer Profiles, all vintages (#27).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: census acs ---
+    # ACS 5-year, the Cancer InFocus indicator subset (#29).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: cdc places tract ---
+    # CDC PLACES tract releases (#30).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: fda mqsa ---
+    # FDA MQSA certified mammography facilities (#36).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: epa sdwis ---
+    # EPA SDWIS drinking-water violations (#53).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: fcc broadband ---
+    # FCC Broadband Data Collection (#54).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
+
+    # --- raw: bls laus ---
+    # BLS Local Area Unemployment Statistics, county (#94).
+    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
+    # Leave this marker and the blank lines around it untouched so
+    # independent branches merge cleanly.
 
     else:
         for ns in cat.list_namespaces():
