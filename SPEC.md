@@ -301,6 +301,55 @@ schemes will diverge across releases of the same source; this is expected.
 SEER site recode ↔ ICD-O-3 topography/histology ↔ ICD-10 (mortality) ↔ NCIt /
 MONDO. The NCIt/MONDO columns are the **bridge to biocOnIce's `ontology`
 namespace** — the one natural cross-lake join key besides publications.
+`mapping_relation` (`exact` | `broader`, #90) says whether the NCIt/MONDO id
+denotes exactly this site or a broader disease it is a constituent of (a SEER
+subsite folded into an SCP combined category, e.g. Cecum → "colorectal
+cancer"), the same vocabulary and purpose as `measure.stratum_map`'s
+`relation` column above — a consumer choosing to join on exact ontology
+matches only does it visibly, rather than silently inheriting a broader
+term's burden.
+
+### measure.cancer_site_group
+
+A small, cited lookup beside `measure.cancer_site` for reading burden through
+a prevention lens (#126): a catchment researcher's caution is that no single
+burden metric should drive decisions, and preventability changes which sites
+matter most (e.g. it raises melanoma and cervical cancer above where
+mortality alone ranks them).
+
+```
+group_id            -- 'tobacco_associated' | 'hpv_associated' |
+                        'obesity_associated' | 'alcohol_associated' |
+                        'alcohol_associated_limited_evidence' |
+                        'uspstf_screenable' | 'vaccine_preventable' |
+                        'uv_associated'
+group_label
+cancer_site_code     -- FK measure.cancer_site
+mapping_relation     -- 'exact' | 'broader' -- same vocabulary as
+                        measure.cancer_site's column of the same name (#90)
+basis                -- the citation: publisher, page, date, verbatim quote
+source_url
+note                 -- caveats: why 'broader', evidence-strength language
+                        the citation itself uses, disagreement between
+                        authorities
+source               -- always 'CANCERONICE' (this project's own curated
+                        grouping; see Derived indices)
+```
+
+Every row cites one authoritative primary source (CDC, USPSTF, NCI, or a US
+Surgeon General's report) with a URL and a quoted sentence — no memberships
+from memory. Where CDC states weaker evidence for a site than its core causal
+list (alcohol's "some studies indicate" language for stomach, pancreatic and
+prostate cancer), that is its own `alcohol_associated_limited_evidence`
+group rather than being flattened into `alcohol_associated` alongside the
+sites CDC states plainly. Where a citation's definition is by histology or
+subsite finer than SEER site recode can express (HPV-associated oropharynx
+spans SEER's separate Oropharynx and Tonsil leaves; obesity's citation names
+adenocarcinoma of the esophagus specifically, not all esophageal histologies;
+obesity's citation names meningioma, which has no SEER leaf of its own, only
+the combined Brain and Other Nervous System code), the row is marked
+`broader` with a `note` explaining
+the mismatch, the same discipline #90 applies to the NCIt/MONDO bridge.
 
 ## Facilities
 

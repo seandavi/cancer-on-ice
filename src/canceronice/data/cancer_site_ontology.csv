@@ -1,41 +1,41 @@
-cancer_site_code,label,ncit_id,ncit_label,mondo_id,mondo_label,note
-26000,Breast,NCIT:C9335,Malignant Breast Neoplasm,MONDO:0007254,breast cancer,
-27010,Cervix Uteri,NCIT:C9311,Malignant Cervical Neoplasm,MONDO:0002974,cervical cancer,
-21041,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-21042,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-21043,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-21044,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-21045,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-21046,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-21047,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-21048,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-21049,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-21051,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-21052,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-22030,Lung and Bronchus,NCIT:C7377,Malignant Lung Neoplasm,MONDO:0008903,lung cancer,
-28010,Prostate,NCIT:C7378,Malignant Prostate Neoplasm,MONDO:0008315,prostate cancer,
-25010,Melanoma of the Skin,NCIT:C3510,Cutaneous Melanoma,MONDO:0005012,cutaneous melanoma,
-29010,Urinary Bladder,NCIT:C9334,Malignant Bladder Neoplasm,MONDO:0001187,urinary bladder cancer,
-29020,Kidney and Renal Pelvis,NCIT:C7548,Malignant Kidney Neoplasm,MONDO:0002367,kidney cancer,Broader match: NCIt/MONDO have no single term combining kidney parenchyma + renal pelvis at SEER's granularity (NCIt separately defines C120456 "except renal pelvis"); C7548/MONDO:0002367 is the general kidney-cancer parent term
-33041,Non-Hodgkin Lymphoma,NCIT:C3211,Non-Hodgkin Lymphoma,MONDO:0018908,non-Hodgkin lymphoma,SCP combined category; SEER site recode splits nodal (33041) vs extranodal (33042)
-33042,Non-Hodgkin Lymphoma,NCIT:C3211,Non-Hodgkin Lymphoma,MONDO:0018908,non-Hodgkin lymphoma,SCP combined category; SEER site recode splits nodal (33041) vs extranodal (33042)
-35011,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
-35012,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
-35013,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
-35021,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
-35022,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
-35023,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
-35031,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
-35041,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
-35043,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
-21100,Pancreas,NCIT:C9005,Malignant Pancreatic Neoplasm,MONDO:0009831,malignant pancreatic neoplasm,
-21071,Liver and Intrahepatic Bile Duct,,,MONDO:0024477,liver and intrahepatic bile duct neoplasm,SCP combined category; SEER site recode 21071 (Liver) + 21072 (Intrahepatic Bile Duct). No NCIt term found combining exactly these two subsites (NCIt's C8609 "Malignant Hepatobiliary Neoplasm" is broader, also covering gallbladder/other biliary) -- left NULL rather than guess
-21072,Liver and Intrahepatic Bile Duct,,,MONDO:0024477,liver and intrahepatic bile duct neoplasm,SCP combined category; SEER site recode 21071 (Liver) + 21072 (Intrahepatic Bile Duct). No NCIt term found combining exactly these two subsites (NCIt's C8609 "Malignant Hepatobiliary Neoplasm" is broader, also covering gallbladder/other biliary) -- left NULL rather than guess
-32010,Thyroid,NCIT:C7510,Malignant Thyroid Gland Neoplasm,MONDO:0002108,thyroid cancer,
-27020,"Corpus and Uterus, NOS",NCIT:C61574,Malignant Uterine Corpus Neoplasm,MONDO:0006003,uterine corpus cancer,SCP combined category (State Cancer Profiles' "Uterus"); SEER site recode 27020 (Corpus Uteri) + 27030 (Uterus NOS)
-27030,"Corpus and Uterus, NOS",NCIT:C61574,Malignant Uterine Corpus Neoplasm,MONDO:0006003,uterine corpus cancer,SCP combined category (State Cancer Profiles' "Uterus"); SEER site recode 27020 (Corpus Uteri) + 27030 (Uterus NOS)
-27040,Ovary,NCIT:C7431,Malignant Ovarian Neoplasm,MONDO:0008170,ovarian cancer,
-21020,Stomach,NCIT:C9331,Malignant Gastric Neoplasm,MONDO:0001056,gastric cancer,
-21010,Esophagus,NCIT:C7478,Malignant Esophageal Neoplasm,MONDO:0007576,esophageal cancer,
-31010,Brain and Other Nervous System,NCIT:C4788,Malignant Nervous System Neoplasm,MONDO:0005872,nervous system cancer,SCP combined category; SEER site recode 31010 (Brain) + 31040 (Cranial Nerves Other Nervous System)
-31040,Brain and Other Nervous System,NCIT:C4788,Malignant Nervous System Neoplasm,MONDO:0005872,nervous system cancer,SCP combined category; SEER site recode 31010 (Brain) + 31040 (Cranial Nerves Other Nervous System)
+cancer_site_code,label,ncit_id,ncit_label,mondo_id,mondo_label,mapping_relation,note
+26000,Breast,NCIT:C9335,Malignant Breast Neoplasm,MONDO:0007254,breast cancer,exact,
+27010,Cervix Uteri,NCIT:C9311,Malignant Cervical Neoplasm,MONDO:0002974,cervical cancer,exact,
+21041,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+21042,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+21043,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+21044,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+21045,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+21046,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+21047,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+21048,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+21049,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+21051,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+21052,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+22030,Lung and Bronchus,NCIT:C7377,Malignant Lung Neoplasm,MONDO:0008903,lung cancer,exact,
+28010,Prostate,NCIT:C7378,Malignant Prostate Neoplasm,MONDO:0008315,prostate cancer,exact,
+25010,Melanoma of the Skin,NCIT:C3510,Cutaneous Melanoma,MONDO:0005012,cutaneous melanoma,exact,
+29010,Urinary Bladder,NCIT:C9334,Malignant Bladder Neoplasm,MONDO:0001187,urinary bladder cancer,exact,
+29020,Kidney and Renal Pelvis,NCIT:C7548,Malignant Kidney Neoplasm,MONDO:0002367,kidney cancer,broader,Broader match: NCIt/MONDO have no single term combining kidney parenchyma + renal pelvis at SEER's granularity (NCIt separately defines C120456 "except renal pelvis"); C7548/MONDO:0002367 is the general kidney-cancer parent term
+33041,Non-Hodgkin Lymphoma,NCIT:C3211,Non-Hodgkin Lymphoma,MONDO:0018908,non-Hodgkin lymphoma,broader,SCP combined category; SEER site recode splits nodal (33041) vs extranodal (33042)
+33042,Non-Hodgkin Lymphoma,NCIT:C3211,Non-Hodgkin Lymphoma,MONDO:0018908,non-Hodgkin lymphoma,broader,SCP combined category; SEER site recode splits nodal (33041) vs extranodal (33042)
+35011,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,broader,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
+35012,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,broader,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
+35013,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,broader,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
+35021,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,broader,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
+35022,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,broader,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
+35023,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,broader,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
+35031,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,broader,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
+35041,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,broader,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
+35043,Leukemia,NCIT:C3161,Leukemia,MONDO:0005059,leukemia,broader,SCP combined category; SEER site recode 35011-35013+35021-35023+35031+35041+35043 (excludes myeloma 34000)
+21100,Pancreas,NCIT:C9005,Malignant Pancreatic Neoplasm,MONDO:0009831,malignant pancreatic neoplasm,exact,
+21071,Liver and Intrahepatic Bile Duct,,,MONDO:0024477,liver and intrahepatic bile duct neoplasm,broader,SCP combined category; SEER site recode 21071 (Liver) + 21072 (Intrahepatic Bile Duct). No NCIt term found combining exactly these two subsites (NCIt's C8609 "Malignant Hepatobiliary Neoplasm" is broader, also covering gallbladder/other biliary) -- left NULL rather than guess
+21072,Liver and Intrahepatic Bile Duct,,,MONDO:0024477,liver and intrahepatic bile duct neoplasm,broader,SCP combined category; SEER site recode 21071 (Liver) + 21072 (Intrahepatic Bile Duct). No NCIt term found combining exactly these two subsites (NCIt's C8609 "Malignant Hepatobiliary Neoplasm" is broader, also covering gallbladder/other biliary) -- left NULL rather than guess
+32010,Thyroid,NCIT:C7510,Malignant Thyroid Gland Neoplasm,MONDO:0002108,thyroid cancer,exact,
+27020,"Corpus and Uterus, NOS",NCIT:C61574,Malignant Uterine Corpus Neoplasm,MONDO:0006003,uterine corpus cancer,broader,SCP combined category (State Cancer Profiles' "Uterus"); SEER site recode 27020 (Corpus Uteri) + 27030 (Uterus NOS)
+27030,"Corpus and Uterus, NOS",NCIT:C61574,Malignant Uterine Corpus Neoplasm,MONDO:0006003,uterine corpus cancer,broader,SCP combined category (State Cancer Profiles' "Uterus"); SEER site recode 27020 (Corpus Uteri) + 27030 (Uterus NOS)
+27040,Ovary,NCIT:C7431,Malignant Ovarian Neoplasm,MONDO:0008170,ovarian cancer,exact,
+21020,Stomach,NCIT:C9331,Malignant Gastric Neoplasm,MONDO:0001056,gastric cancer,exact,
+21010,Esophagus,NCIT:C7478,Malignant Esophageal Neoplasm,MONDO:0007576,esophageal cancer,exact,
+31010,Brain and Other Nervous System,NCIT:C4788,Malignant Nervous System Neoplasm,MONDO:0005872,nervous system cancer,broader,SCP combined category; SEER site recode 31010 (Brain) + 31040 (Cranial Nerves Other Nervous System)
+31040,Brain and Other Nervous System,NCIT:C4788,Malignant Nervous System Neoplasm,MONDO:0005872,nervous system cancer,broader,SCP combined category; SEER site recode 31010 (Brain) + 31040 (Cranial Nerves Other Nervous System)

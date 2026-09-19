@@ -688,12 +688,108 @@ TABLES = {
                             "rows."),
             NestedField(12, "valid_from", StringType(), required=True, doc=VALID_FROM),
             NestedField(13, "valid_to", StringType(), doc=VALID_TO),
+            NestedField(14, "mapping_relation", StringType(),
+                        doc="Whether ncit_id/mondo_id denote exactly this cancer_site_code's "
+                            "disease, or a broader one it is a constituent of: 'exact' | "
+                            "'broader'. NULL only where neither ncit_id nor mondo_id is filled "
+                            "(mapping_basis is also NULL there). A subsite code combined by SCP "
+                            "into a larger category (e.g. 21041 Cecum, part of 'Colon and "
+                            "Rectum') is 'broader' -- the ontology term denotes the combined "
+                            "disease, not the subsite alone; a code whose ontology term matches "
+                            "it 1:1 (e.g. 26000 Breast) is 'exact'. Same vocabulary as "
+                            "measure.stratum_map's relation column (SPEC.md), added by #90 for "
+                            "the cross-lake join to biocOnIce's ontology namespace (#60, #61) to "
+                            "be able to choose exact matches only."),
         ),
         business_key=("cancer_site_code", "source_release"),
         sort_by=("cancer_site_code", "source_release"),
         comment="SEER site recode <-> ICD-O-3 topography/histology <-> ICD-10 (mortality) <-> "
                 "NCIt/MONDO (SPEC.md § measure.cancer_site) -- the bridge to biocOnIce's "
                 "`ontology` namespace. Full Type-2 history via valid_from/valid_to.",
+    ),
+
+    # --- derived: measure cancer site group ---
+    # measure.cancer_site_group -- prevention-lens groupings over measure.cancer_site
+    # (screenable, vaccine-preventable, tobacco-/HPV-/obesity-/alcohol-/UV-associated), #126.
+    "raw.canceronice__cancer_site_group": TableDef(
+        schema=Schema(
+            NestedField(1, "group_id", StringType(), required=True,
+                        doc="Snake_case grouping id, e.g. 'tobacco_associated', exactly as "
+                            "curated (see data/cancer_site_groups.csv)."),
+            NestedField(2, "group_label", StringType(), required=True,
+                        doc="Human-readable label for the grouping, as curated."),
+            NestedField(3, "cancer_site_code", StringType(), required=True,
+                        doc="A measure.cancer_site.cancer_site_code this grouping includes."),
+            NestedField(4, "mapping_relation", StringType(), required=True,
+                        doc="'exact' | 'broader' -- same vocabulary as measure.cancer_site's "
+                            "column of the same name (#90): whether this cancer_site_code is "
+                            "exactly what the citation names, or a broader SEER code standing "
+                            "in for a histology/subsite the citation names more narrowly (e.g. "
+                            "HPV-associated oropharynx) or a narrower one the citation names "
+                            "more broadly (e.g. a single subsite folded under a citation that "
+                            "names the whole combined category)."),
+            NestedField(5, "basis", StringType(), required=True,
+                        doc="The citation: publisher, page title, checked/updated date, and the "
+                            "verbatim sentence establishing this (group, cancer_site_code) "
+                            "membership. One citation per row (SPEC.md § Licence gate discipline "
+                            "applied to grouping membership, not just ingest) -- never from "
+                            "memory."),
+            NestedField(6, "source_url", StringType(), required=True,
+                        doc="URL of the page `basis` quotes."),
+            NestedField(7, "note", StringType(),
+                        doc="Caveats a plain (group_id, cancer_site_code, mapping_relation) row "
+                            "can't carry: why a mapping is 'broader', evidence-strength language "
+                            "the citation itself uses (e.g. CDC's 'some studies indicate' versus "
+                            "its core causal list), or where another authority's evidence "
+                            "grading differs. NULL where there is nothing to add."),
+            NestedField(8, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("group_id", "cancer_site_code"),
+        comment="Curated CSV of cancer-site groupings (data/cancer_site_groups.csv, committed "
+                "in the package -- this project's own compilation of CDC/USPSTF/NCI/Surgeon "
+                "General citations, like raw.geography__county_recodes), landed verbatim and "
+                "whole. Replaced wholesale each time it is re-curated -- there is no upstream "
+                "edition to key an overwrite scope on.",
+    ),
+
+    "measure.cancer_site_group": TableDef(
+        schema=Schema(
+            NestedField(1, "group_id", StringType(), required=True,
+                        doc="Snake_case grouping id: 'tobacco_associated' | 'hpv_associated' | "
+                            "'obesity_associated' | 'alcohol_associated' | "
+                            "'alcohol_associated_limited_evidence' | 'uspstf_screenable' | "
+                            "'vaccine_preventable' | 'uv_associated'. Part of the business key "
+                            "together with cancer_site_code -- a site can belong to more than "
+                            "one group."),
+            NestedField(2, "group_label", StringType(), required=True,
+                        doc="Human-readable label, e.g. 'Tobacco-associated cancer'."),
+            NestedField(3, "cancer_site_code", StringType(), required=True,
+                        doc="FK measure.cancer_site.cancer_site_code. Business key together "
+                            "with group_id."),
+            NestedField(4, "mapping_relation", StringType(), required=True,
+                        doc="'exact' | 'broader' -- see raw.canceronice__cancer_site_group."),
+            NestedField(5, "basis", StringType(), required=True,
+                        doc="The citation establishing this membership -- see "
+                            "raw.canceronice__cancer_site_group."),
+            NestedField(6, "source_url", StringType(), required=True, doc="URL `basis` quotes."),
+            NestedField(7, "note", StringType(),
+                        doc="Caveats -- see raw.canceronice__cancer_site_group."),
+            NestedField(8, "source", StringType(), required=True,
+                        doc="Always 'CANCERONICE' -- this project's own curated grouping "
+                            "(synthesizing external citations recorded per row in basis/"
+                            "source_url), the same convention SPEC.md uses for derived indices. "
+                            "Part of the merge scope, so a second curator/source of groupings "
+                            "could stack here without retiring this one's rows."),
+            NestedField(9, "valid_from", StringType(), required=True, doc=VALID_FROM),
+            NestedField(10, "valid_to", StringType(), doc=VALID_TO),
+        ),
+        business_key=("group_id", "cancer_site_code"),
+        sort_by=("group_id", "cancer_site_code"),
+        comment="Prevention-lens groupings over measure.cancer_site -- screenable, "
+                "vaccine-preventable, tobacco-/HPV-/obesity-/alcohol-/UV-associated (SPEC.md § "
+                "measure.cancer_site_group, #126). Every row cites the defining publication. "
+                "Full Type-2 history via valid_from/valid_to.",
     ),
 
     # --- raw: cdc atsdr svi ---
