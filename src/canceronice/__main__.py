@@ -40,9 +40,11 @@ def main():
 
     # --- derived: geography alias ---
     # geography.alias — FIPS renames and recodes that are not boundary changes (#26).
-    # The local `from . import <module>` and the subparser goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    from . import geography_alias
+    ga = sub.add_parser("geo-alias", help="land the curated county-recode CSV, then derive "
+                        "geography.alias")
+    ga.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    ga.add_argument("--path", help="an alternate curated CSV; defaults to the packaged one")
 
     # --- derived: measure cancer site ---
     # measure.cancer_site — SEER site recode <-> ICD-O-3 <-> ICD-10 <-> NCIt / MONDO (#31).
@@ -102,10 +104,8 @@ def main():
         _print(ers_rucc.ingest(cat, args.release, args.url))
 
     # --- derived: geography alias ---
-    # geography.alias — FIPS renames and recodes that are not boundary changes (#26).
-    # The `elif args.cmd == ...` dispatch branch goes directly under this comment block.
-    # Leave this marker and the blank lines around it untouched so
-    # independent branches merge cleanly.
+    elif args.cmd == "geo-alias":
+        _print(geography_alias.ingest(cat, args.release, args.path))
 
     # --- derived: measure cancer site ---
     # measure.cancer_site — SEER site recode <-> ICD-O-3 <-> ICD-10 <-> NCIt / MONDO (#31).
