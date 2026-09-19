@@ -190,6 +190,17 @@ def main():
     bl.add_argument("--since", type=int,
                     help="derive years >= this (default: this year minus 10)")
 
+    # --- raw: epa tri ---
+    # EPA Toxics Release Inventory Basic Data Files (#100).
+    from . import epa_tri
+    tr = sub.add_parser("tri", help="land one EPA TRI Basic Data Files reporting year, then "
+                        "derive facility.site (kind='tri') and county-year release totals")
+    tr.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    tr.add_argument("--year", required=True, type=int, help="reporting year, e.g. 2023")
+    tr.add_argument("--url", help="an already-downloaded CSV file or alternate URL")
+    tr.add_argument("--retrieved-on", dest="retrieved_on",
+                    help="ISO date to record as the version (default: today)")
+
     args = p.parse_args()
 
     cat = catalog()
@@ -292,6 +303,11 @@ def main():
     elif args.cmd == "laus":
         _print(bls_laus.ingest(cat, args.release, args.county_url, args.area_url, args.series_url,
                                args.measure_url, args.footnote_url, args.vintage, args.since))
+
+    # --- raw: epa tri ---
+    # EPA Toxics Release Inventory Basic Data Files (#100).
+    elif args.cmd == "tri":
+        _print(epa_tri.ingest(cat, args.release, args.year, args.url, args.retrieved_on))
 
     else:
         for ns in cat.list_namespaces():
