@@ -11,10 +11,9 @@ same kind of real excerpt, for 2020 (modern) and 2026 (current) -- Alabama's
 1st/2nd CD and Senate/House District 1/2, Wyoming's at-large CD, and North
 Carolina's 3rd CD across all three known vintages (2020/2024/2026), which
 really did redraw each time (confirmed against the live files 2026-09-19).
-tiny_baf_al.zip is a real excerpt of Alabama's 2020 Block Assignment File:
-tract 01101005610 (Montgomery County) genuinely splits across CD 02/03/07,
-SLDU 025/026 and SLDL 069/075/076; tract 01001020100's first five blocks are
-all CD 02, for contrast.
+Tract -> district weights (a block-to-district relationship file) are
+deferred to #25 -- see census_gazetteer.py's module docstring -- so there is
+no crosswalk/BAF fixture or test here.
 """
 
 from pathlib import Path
@@ -41,7 +40,6 @@ def district_urls(year):
 
 
 STATE_URL = str(FIX / "tiny_gazetteer_state.txt")
-BAF_ZIP = str(FIX / "tiny_baf_al.zip")
 
 
 def rows(cat, identifier, **kw):
@@ -283,65 +281,3 @@ def test_every_district_column_is_documented(cat):
         assert table.properties.get("comment"), identifier
         for f in table.schema().fields:
             assert f.doc, f"{identifier}.{f.name} has no doc"
-
-
-# --- block assignment files / tract -> district recipe (#104) ---
-
-def test_land_baf_lands_scoped_per_state(cat):
-    n = gz.land_baf(cat, REL, [("01", "AL")], zip_path=BAF_ZIP)
-    assert n == 3 * 64  # 5 + 59 blocks, 3 district levels each
-    baf = rows(cat, "raw.census__baf")
-    assert {r["district_level"] for r in baf} == {"cd", "sldu", "sldl"}
-    assert all(r["baf_vintage"] == "2020" and r["state"] == "01" for r in baf)
-
-    # re-landing the same state replaces it rather than appending
-    gz.land_baf(cat, REL, [("01", "AL")], zip_path=BAF_ZIP)
-    assert len(rows(cat, "raw.census__baf")) == n
-
-
-def test_land_baf_manifest(cat):
-    gz.land_baf(cat, REL, [("01", "AL")], zip_path=BAF_ZIP)
-    m = next(r for r in rows(cat, "provenance.release") if r["source"] == "census_gazetteer_baf")
-    assert (m["version_method"], m["source_version"]) == ("release_number", "2020")
-
-
-def test_every_baf_column_is_documented(cat):
-    gz.land_baf(cat, REL, [("01", "AL")], zip_path=BAF_ZIP)
-    table = cat.load_table("raw.census__baf")
-    assert table.properties.get("comment")
-    for f in table.schema().fields:
-        assert f.doc, f"raw.census__baf.{f.name} has no doc"
-
-
-def test_recipe_tract_to_district_weights_and_measure_rollup(cat):
-    """SPEC.md § Recipes / issue #104's Done criterion: a county or tract
-    measure rolled up to district, with stated weights -- computed ad hoc
-    (module docstring: geography.crosswalk, #25, doesn't exist yet)."""
-    gz.land_baf(cat, REL, [("01", "AL")], zip_path=BAF_ZIP)
-
-    w = {(r["from_geo_id"], r["to_geo_id"]): r["weight"]
-        for r in gz.tract_district_weights(cat, "cd").to_pylist()}
-    # the real Montgomery County split: 31/21/7 of 59 blocks across CD 02/03/07
-    assert w[("tract:01101005610", "cd:0102")] == pytest.approx(31 / 59)
-    assert w[("tract:01101005610", "cd:0103")] == pytest.approx(21 / 59)
-    assert w[("tract:01101005610", "cd:0107")] == pytest.approx(7 / 59)
-    # the unsplit sample tract: one district at weight 1.0
-    unsplit = [r for r in gz.tract_district_weights(cat, "cd").to_pylist()
-              if r["from_geo_id"] == "tract:01001020100"]
-    assert unsplit == [{"from_geo_id": "tract:01001020100", "to_geo_id": "cd:0102",
-                        "weight": 1.0, "weight_basis": "block_count"}]
-
-    # SLDU/SLDL split the same tract differently -- real, distinct district lines
-    sldu_w = {(r["from_geo_id"], r["to_geo_id"]): r["weight"]
-             for r in gz.tract_district_weights(cat, "sldu").to_pylist()}
-    assert sldu_w[("tract:01101005610", "sldu:01025")] == pytest.approx(21 / 59)
-    assert sldu_w[("tract:01101005610", "sldu:01026")] == pytest.approx(38 / 59)
-
-    # a toy county/tract measure, rolled up to district using the stated weights
-    measure = {"tract:01101005610": 590.0, "tract:01001020100": 100.0}
-    rolled = {}
-    for (from_id, to_id), weight in w.items():
-        rolled[to_id] = rolled.get(to_id, 0.0) + measure[from_id] * weight
-    assert rolled["cd:0102"] == pytest.approx(590 * 31 / 59 + 100.0)
-    assert rolled["cd:0103"] == pytest.approx(590 * 21 / 59)
-    assert rolled["cd:0107"] == pytest.approx(590 * 7 / 59)

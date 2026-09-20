@@ -387,8 +387,9 @@ TABLES = {
     ),
 
     # --- raw: census gazetteer districts ---
-    # Congressional (CD) and state legislative (SLDU/SLDL) districts, plus the
-    # Census Block Assignment Files tying blocks (hence tracts) to them (#104).
+    # Congressional (CD) and state legislative (SLDU/SLDL) districts (#104).
+    # Tract -> district weights (the block-to-district relationship) are
+    # deferred to #25 -- see census_gazetteer.py's module docstring.
     "raw.census__gazetteer_cd": TableDef(
         schema=Schema(
             NestedField(1, "usps", StringType(), doc="Two-letter USPS state/territory abbreviation."),
@@ -477,39 +478,6 @@ TABLES = {
         comment="Census Gazetteer state-legislative lower-chamber (SLDL) file landed verbatim and "
                 "whole, one row per district per vintage year (SPEC.md § Geography; #104). Licence: "
                 "U.S. government work, public domain (17 U.S.C. § 105).",
-    ),
-
-    "raw.census__baf": TableDef(
-        schema=Schema(
-            NestedField(1, "state", StringType(), required=True,
-                        doc="2-digit state FIPS code this block's zip file was published under."),
-            NestedField(2, "block_geoid", StringType(), required=True,
-                        doc="15-digit 2020 Census block GEOID (state+county+tract+block), as "
-                            "published ('BLOCKID'). Its leading 11 digits are the block's tract's "
-                            "geography.unit fips."),
-            NestedField(3, "district_level", StringType(), required=True,
-                        doc="Which district type this row assigns the block to: 'cd', 'sldu' or "
-                            "'sldl'. Part of the business key together with block_geoid — one "
-                            "block has one row per level."),
-            NestedField(4, "district_code", StringType(), required=True,
-                        doc="The district's code within district_level, as published ('DISTRICT') "
-                            "— combined with state, matches the corresponding "
-                            "raw.census__gazetteer_{cd,sldu,sldl}.geoid's district digits."),
-            NestedField(5, "baf_vintage", StringType(), required=True,
-                        doc="Fixed '2020' — the redistricting-cycle Block Assignment Files are a "
-                            "one-time-per-decade product, not republished for mid-decade district "
-                            "redraws (census_gazetteer module docstring). Raw is replaced wholesale "
-                            "per (state, baf_vintage)."),
-            NestedField(6, "landed_in", StringType(), required=True,
-                        doc="The cancerOnIce release whose ingest landed these rows."),
-        ),
-        sort_by=("baf_vintage", "district_level", "state", "block_geoid"),
-        comment="Census 2020 Redistricting Data Block Assignment Files (BAF), CD/SLDU/SLDL members "
-                "only, landed verbatim per state (SPEC.md § geography.crosswalk; #104). The "
-                "block-level detail `census_gazetteer.tract_district_weights` computes tract -> "
-                "district weights from — a recipe, not geography.crosswalk (#25 doesn't exist "
-                "yet; see that function's docstring). Licence: U.S. government work, public domain "
-                "(17 U.S.C. § 105).",
     ),
 
     # --- raw: cdc places ---

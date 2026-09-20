@@ -118,36 +118,20 @@ milestone doesn't need — add `CD_COLUMNS["2010"]`/a `_cd_zip_url` 2010 case
 alongside `COUNTY_COLUMNS["2010"]`'s if a later milestone lands district
 history back to 2010.
 
-**Block Assignment Files (BAF) — the block-to-district relationship, #104.**
-Census's own answer to "which blocks (hence tracts) are in which district" is
-not part of the Gazetteer: it is the redistricting BAF product, one zip per
-state bundling several geography kinds, e.g.
-`https://www2.census.gov/geo/docs/maps-data/data/baf2020/BlockAssign_ST01_AL.zip`
-containing `BlockAssign_ST01_AL_CD.txt` (`BLOCKID|DISTRICT`, one row per 2020
-Census block) among others — confirmed 2026-09-19 against the real Alabama
-zip and against the Block Assignment Files reference page
-(https://www.census.gov/geographies/reference-files/time-series/geo/block-assignment-files.html),
-same public-domain licence. `land_baf` lands only the `_CD`/`_SLDU`/`_SLDL`
-members into one raw table, `raw.census__baf`.
-
-**BAF is a fixed 2020-cycle product, not an annual one.** The reference page
-above carries only a "2020" tab — Census does not republish BAF for a
-mid-decade CD redraw, so `baf_vintage` is the constant `"2020"`, not a year
-(unlike the Gazetteer's `gazetteer_year`). A block's `district_code` in
-`raw.census__baf` can therefore lag a state's most recent redraw; it is still
-the only block-level detail Census publishes tying a block (hence a tract, by
-its GEOID's leading 11 digits) to a district.
-
-**geography.crosswalk (#25) does not exist yet.** `tract_district_weights` is
-a *recipe* (SPEC.md § Recipes), not a landed table: it computes
-`from_geo_id, to_geo_id, weight, weight_basis` from `raw.census__baf` on the
-fly and returns it, rather than writing anywhere — #25 hasn't declared
-`geography.crosswalk` for it to land in, and `weight_basis='block_count'`
-(share of a tract's 2020 blocks assigned to a district) isn't one of
-SPEC.md's declared bases (`population | housing_units | land_area`) since BAF
-carries no population. Once #25 lands `geography.crosswalk` with a
-`block_count` (or better, population-weighted once block population is also
-landed) basis, this recipe's SELECT is what feeds it — see the PR for #104.
+**Tract -> district weights: deferred to #25, not landed here.** An earlier
+version of this module landed the 2020 redistricting-cycle Block Assignment
+Files (`raw.census__baf`, one zip per state,
+`https://www2.census.gov/geo/docs/maps-data/data/baf2020/`) and a
+`tract_district_weights` recipe over them. Caught in review (2026-09-19):
+that BAF product ties blocks to the *116th-Congress* CD lines (the map in
+effect for the 2020 Census), not the 2024/2020-Gazetteer/2026-Gazetteer
+vintages this module actually lands (119th/120th) — joining it against
+`geography.unit`'s cd/sldu/sldl rows here would silently emit district ids
+for the wrong vintage. Removed rather than shipped wrong. #25
+(`geography.crosswalk`) should instead use the Census Block Equivalency
+Files for the 118th/119th Congress cycle (correct vintage; not yet verified
+against a live download) when it lands the weighted crosswalk — this module
+stops at landing the district units themselves.
 """
 
 import tempfile
@@ -158,7 +142,7 @@ from pathlib import Path
 
 import duckdb
 from pyiceberg.exceptions import NoSuchTableError
-from pyiceberg.expressions import AlwaysTrue, And, EqualTo
+from pyiceberg.expressions import AlwaysTrue, EqualTo
 
 from . import merge
 
@@ -219,9 +203,6 @@ FULL_SLD_COLUMNS = ("usps", "geoid", "geoidfq", "name",
 CD_CONGRESS = {2017: 115, 2018: 116, 2019: 116, 2020: 116, 2021: 116, 2022: 116,
               2023: 118, 2024: 119, 2025: 119, 2026: 120}
 
-BAF_BASE = "https://www2.census.gov/geo/docs/maps-data/data/baf2020"
-BAF_VINTAGE = "2020"  # fixed one-time-per-decade product (module docstring)
-
 
 def _zip_url(kind, year):
     if year == 2010:
@@ -261,21 +242,6 @@ def _fetch_txt(url, tmpdir):
         names = [n for n in z.namelist() if n.endswith(".txt")]
         if len(names) != 1:
             raise SystemExit(f"census gazetteer: {url} has {len(names)} .txt member(s), expected 1")
-        z.extract(names[0], tmpdir)
-        return Path(tmpdir) / names[0]
-
-
-def _fetch_zip_member(url, suffix, tmpdir):
-    """One named member of a multi-file zip -- BAF's per-state zips bundle
-    AIANNH/CD/SLDU/SLDL/VTD/... together (module docstring), unlike the
-    single-.txt gazetteer zips `_fetch_txt` handles, so this picks the one
-    member whose name ends `suffix` (e.g. '_CD.txt')."""
-    src = _download(url, tmpdir, "baf.zip")
-    with zipfile.ZipFile(src) as z:
-        names = [n for n in z.namelist() if n.endswith(suffix)]
-        if len(names) != 1:
-            raise SystemExit(f"census gazetteer: {url} has {len(names)} member(s) ending "
-                             f"'{suffix}', expected 1")
         z.extract(names[0], tmpdir)
         return Path(tmpdir) / names[0]
 
@@ -515,69 +481,3 @@ def ingest_districts(cat, release, year, cd_url=None, sldu_url=None, sldl_url=No
     """Phase 1+2 for districts, callable on its own (see `land_districts`)."""
     _, district_counts = land_districts(cat, release, year, cd_url, sldu_url, sldl_url)
     return {**district_counts, **transform(cat, release, year)}
-
-
-def land_baf(cat, release, states, baf_vintage=BAF_VINTAGE, zip_path=None):
-    """Block Assignment Files (#104): the block-to-district relationship the
-    tract -> district weights below depend on (module docstring). One zip per
-    state bundles several geography kinds; only CD/SLDU/SLDL are extracted.
-
-    `states`: `[(fips, usps), ...]` to land, e.g. rows of
-    `raw.census__state_fips` (`land_state_fips`). `zip_path`, given, overrides
-    every state's URL with one local zip -- only meaningful for a
-    single-state offline test.
-
-    Scoped per state (`state` AND `baf_vintage`) so landing one state never
-    touches another's rows (AGENTS.md) -- BAF is not landed per gazetteer
-    year (module docstring: it is a single, fixed cycle product).
-    """
-    con = duckdb.connect()
-    total = 0
-    for fips, usps in states:
-        url = zip_path or f"{BAF_BASE}/BlockAssign_ST{fips}_{usps}.zip"
-        with tempfile.TemporaryDirectory() as tmp:
-            selects = []
-            for level, suffix in (("cd", "_CD.txt"), ("sldu", "_SLDU.txt"), ("sldl", "_SLDL.txt")):
-                path = _fetch_zip_member(url, suffix, tmp)
-                view = f"{level}_view"
-                con.sql(f"""
-                    CREATE OR REPLACE TEMP VIEW {view} AS
-                    SELECT BLOCKID AS block_geoid, DISTRICT AS district_code
-                    FROM read_csv('{path}', header=true, delim='|', quote='', escape='',
-                                  all_varchar=true)
-                """)
-                selects.append(f"SELECT '{fips}' AS state, block_geoid, '{level}' AS district_level, "
-                               f"district_code, '{baf_vintage}' AS baf_vintage, "
-                               f"'{release}' AS landed_in FROM {view}")
-            arrow = con.sql(" UNION ALL ".join(selects)).to_arrow_table()
-        if not arrow.num_rows:
-            raise SystemExit(f"census gazetteer: {url} yielded no BAF rows for {usps}")
-        scope = And(EqualTo("state", fips), EqualTo("baf_vintage", baf_vintage))
-        total += merge.write(cat, "raw.census__baf", arrow, scope)
-    merge.manifest(cat, release, "census_gazetteer_baf", BAF_BASE, total,
-                   version=baf_vintage, method="release_number")
-    return total
-
-
-def tract_district_weights(cat, district_level, baf_vintage=BAF_VINTAGE):
-    """Recipe (SPEC.md § Recipes; #104), not a landed table: `from_geo_id ->
-    to_geo_id` weights computed from `raw.census__baf` on the fly and
-    returned, since `geography.crosswalk` (#25) doesn't exist yet to hold
-    them (module docstring). `weight` is a tract's share of 2020 Census
-    blocks assigned to each district (`weight_basis='block_count'`) — a
-    stand-in for a population-weighted basis until block population is also
-    landed.
-    """
-    con = duckdb.connect()
-    con.register("baf", cat.load_table("raw.census__baf").scan(
-        row_filter=And(EqualTo("district_level", district_level),
-                       EqualTo("baf_vintage", baf_vintage))).to_arrow())
-    return con.sql(f"""
-        SELECT 'tract:' || substr(block_geoid, 1, 11) AS from_geo_id,
-               '{district_level}:' || state || district_code AS to_geo_id,
-               count(*)::DOUBLE / sum(count(*)) OVER (PARTITION BY substr(block_geoid, 1, 11))
-                   AS weight,
-               'block_count' AS weight_basis
-        FROM baf
-        GROUP BY substr(block_geoid, 1, 11), state, district_code
-    """).to_arrow_table()

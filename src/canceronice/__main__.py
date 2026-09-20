@@ -42,16 +42,6 @@ def main():
     gd.add_argument("--sldu-url", help="an already-downloaded SLDU zip/txt; skips download")
     gd.add_argument("--sldl-url", help="an already-downloaded SLDL zip/txt; skips download")
 
-    # --- raw: census baf ---
-    # Block Assignment Files: block -> district, for tract -> district weights (#104).
-    bf = sub.add_parser("baf", help="land the 2020 Block Assignment Files (CD/SLDU/SLDL "
-                        "members) for one or more states")
-    bf.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
-    bf.add_argument("--state", dest="states", action="append", required=True,
-                    metavar="FIPS:USPS", help="a state to land, e.g. 01:AL; repeatable")
-    bf.add_argument("--zip-path", help="an already-downloaded state zip; skips download "
-                    "(only meaningful with a single --state)")
-
     # --- raw: cdc places ---
     from . import places
     pl = sub.add_parser("places", help="land a CDC PLACES county-data release, then derive")
@@ -238,12 +228,6 @@ def main():
     elif args.cmd == "gazetteer-districts":
         _print(census_gazetteer.ingest_districts(cat, args.release, args.year,
                                                   args.cd_url, args.sldu_url, args.sldl_url))
-
-    # --- raw: census baf ---
-    elif args.cmd == "baf":
-        states = [tuple(s.split(":", 1)) for s in args.states]
-        n = census_gazetteer.land_baf(cat, args.release, states, zip_path=args.zip_path)
-        print(f"raw.census__baf{'':32} {n:>10,} rows")
 
     # --- raw: cdc places ---
     elif args.cmd == "places":
