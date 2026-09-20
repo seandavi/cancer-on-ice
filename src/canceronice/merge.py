@@ -12,9 +12,11 @@ scope sorts every record into one of five outcomes:
   history     already closed           -> untouched
 
 Within the release being built, all of that is a draft: a row opened at this
-release is replaced rather than superseded, one retired at this release that
-comes back identical is reopened, and one opened and retired at this release
-is dropped. Only earlier releases are history.
+release is replaced rather than superseded, and one retired at this release
+that comes back identical is reopened. One opened and retired at this release
+existed in no release, so `merge` refuses to drop it silently (#118) unless
+the caller opts in with `allow_draft_drop` -- see `merge()`. Only earlier
+releases are history.
 
 Nothing is ever updated in place. That is the point: overwriting a changed
 attribute is Kimball Type 1, which destroys history, and it is what made a
@@ -135,11 +137,22 @@ def _cols(schema, side, release, opened=None):
     return ", ".join(out)
 
 
-def merge(cat, identifier, incoming, release, scope):
+def merge(cat, identifier, incoming, release, scope, allow_draft_drop=False):
     """Merge `incoming` — the complete upstream state within `scope` — into a table.
 
     `scope` bounds what this ingest is responsible for, typically one source.
     Records outside it are never read and so are never wrongly retired.
+
+    A row opened at this release that `incoming` doesn't mention raises by
+    default (#118): from inside one call, a sibling slice (two `merge` calls
+    sharing a scope, e.g. county then tract rows under one `source_release`)
+    and a deliberate correction (this release's ingest re-run with a fixed
+    `incoming` that drops a row it wrongly created) look identical — both are
+    a live, `valid_from == release` row absent from `incoming`. #118 asks that
+    the ambiguous case raise, since a sibling slice is the far more common
+    accident. Pass `allow_draft_drop=True` to get the old behaviour back for
+    the deliberate-correction case: such a row is dropped as if it never
+    existed in any release, as documented above.
     """
     table = schemas.create(cat, identifier)
     schema = table.schema()
@@ -162,13 +175,43 @@ def merge(cat, identifier, incoming, release, scope):
     #   - a live row opened at this release is replaced, not superseded;
     #   - a row retired at this release that reappears identical is reopened,
     #     not re-created as a new version (its interval never really closed);
-    #   - a row opened and retired at this release is dropped, since it existed
-    #     in no release; the same goes for such zero-width rows already stored.
+    #   - a row opened and retired at this release existed in no release, so it
+    #     is dropped only under allow_draft_drop (#118 guard below); the same
+    #     goes for such zero-width rows already stored, dropped unconditionally
+    #     since they were never live to begin with.
     # Only earlier releases are history. This is what makes the merge safe to
-    # rerun within a release, and what lets a mistaken ingest be undone by the
-    # correct one.
+    # rerun within a release, and (with allow_draft_drop) what lets a mistaken
+    # ingest be undone by the correct one.
     con.execute("CREATE OR REPLACE TABLE cur AS "
                 "SELECT * FROM stored WHERE valid_from IS DISTINCT FROM valid_to")
+
+    # #118: a row opened at this release -- by an earlier merge call sharing
+    # this scope, e.g. county then tract rows under one source_release -- that
+    # this call's `incoming` doesn't mention matches none of the five outcomes
+    # below: too new for 'retired'/'superseded' ({supersede} is false), not
+    # closed for 'history', and absent from `inc` for 'new'/'changed'/
+    # 'unchanged'. It would simply be missing from `final`, and the
+    # scope-filtered overwrite would then erase it -- silently, since nothing
+    # about that looks like an error. Raise instead of losing it, unless the
+    # caller opted into that drop (allow_draft_drop) -- the documented way to
+    # undo a mistaken ingest within the same release.
+    if not allow_draft_drop:
+        cq = ", ".join(f'c."{k}"' for k in keys)
+        missing = con.sql(f"""
+            SELECT {cq} FROM cur c LEFT JOIN inc i ON {on}
+            WHERE c.valid_to IS NULL AND c.valid_from = '{release}' AND i.{k0} IS NULL
+        """).fetchall()
+        if missing:
+            sample = ", ".join(str(tuple(r)) for r in missing[:5])
+            raise ValueError(
+                f"{identifier}: {len(missing)} row(s) opened in release {release!r} are "
+                f"absent from this incoming and would be silently dropped. Either this "
+                f"ingest made two `merge.merge` calls sharing one scope (#118 -- combine "
+                f"this source's slices into one incoming table, or narrow `scope` to name "
+                f"the slice; see AGENTS.md), or this is a deliberate same-release "
+                f"correction, in which case pass allow_draft_drop=True. e.g. {sample}"
+            )
+
     # One stored row per incoming key to match against, by priority: a row
     # retired at this release that is identical (reopen it, and thereby drop any
     # replacement opened at this release), else the live row, else a row retired
