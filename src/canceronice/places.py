@@ -49,7 +49,13 @@ definitions.
 "Estimates suppressed for population less than 50" (0 rows in the 2024
 release, 66 in 2025) -> `value_status = 'suppressed_small_count'`.
 `FOOTNOTE_STATUS` enumerates it explicitly; any other footnote text raises
-`SystemExit` in `transform` rather than guessing.
+`SystemExit` in `transform` rather than guessing. `value_status` is derived
+from the same `TRY_CAST` that produces `value` (a genuinely empty cell looks
+up its footnote; a present-but-non-numeric one -- never seen in the real
+files, verified 2026-09-19 -- falls back to `not_available` rather than
+guessing "suppressed"), not from `Data_Value`'s raw presence: the two used to
+disagree, landing a present-but-malformed cell as a numberless 'reported' row
+(#148; `merge.check_observations`'s reverse guard now catches any regression).
 
 **No cervix/lung screening measure in county data.** The county file's 40
 measures include `COLON_SCREEN` (colorectal) and `MAMMOUSE` (mammography) but
@@ -441,8 +447,18 @@ def transform(cat, release, places_release):
                -- TotalPopulation/TotalPop18plus are not this measure's
                -- denominator (see module docstring); they stay in raw only.
                NULL::DOUBLE AS denominator,
-               CASE WHEN Data_Value IS NOT NULL THEN 'reported' ELSE {value_status} END
-                   AS value_status,
+               -- Status follows the same TRY_CAST that produces `value`, not
+               -- the raw cell's presence -- a present-but-non-numeric
+               -- Data_Value (never seen in the real files, verified
+               -- 2026-09-19) must not land as a numberless 'reported' row
+               -- (merge.check_observations; #148). The footnote case only
+               -- ever runs for a genuinely empty cell (pre-checked above
+               -- against FOOTNOTE_STATUS); 'not_available' is the fallback
+               -- for the never-seen malformed-but-present case, matching
+               -- ers_rucc.py's fix for the same shape.
+               CASE WHEN TRY_CAST(Data_Value AS DOUBLE) IS NOT NULL THEN 'reported'
+                    WHEN Data_Value IS NULL THEN {value_status}
+                    ELSE 'not_available' END AS value_status,
                NULL::VARCHAR AS reliability_flag,
                NULL::VARCHAR AS trend
         FROM raw
