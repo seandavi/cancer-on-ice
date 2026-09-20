@@ -77,6 +77,27 @@ def test_merge_raises_rather_than_drop_a_sibling_calls_rows(cat):
     assert ("county:08031", REL1, None) in versions
 
 
+def test_merge_allow_draft_drop_opts_out_of_the_118_guard(cat):
+    """The #118 guard can't tell a sibling slice from a deliberate same-release
+    correction -- both are a live row opened this release and absent from
+    `incoming`. allow_draft_drop=True keeps the documented draft-drop
+    behaviour for the latter: a mistaken row is dropped as if it never
+    existed in any release, rather than raising."""
+    v1 = pa.Table.from_pylist([
+        county("county:08031", "08031", "Denver County"),
+        county("county:08999", "08999", "Parser Bug County"),  # bad row, this release
+    ])
+    merge.merge(cat, "geography.unit", v1, REL1, AlwaysTrue())
+
+    corrected = pa.Table.from_pylist([county("county:08031", "08031", "Denver County")])
+    merge.merge(cat, "geography.unit", corrected, REL1, AlwaysTrue(), allow_draft_drop=True)
+
+    versions = rows(cat, "geography.unit")
+    assert {(r["geo_id"], r["valid_from"], r["valid_to"]) for r in versions} == {
+        ("county:08031", REL1, None),
+    }
+
+
 def observation(value_status, value):
     return dict(value_status=value_status, value=value)
 

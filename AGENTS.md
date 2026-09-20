@@ -51,7 +51,9 @@ routing, credential vending) — that boundary is deliberate.
   (e.g. county then tract rows under one `source_release`) now raises rather
   than silently dropping the first call's rows (#118). If a source writes
   several slices, either combine them into one incoming table, or narrow
-  `scope` to name the slice.
+  `scope` to name the slice. To deliberately undo a mistaken ingest within
+  the same release (drop a row this release wrongly created), pass
+  `merge.merge(..., allow_draft_drop=True)`.
 - **PyIceberg is the only writer to the lake.** Never `DELETE`/`UPDATE`/`MERGE`
   a live table through DuckDB or any other engine, even to test (biocOnIce
   learned this the hard way; see its AGENTS.md).
