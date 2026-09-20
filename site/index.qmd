@@ -1,0 +1,240 @@
+---
+title: "Catchment Lake"
+jupyter: coi-docs
+---
+
+Catchment Lake publishes population cancer data — screening, risk factors,
+the social and environmental context around them, and the places people get
+care — as Apache Iceberg tables keyed on geography and time. Every release
+every source has ever published stays queryable, from DuckDB, R, Python, or
+a browser, with no account and no token.
+
+The lake exists so a cancer center can write, and defend, one sentence: *in
+our catchment, as reported by source S in release R, the measure was X.*
+Today that sentence usually rests on a screenshot, a downloaded CSV of
+unknown vintage, or a dashboard that has since silently changed underneath
+it. Here, the release that produced a number stays attached to it.
+
+## Live county map
+
+The map below reads a small, versioned extract of `measure.observation`
+written at *build* time — the same numbers you'd get querying the catalog
+directly, just not re-queried on every page load. ["Run this live in your
+browser"](recipes/screening-rurality.qmd) runs the same measure/release
+query against the real, 25-million-row table through DuckDB-WASM — scoped to
+one state at a time rather than the whole country, for the reason given on
+that page.
+
+```{python}
+#| echo: false
+#| output: false
+# Build-time extract: ~6 cancer-relevant PLACES county measures, releases
+# 2024 and 2025, written to data/home_map.json for the {ojs} map below to
+# read. This is real catalog output, not a fixture — if a release changes
+# these numbers, the next render of this page changes too.
+import json
+
+import duckdb
+
+con = duckdb.connect()
+con.execute("INSTALL iceberg; LOAD iceberg; INSTALL httpfs; LOAD httpfs;")
+con.execute(
+    "ATTACH 'canceronice' AS coi (TYPE ICEBERG, "
+    "ENDPOINT 'https://icegate-canceronice.seandavi.workers.dev', "
+    "AUTHORIZATION_TYPE 'none');"
+)
+
+MEASURES = [
+    "PLACES:CANCER:age_adjusted",
+    "PLACES:COLON_SCREEN:age_adjusted",
+    "PLACES:MAMMOUSE:age_adjusted",
+    "PLACES:CSMOKING:age_adjusted",
+    "PLACES:OBESITY:age_adjusted",
+    "PLACES:CHECKUP:age_adjusted",
+]
+RELEASES = ["2024", "2025"]
+# Short codes keep the JSON small (~1.1 MB uncompressed for 6 measures x 2
+# releases x ~3,222 counties) — see value_status meaning on the Concepts >
+# Suppression page.
+STATUS_CODE = {
+    "reported": "R",
+    "suppressed_small_count": "S",
+    "suppressed_complementary": "C",
+    "suppressed_reliability": "U",
+    "not_available": "N",
+    "not_applicable": "X",
+}
+
+placeholders = ",".join(f"'{m}'" for m in MEASURES)
+rows = con.sql(f"""
+    SELECT source_release, measure_id, geo_id, value, lower, upper, value_status
+    FROM coi.measure.observation
+    WHERE source = 'PLACES' AND source_release IN ('2024', '2025')
+      AND measure_id IN ({placeholders})
+      AND geo_id LIKE 'county:%' AND stratum_id = 'PLACES:ALL'
+      AND valid_to IS NULL
+""").fetchall()
+
+obs = {}
+for release, measure_id, geo_id, value, lower, upper, status in rows:
+    fips = geo_id.split(":", 1)[1]
+    obs.setdefault(release, {}).setdefault(measure_id, []).append([
+        fips,
+        round(value, 1) if value is not None else None,
+        round(lower, 1) if lower is not None else None,
+        round(upper, 1) if upper is not None else None,
+        STATUS_CODE.get(status, "?"),
+    ])
+
+labels = dict(con.sql(f"""
+    SELECT measure_id, label FROM coi.measure.definition
+    WHERE measure_id IN ({placeholders})
+""").fetchall())
+
+counties = dict(con.sql("""
+    SELECT fips, name FROM coi.geography.unit
+    WHERE level = 'county' AND vintage = 2026 AND valid_to IS NULL
+""").fetchall())
+
+payload = {
+    "measures": [{"id": m, "label": labels.get(m, m)} for m in MEASURES],
+    "releases": RELEASES,
+    "counties": counties,
+    "obs": obs,
+}
+
+import os
+os.makedirs("data", exist_ok=True)
+with open("data/home_map.json", "w") as f:
+    json.dump(payload, f, separators=(",", ":"))
+print(f"wrote data/home_map.json: {len(rows)} rows, "
+      f"{os.path.getsize('data/home_map.json') / 1024:.0f} KB")
+```
+
+::: {.callout-note}
+**Two known gaps in this map, verified against the data:**
+
+- **Connecticut** doesn't join. PLACES 2024/2025 report Connecticut's nine
+  2022-vintage planning regions; the county boundary shapes used to draw
+  this map (`us-atlas`, still on legacy county lines) only have the eight
+  counties those regions replaced. Connecticut draws as no-data here — a
+  boundary-vintage mismatch worth surfacing, not a bug to hide (see
+  [Concepts › Boundary vintages](concepts/boundaries.qmd)).
+- **Kentucky and Pennsylvania** show only 2 of these 6 measures for release
+  2025 — mammography use and colorectal cancer screening — with cancer
+  (non-skin)/melanoma, current smoking, obesity, and annual checkup all
+  missing. Verified directly against `raw.places__county`: both states
+  report 40 distinct measures for 2024 but only 5 for 2025 (PLACES-wide,
+  not specific to this map's 6), and CDC's own [PLACES release
+  notes](https://www.cdc.gov/places/current-release-notes/index.html)
+  confirm why — "Estimates for Kentucky and Pennsylvania were not available
+  for measures based on the 2023 BRFSS. However, the five measures based on
+  the 2022 BRFSS were carried over for Kentucky and Pennsylvania" (mammography
+  use, colorectal cancer screening, dental visits, short sleep duration, and
+  all teeth lost — only the first two are among this map's 6) — the two
+  states did not collect enough months of 2023 BRFSS data to meet PLACES'
+  own inclusion threshold, so those five measures are simply carried forward
+  from the prior data year rather than missing.
+:::
+
+```{ojs}
+//| echo: false
+mapData = FileAttachment("data/home_map.json").json()
+```
+
+```{ojs}
+//| echo: false
+viewof measureId = Inputs.select(mapData.measures, {
+  label: "Measure",
+  format: (d) => d.label,
+  value: mapData.measures[0]
+})
+viewof release = Inputs.select(mapData.releases, { label: "Release" })
+```
+
+```{ojs}
+//| echo: false
+STATUS_LABEL = ({
+  R: "reported", S: "suppressed (small count)", C: "suppressed (complementary)",
+  U: "suppressed (unreliable)", N: "not available", X: "not applicable"
+})
+```
+
+```{ojs}
+//| echo: false
+rowsForSelection = mapData.obs[release]?.[measureId.id] ?? []
+byFips = new Map(rowsForSelection.map((r) => [r[0], r]))
+```
+
+```{ojs}
+//| echo: false
+// County boundaries live nowhere in the lake (it holds tabular data, not
+// geometry) — loaded once, at view time, from a public TopoJSON CDN.
+countyGeo = {
+  const topojsonMod = await import("https://cdn.jsdelivr.net/npm/topojson-client@3/+esm");
+  const us = await fetch("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json").then((r) => r.json());
+  return topojsonMod.feature(us, us.objects.counties);
+}
+```
+
+```{ojs}
+//| echo: false
+joined = countyGeo.features.map((f) => {
+  const row = byFips.get(f.id);
+  const name = mapData.counties[f.id] ?? f.properties.name;
+  return { ...f, properties: { ...f.properties, fips: f.id, name, row } };
+})
+```
+
+```{ojs}
+//| echo: false
+Plot.plot({
+  projection: "albers-usa",
+  color: {
+    type: "sequential",
+    scheme: "blues",
+    label: measureId.label,
+    legend: true,
+    nice: true
+  },
+  marks: [
+    Plot.geo(joined, {
+      fill: (d) => (d.properties.row && d.properties.row[4] === "R") ? d.properties.row[1] : null,
+      stroke: "white",
+      strokeWidth: 0.3,
+      title: (d) => {
+        const row = d.properties.row;
+        if (!row) return `${d.properties.name} (${d.properties.fips}): no data`;
+        if (row[4] !== "R")
+          return `${d.properties.name} (${d.properties.fips}): ${STATUS_LABEL[row[4]]} — no value`;
+        return `${d.properties.name} (${d.properties.fips})\n${measureId.label}: ${row[1]}% (CI ${row[2]}–${row[3]})\nrelease ${release}`;
+      }
+    }),
+    // Suppressed, unavailable, or unmatched counties: drawn grey, never left
+    // to read as zero (AGENTS.md's suppression gate applies to how the map
+    // draws, not only to the value column).
+    Plot.geo(
+      joined.filter((d) => !d.properties.row || d.properties.row[4] !== "R"),
+      { fill: "#ddd", stroke: "white", strokeWidth: 0.3, fillOpacity: 0.6 }
+    )
+  ],
+  width: 900,
+  height: 550
+})
+```
+
+<span class="suppressed-swatch"></span> no data, suppressed, or not applicable
+&nbsp;·&nbsp; [Run this live in your browser](recipes/screening-rurality.qmd)
+
+## Where to go next
+
+- **New here?** [Start here](start/index.qmd) has the exact ATTACH statement
+  for R, SAS, SEER\*Stat, Python, and the DuckDB CLI.
+- **Building a catchment report?** [Concepts](concepts/index.qmd) covers the
+  three time axes, why suppression is a status rather than a blank cell, and
+  boundary vintages — the things that make a query wrong in a way that still
+  runs.
+- **Looking for a specific measure or table?** The [Dictionary](dictionary/index.qmd)
+  is generated straight from the catalog and the declared schemas, regenerated
+  at each site build — not hand-maintained, though (like this page's map)
+  it's a snapshot as of that build, not a live query.

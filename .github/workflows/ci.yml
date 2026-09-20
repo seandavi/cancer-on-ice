@@ -10,3 +10,30 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv run pytest
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: "1.8.25" # pinned to match the version _freeze/ was generated with locally
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Quarto's Jupyter engine resolves the `coi-docs` kernel by name
+      # before it will even consult the freeze cache — confirmed this
+      # fails, even with a fully up-to-date _freeze/ entry, if no kernel
+      # by that name is registered. But it doesn't need a *working* one:
+      # with a valid freeze cache a whole-project render never actually
+      # launches it, so this installs just enough to satisfy the kernel
+      # lookup (no duckdb/pandas/canceronice — see site/README.md for the
+      # full local dev kernel).
+      - run: pip install jupyter_core jupyter_client nbclient nbformat ipykernel pyyaml
+      - run: python -m ipykernel install --user --name coi-docs --display-name "cancerOnIce docs"
+      # Relies on the committed site/_freeze/ cache and site/data/home_map.json
+      # (see site/README.md) for actual page content — no network access, no
+      # real canceronice/duckdb install. A page whose source changed without
+      # a local re-render first will fail here rather than silently
+      # re-executing.
+      - run: quarto render site
