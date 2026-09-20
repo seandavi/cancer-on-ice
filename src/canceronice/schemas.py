@@ -3266,12 +3266,16 @@ TABLES = {
             NestedField(4, "CITY_NAME", StringType(), doc="Part of facility.site.address."),
             NestedField(5, "COUNTY_NAME", StringType(), doc="County name, as published."),
             NestedField(6, "FIPS_CODE", StringType(),
-                        doc="County FIPS code -- NOT consistently zero-padded in the live file "
-                            "(e.g. '9003' vs '01013', verified 2026-09-18); facility.site.geo_id "
-                            "is 'county:'+lpad(this, 5, '0'). 2010-vintage geography (Connecticut "
-                            "rows carry its eight legacy counties, never the nine 2022 planning "
-                            "regions -- same marker epa_sdwis.py's ANSI reference uses for its "
-                            "own GEO_VINTAGE=2010)."),
+                        doc="County FIPS code, landed exactly as published -- NOT consistently "
+                            "zero-padded (e.g. '9003' vs '01013', verified 2026-09-18) and not "
+                            "always a real FIPS code at all (9 live rows carry a state postal "
+                            "abbreviation glued to a county code, e.g. 'NJ017', or garbage like "
+                            "'S', verified 2026-09-19 -- see epa_superfund.py module docstring). "
+                            "facility.site.geo_id is 'county:'+lpad(this, 5, '0') only after "
+                            "validating this matches [0-9]{1,5}; otherwise geo_id is NULL, not "
+                            "guessed. 2010-vintage geography (Connecticut rows carry its eight "
+                            "legacy counties, never the nine 2022 planning regions -- same marker "
+                            "epa_sdwis.py's ANSI reference uses for its own GEO_VINTAGE=2010)."),
             NestedField(7, "STATE_CODE", StringType(),
                         doc="USPS state/territory abbreviation; part of facility.site.address."),
             NestedField(8, "POSTAL_CODE", StringType(), doc="ZIP code; part of facility.site.address."),

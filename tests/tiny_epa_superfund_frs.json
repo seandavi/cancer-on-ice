@@ -174,6 +174,41 @@
         "EPA_REGION_CODE": "09",
         "KEY_FIELD": "SEMSASD980637656"
       }
+    },
+    {
+      "attributes": {
+        "REGISTRY_ID": "110009299749",
+        "PRIMARY_NAME": "PJP LANDFILL",
+        "LOCATION_ADDRESS": "400 SIP AVENUE",
+        "CITY_NAME": "JERSEY CITY",
+        "COUNTY_NAME": "HUDSON",
+        "FIPS_CODE": "NJ017",
+        "STATE_CODE": "NJ",
+        "POSTAL_CODE": "07306",
+        "LATITUDE83": 40.734719,
+        "LONGITUDE83": -74.085561,
+        "HUC8_CODE": "02030103",
+        "ACCURACY_VALUE": null,
+        "COLLECT_MTH_DESC": null,
+        "REF_POINT_DESC": null,
+        "CREATE_DATE": 1635206400000,
+        "UPDATE_DATE": 1637761731000,
+        "LAST_REPORTED_DATE": null,
+        "FAC_URL": "https://ofmpub.epa.gov/frs_public2/fii_query_detail.disp_program_facility?p_registry_id=110009299749",
+        "PGM_SYS_ID": "NJD980505648",
+        "PGM_SYS_ACRNM": "SEMS",
+        "INTEREST_TYPE": "SUPERFUND NPL",
+        "PROGRAM_URL": "http://www.epa.gov/superfund/action/law/cercla.htm",
+        "PGM_REPORT_URL": "no data yet",
+        "PUBLIC_IND": "Y",
+        "ACTIVE_STATUS": "CURRENTLY ON THE FINAL NPL",
+        "FEDERAL_AGENCY_NAME": null,
+        "HUC_12": null,
+        "FEDERAL_LAND_IND": null,
+        "FED_FACILITY_CODE": null,
+        "EPA_REGION_CODE": "02",
+        "KEY_FIELD": "SEMSNJD980505648"
+      }
     }
   ]
 }

@@ -185,6 +185,37 @@
         "Restoration_FR_Notice_Jumper_Page": null,
         "Site_has_had_a_Partial_Deletion": "No"
       }
+    },
+    {
+      "attributes": {
+        "Site_Name": "PJP Landfill",
+        "Site_Score": 28.73,
+        "Site_EPA_ID": "NJD980505648",
+        "SEMS_ID": 200569,
+        "SITS_ID": 109,
+        "Region_ID": 2,
+        "State": "New Jersey",
+        "City": "Jersey City",
+        "County": "Hudson",
+        "Status": "NPL Site",
+        "Longitude": -74.085561,
+        "Latitude": 40.734719,
+        "Proposed_Date": "12/30/1982",
+        "Listing_Date": "09/08/1983",
+        "Construction_Completion_Date": "09/25/2020",
+        "Construction_Completion_Number": 1221,
+        "NOID_Date": null,
+        "Deletion_Date": null,
+        "Site_Listing_Narrative": "<a href=\"https://semspub.epa.gov/src/document/02/363392\" target=\"_blank\">NJD980505648 (PDF)</a>",
+        "Site_Progress_Profile": "<a href=\"https://cumulis.epa.gov/supercpad/cursites/csitinfo.cfm?id=0200569\" target=\"_blank\">PJP Landfill</a>",
+        "Notice_of_Data_Availability": null,
+        "Proposed_FR_Notice": "<a href=\"https://semspub.epa.gov/src/document/11/189619\" target=\"_blank\">12/30/1982 (PDF)</a>",
+        "Deletion_FR_Notice": null,
+        "Final_FR_Notice": "<a href=\"https://semspub.epa.gov/src/document/11/189620\" target=\"_blank\">09/08/1983 (PDF)</a>",
+        "NOID_FR_Notice": null,
+        "Restoration_FR_Notice_Jumper_Page": null,
+        "Site_has_had_a_Partial_Deletion": "No"
+      }
     }
   ]
 }

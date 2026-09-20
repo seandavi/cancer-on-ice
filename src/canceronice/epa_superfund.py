@@ -36,10 +36,12 @@ FRS-synced). A further 8 FRS rows match by id but carry a NULL `FIPS_CODE`
 themselves -- mostly territories with no county-equivalent FIPS at all
 (American Samoa's 'Taputimu Farm', the Northern Mariana Islands' 'PCB
 Warehouse'), plus a few mainland rows FRS simply has not coded (e.g. Iowa's
-'Midwest Manufacturing Company'). All 11/1,840 land in `facility.site` with
-`geo_id`/`geo_vintage` NULL rather than a guessed county -- `transform`
-prints the real total, mirroring epa_sdwis.py's "report the unmatched rate
-honestly" rule.
+'Midwest Manufacturing Company'). A further 9 FRS rows carry a `FIPS_CODE`
+that is neither NULL nor a real FIPS -- see "FIPS_CODE is not consistently
+zero-padded, and is sometimes not a FIPS code at all" below. All 20/1,840
+land in `facility.site` with `geo_id`/`geo_vintage` NULL rather than a
+guessed county -- `transform` prints the real total, mirroring
+epa_sdwis.py's "report the unmatched rate honestly" rule.
 
 **Licence.** Both ArcGIS items' own `licenseInfo` (checked 2026-09-18): the
 status layer states "Security Classification: Public - Data asset is or
@@ -86,10 +88,20 @@ marker epa_sdwis.py's `raw.sdwis__ref_ansi_areas` uses for its own
 `GEO_VINTAGE = 2010` -- so this module matches that already-landed
 `geography.unit` vintage rather than inventing a new one.
 
-**FIPS_CODE is not consistently zero-padded.** Verified 2026-09-18: some
-rows carry '9003' (Hartford County, CT), others '01013' -- `geo_id` is
-built with `lpad(FIPS_CODE, 5, '0')`, mirroring hrsa_sites.py's own FIPS
-lpad.
+**FIPS_CODE is not consistently zero-padded, and is sometimes not a FIPS
+code at all.** Verified 2026-09-18: some rows carry '9003' (Hartford
+County, CT), others '01013'. Verified again 2026-09-19, against the live
+file, that a handful are not a county FIPS in any padding: 8 rows carry a
+2-letter state postal abbreviation glued to a 3-digit county code instead
+of a numeric state FIPS (e.g. 'NJ017' for Hudson County, NJ -- the real
+FIPS is '34017'; also 'MI149', 'FL079', 'MS035', 'IL119', 'ME019', 'KY157',
+'NJ023'), and one ('S', Delaware's 'Georgetown North Groundwater') is not a
+county code at all. `FIPS_CODE` is validated against `[0-9]{1,5}` before
+`lpad(..., 5, '0')`; a value that fails this (including the 9 above) is
+treated exactly like a NULL `FIPS_CODE` -- `geo_id` NULL, counted in the
+unmatched diagnostic -- rather than reassembled from `STATE_CODE` plus the
+trailing digits, per SPEC.md's "never fuzzy-matched" rule (the same
+principle epa_sdwis.py's own ANSI-code validation follows).
 
 **One point per site, even for a multi-county site.** A handful of real
 sites (e.g. 'Triana/Tennessee River', whose `County` text reads "Limestone,
@@ -234,23 +246,42 @@ def transform(cat, release, retrieved_on):
     con.register("frs", cat.load_table("raw.superfund__npl_frs").scan(
         row_filter=EqualTo("retrieved_on", retrieved_on)).to_arrow())
 
-    # count(f."FIPS_CODE"), not count(f."PGM_SYS_ID"): a real FRS row can match
-    # and still carry no FIPS_CODE at all (verified 2026-09-18 -- mostly
-    # territories with no county-equivalent FIPS, e.g. American Samoa's
-    # 'Taputimu Farm', plus a handful of mainland rows FRS simply has not
-    # coded), and that case must count as unmatched here too, or this
-    # print (and the returned diagnostic) would understate how many sites
-    # get a NULL geo_id -- the same "report it honestly" rule epa_sdwis.py
-    # follows for its own unmatched rate.
+    # `fips`: FIPS_CODE validated to 1-5 ASCII digits before lpad, not trusted
+    # blind. Verified 2026-09-19 against the live file: 9 rows carry something
+    # else entirely -- 8 are a state postal abbreviation glued to a 3-digit
+    # county code instead of a numeric state FIPS (e.g. 'NJ017' for Hudson
+    # County, NJ -- the real FIPS is '34017'; 'MI149', 'FL079', ... same
+    # shape), and one ('S', Delaware's 'Georgetown North Groundwater') is not
+    # a county code at all. None is guessed or reassembled from STATE_CODE --
+    # SPEC.md's "never fuzzy-matched" rule (epa_sdwis.py's own ANSI-code
+    # validation is the precedent) -- they fail the digits-only check here
+    # and fall into the same NULL-geo_id, reported-not-guessed path as an
+    # unmatched or FIPS-less row.
+    con.execute("""
+        CREATE OR REPLACE TABLE frs2 AS
+        SELECT *, CASE WHEN "FIPS_CODE" SIMILAR TO '[0-9]{1,5}' THEN lpad("FIPS_CODE", 5, '0') END
+                   AS fips
+        FROM frs
+    """)
+
+    # count(f.fips), not count(f."PGM_SYS_ID") or count(f."FIPS_CODE"): a real
+    # FRS row can match and still carry no usable FIPS -- either NULL outright
+    # (verified 2026-09-18 -- mostly territories with no county-equivalent
+    # FIPS, e.g. American Samoa's 'Taputimu Farm') or malformed (see `fips`
+    # above) -- and both cases must count as unmatched here too, or this print
+    # (and the returned diagnostic) would understate how many sites get a
+    # NULL geo_id -- the same "report it honestly" rule epa_sdwis.py follows
+    # for its own unmatched rate.
     n_status, n_matched = con.sql("""
-        SELECT count(*), count(f."FIPS_CODE")
-        FROM status s LEFT JOIN frs f ON f."PGM_SYS_ID" = s."Site_EPA_ID"
+        SELECT count(*), count(f.fips)
+        FROM status s LEFT JOIN frs2 f ON f."PGM_SYS_ID" = s."Site_EPA_ID"
     """).fetchone()
     unmatched = n_status - n_matched
     if unmatched:
         print(f"epa_superfund: {unmatched:,}/{n_status:,} NPL status rows have no usable "
-             f"county FIPS (no matching FRS SEMS_NPL record, or a matched one with a NULL "
-             f"FIPS_CODE) and land with geo_id/geo_vintage NULL rather than a guessed county.")
+             f"county FIPS (no matching FRS SEMS_NPL record, a matched one with a NULL or "
+             f"malformed FIPS_CODE) and land with geo_id/geo_vintage NULL rather than a "
+             f"guessed county.")
 
     site = con.sql(f"""
         SELECT 'EPA_SUPERFUND:' || s."Site_EPA_ID" AS facility_id, 'EPA_SUPERFUND' AS source,
@@ -258,9 +289,8 @@ def transform(cat, release, retrieved_on):
                concat_ws(', ', f."LOCATION_ADDRESS", coalesce(f."CITY_NAME", s."City"),
                         coalesce(f."STATE_CODE", s."State"), f."POSTAL_CODE") AS address,
                s."Latitude" AS lat, s."Longitude" AS lon,
-               CASE WHEN f."FIPS_CODE" IS NOT NULL THEN 'county:' || lpad(f."FIPS_CODE", 5, '0') END
-                   AS geo_id,
-               CASE WHEN f."FIPS_CODE" IS NOT NULL THEN {GEO_VINTAGE} END AS geo_vintage,
+               CASE WHEN f.fips IS NOT NULL THEN 'county:' || f.fips END AS geo_id,
+               CASE WHEN f.fips IS NOT NULL THEN {GEO_VINTAGE} END AS geo_vintage,
                to_json({{
                    'status': s."Status",
                    'site_score': CAST(s."Site_Score" AS VARCHAR),
@@ -274,7 +304,7 @@ def transform(cat, release, retrieved_on):
                    'county_name': s."County",
                    'registry_id': f."REGISTRY_ID"
                }}) AS attributes_json
-        FROM status s LEFT JOIN frs f ON f."PGM_SYS_ID" = s."Site_EPA_ID"
+        FROM status s LEFT JOIN frs2 f ON f."PGM_SYS_ID" = s."Site_EPA_ID"
     """).to_arrow_table()
 
     counts = {"facility.site": merge.merge(cat, "facility.site", site, release,
