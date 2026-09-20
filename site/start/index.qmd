@@ -1,0 +1,40 @@
+---
+title: "Start here"
+---
+
+Catchment Lake is read anonymously — no account, no token — through
+[DuckDB's Iceberg extension](https://duckdb.org/docs/extensions/iceberg.html).
+Every client below speaks that same SQL underneath; pick the one you already
+use.
+
+## The one statement every client needs
+
+```sql
+INSTALL iceberg; LOAD iceberg;
+ATTACH 'canceronice' AS coi (
+    TYPE ICEBERG,
+    URI 'https://icegate-canceronice.seandavi.workers.dev',  -- DuckDB <= 1.5: ENDPOINT instead of URI
+    AUTHORIZATION_TYPE 'none'
+);
+```
+
+DuckDB versions through 1.5 (and the pinned build the in-browser recipes use)
+only accept `ENDPOINT`; newer native builds warn that `ENDPOINT` is
+deprecated and prefer `URI`. Use whichever your DuckDB version asks for — the
+value is the same either way.
+
+Once attached, every table is `coi.<namespace>.<table>` — `coi.measure.observation`,
+`coi.geography.unit`, and so on. See the [Dictionary](/dictionary/index.qmd)
+for the full table and column list.
+
+## Pick your client
+
+- [Python](python.qmd) — the `duckdb` package, worked examples
+- [DuckDB CLI](duckdb-cli.qmd) — no install beyond the `duckdb` binary itself
+- [R](r.qmd)
+- [SAS](sas.qmd)
+- [SEER\*Stat](seerstat.qmd)
+
+`value` is `NULL` whenever `value_status` is not `'reported'` — see
+[Concepts › Suppression](/concepts/suppression.qmd) before you filter or
+aggregate a measure.

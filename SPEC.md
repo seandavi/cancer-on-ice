@@ -185,7 +185,7 @@ vintage is an assembly name without a patch level.
 
 ```
 geo_id          -- canonical: '<level>:<fips>', e.g. 'county:08031'
-level           -- nation | state | county | tract | block_group | zcta | place | custom
+level           -- nation | state | county | tract | block_group | zcta | place | cd | sldu | sldl | custom
 fips            -- the bare code
 vintage         -- boundary vintage year, e.g. 2020
 name
@@ -274,7 +274,7 @@ has to parse a sentinel (`"*"`, `"3 or fewer"`, `-1`) to find out.
 ```
 measure_id, source, label, units
 universe            -- population the rate is over
-rate_basis          -- per 100,000 | per 1,000,000 | percent | count | index
+rate_basis          -- per 100,000 | per 1,000,000 | percent | count | index | sum
 age_adjustment      -- standard population (e.g. 2000 US standard) or NULL
 method              -- direct | model_based | survey_direct | derived
 cancer_site_code    -- FK measure.cancer_site when applicable
@@ -301,6 +301,57 @@ schemes will diverge across releases of the same source; this is expected.
 SEER site recode ↔ ICD-O-3 topography/histology ↔ ICD-10 (mortality) ↔ NCIt /
 MONDO. The NCIt/MONDO columns are the **bridge to biocOnIce's `ontology`
 namespace** — the one natural cross-lake join key besides publications.
+`mapping_relation` (`exact` | `broader` | `narrower` | `overlap`, #90) says
+how the NCIt/MONDO id relates to this site: exactly (a SEER subsite folded
+into an SCP combined category is `broader` there, e.g. Cecum → "colorectal
+cancer"; a code whose anatomic scope only partly matches the term, neither a
+subset nor a superset, is `overlap`, e.g. Uterus, NOS against "uterine
+corpus cancer" — some NOS cases are corpus, some are not) — the same
+vocabulary and purpose as `measure.stratum_map`'s `relation` column above —
+a consumer choosing to join on exact ontology matches only does it visibly,
+rather than silently inheriting a broader or partial term's burden.
+
+### measure.cancer_site_group
+
+A small, cited lookup beside `measure.cancer_site` for reading burden through
+a prevention lens (#126): a catchment researcher's caution is that no single
+burden metric should drive decisions, and preventability changes which sites
+matter most (e.g. it raises melanoma and cervical cancer above where
+mortality alone ranks them).
+
+```
+group_id            -- 'tobacco_associated' | 'hpv_associated' |
+                        'obesity_associated' | 'alcohol_associated' |
+                        'alcohol_associated_limited_evidence' |
+                        'uspstf_screenable' | 'vaccine_preventable' |
+                        'uv_associated'
+group_label
+cancer_site_code     -- FK measure.cancer_site
+mapping_relation     -- 'exact' | 'broader' -- same vocabulary as
+                        measure.cancer_site's column of the same name (#90)
+basis                -- the citation: publisher, page, date, verbatim quote
+source_url
+note                 -- caveats: why 'broader', evidence-strength language
+                        the citation itself uses, disagreement between
+                        authorities
+source               -- always 'CANCERONICE' (this project's own curated
+                        grouping; see Derived indices)
+```
+
+Every row cites one authoritative primary source (CDC, USPSTF, NCI, or a US
+Surgeon General's report) with a URL and a quoted sentence — no memberships
+from memory. Where CDC states weaker evidence for a site than its core causal
+list (alcohol's "some studies indicate" language for stomach, pancreatic and
+prostate cancer), that is its own `alcohol_associated_limited_evidence`
+group rather than being flattened into `alcohol_associated` alongside the
+sites CDC states plainly. Where a citation's definition is by histology or
+subsite finer than SEER site recode can express (HPV-associated oropharynx
+spans SEER's separate Oropharynx and Tonsil leaves; obesity's citation names
+adenocarcinoma of the esophagus specifically, not all esophageal histologies;
+obesity's citation names meningioma, which has no SEER leaf of its own, only
+the combined Brain and Other Nervous System code), the row is marked
+`broader` with a `note` explaining
+the mismatch, the same discipline #90 applies to the NCIt/MONDO bridge.
 
 ## Facilities
 
@@ -308,7 +359,7 @@ namespace** — the one natural cross-lake join key besides publications.
 
 ```
 facility_id, source, source_release
-kind                -- mammography | fqhc | rhc | lung_screening | provider | hospital
+kind                -- mammography | fqhc | rhc | lung_screening | provider | hospital | tri
 name, address, lat, lon
 geo_id (tract), geo_vintage
 attributes_json     -- JSON string, keys documented per source
@@ -360,6 +411,22 @@ CIF downloads): what exists, its licence, its
 geography/time coverage, and where to fetch it. Same shape as biocOnIce's
 `resource` namespace; inherits whatever biocOnIce decides in its #30.
 
+## Provenance
+
+### provenance.lineage
+
+Table- and column-level lineage DAG, captured at ingest with sqlglot (#140):
+what fed each derived column's values, down to the raw table and — where the
+module's own SQL states it directly — the raw column and the expression that
+produced it. One row per edge; `to_column` NULL is a table-level-only edge
+(the source is known, the column isn't), `from_kind='url'` roots a raw table
+at the upstream URL it was landed from. Captured from the SQL a module
+already writes, never inferred from read/write order. Rebuildable, so
+`merge.write` scopes it on `(release, job, to_table)` — no Type 2 history, same as
+`provenance.release`. Full column contract in `schemas.py`; capture API in
+`canceronice.lineage`. Wired module by module — see AGENTS.md / the module's
+own docstring for whether a given source calls it yet.
+
 ---
 
 # Licence gate
@@ -406,7 +473,7 @@ ingest, as in biocOnIce.
 | **Census TIGER/Line + relationship files** | the spine | boundary vintage | public domain; geometry → GeoParquet/PMTiles pointer |
 | **State Cancer Profiles** | county incidence, mortality, screening, risk, demographics | vintage | land from scraper releases / cdsci-lake (ADR-0012); existing Zenodo vintages backfill history |
 | **SEER county & tract population** | denominators matching the rates | release | freely downloadable, no DUA |
-| **ACS 5-year** (curated table subset) | demographics, poverty, vehicle access | release year | public domain; MOE → `interval_level = 0.90`; insurance/Medicaid not landed (#29 — the Census Data API now demands a key even for tiny requests, and the keyless bulk Summary File only ships detailed tables, whose insurance equivalents are 230+ columns for one overall rate) |
+| **ACS 5-year** (curated table subset) | demographics, poverty, vehicle access, insurance/Medicaid | release year | public domain; MOE → `interval_level = 0.90`; releases before 2017–2021 not landed (#125 — the keyless bulk Summary File only ships the sequence-based format before "2021", a different enough parser to be out of scope; CIF parity does not need it) |
 | **CDC PLACES** | model-based tract/county screening & behaviors | annual release | public domain; `method = model_based` |
 | **CDC/ATSDR SVI** | area-level context index | edition (2000–2022) | land every published edition |
 | **USDA ERS RUCC / RUCA; Food Access Atlas** | rurality, food access | edition | public domain |

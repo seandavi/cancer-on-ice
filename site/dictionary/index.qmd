@@ -1,0 +1,104 @@
+---
+title: "Dictionary"
+jupyter: coi-docs
+---
+
+This page is generated at *build* time — the measures table and the
+provenance table are queried live from the catalog, and every table's
+column docs come straight from the declared schemas
+(`canceronice.schemas`) in this repository, not hand-copied. If a release
+adds a measure or a schema gains a column, this page's next render shows it.
+
+## Measures
+
+Every measure the catalog currently defines, by source. Type in the search
+box to filter.
+
+```{python}
+#| echo: false
+import duckdb
+
+con = duckdb.connect()
+con.execute("INSTALL iceberg; LOAD iceberg; INSTALL httpfs; LOAD httpfs;")
+con.execute(
+    "ATTACH 'canceronice' AS coi (TYPE ICEBERG, "
+    "ENDPOINT 'https://icegate-canceronice.seandavi.workers.dev', "
+    "AUTHORIZATION_TYPE 'none');"
+)
+measures_df = con.sql("""
+    SELECT source, measure_id, label, units, rate_basis, method
+    FROM coi.measure.definition
+    ORDER BY source, measure_id
+""").df()
+print(f"{len(measures_df)} measures across {measures_df['source'].nunique()} sources.")
+ojs_define(measures_data = measures_df)
+```
+
+```{ojs}
+//| echo: false
+measures = transpose(measures_data)
+```
+
+```{ojs}
+//| echo: false
+viewof measureSearch = Inputs.search(measures, { placeholder: "Search measures (id, label, source)…" })
+```
+
+```{ojs}
+//| echo: false
+Inputs.table(measureSearch, {
+  columns: ["source", "measure_id", "label", "units", "rate_basis", "method"],
+  rows: 20
+})
+```
+
+## Tables
+
+Every table this repository declares (`canceronice.schemas.TABLES`),
+grouped by namespace, with its comment, its business key, and every
+column's own doc string. A table not yet populated in the live catalog
+still appears here — this section is the *declared* schema, not a scan of
+what happens to exist right now.
+
+```{python}
+#| echo: false
+#| output: asis
+from canceronice import schemas
+
+for ns, ns_doc in schemas.NAMESPACES.items():
+    tables_in_ns = sorted(k for k in schemas.TABLES if k.startswith(f"{ns}."))
+    if not tables_in_ns:
+        continue
+    print(f"### `{ns}` — {ns_doc}\n")
+    for table_name in tables_in_ns:
+        table_def = schemas.TABLES[table_name]
+        print(f"#### `{table_name}`\n")
+        print(f"{table_def.comment}\n")
+        if table_def.business_key:
+            print(f"**Business key:** `{', '.join(table_def.business_key)}`  ")
+        if table_def.partition_by:
+            print(f"**Partitioned by:** `{', '.join(table_def.partition_by)}`  ")
+        if table_def.sort_by:
+            print(f"**Sorted by:** `{', '.join(table_def.sort_by)}`  ")
+        print()
+        print("| Column | Type | Required | Doc |")
+        print("| --- | --- | --- | --- |")
+        for f in table_def.schema.fields:
+            doc = (f.doc or "").replace("|", "\\|").replace("\n", " ")
+            print(f"| `{f.name}` | {f.field_type} | {'yes' if f.required else ''} | {doc} |")
+        print()
+```
+
+## Releases
+
+What each catalog release was built from — source, upstream version, and
+when it was retrieved.
+
+```{python}
+#| echo: false
+con.sql("""
+    SELECT release, source, source_version, version_method, retrieved_at, row_count
+    FROM coi.provenance.release
+    ORDER BY release, source, source_version
+""").df()
+```

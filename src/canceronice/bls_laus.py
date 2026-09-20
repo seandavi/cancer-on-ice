@@ -347,8 +347,14 @@ def transform(cat, release, vintage, since=None):
                     ELSE TRY_CAST(value AS DOUBLE) END AS value,
                NULL::DOUBLE AS lower, NULL::DOUBLE AS upper, NULL::DOUBLE AS interval_level,
                NULL::DOUBLE AS numerator, NULL::DOUBLE AS denominator,
+               -- Status follows the same CAST that actually produced `value`, not
+               -- just the footnote flag -- a present-but-non-numeric cell with no
+               -- N/U footnote (never seen in the real file, verified 2026-09-19)
+               -- must not land as a numberless 'reported' row
+               -- (merge.check_observations; #148).
                CASE WHEN footnote_codes IN ({not_available}) THEN 'not_available'
-                    ELSE 'reported' END AS value_status,
+                    WHEN TRY_CAST(value AS DOUBLE) IS NOT NULL THEN 'reported'
+                    ELSE 'not_available' END AS value_status,
                footnote_codes AS reliability_flag, NULL::VARCHAR AS trend
         FROM parsed
     """).to_arrow_table()

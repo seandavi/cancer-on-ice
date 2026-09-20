@@ -315,6 +315,10 @@ def transform(cat, release, edition):
     # One row per (tract, RUCA:primary/secondary) -- code 99 is the source's
     # own "not coded" sentinel (zero-population, water tracts): value_status
     # = 'not_applicable', value stays NULL, never landed as the number 99.
+    # value_status follows the same TRY_CAST that produces `value`, not just
+    # the '99' check, so a present-but-non-numeric cell (never seen in either
+    # real file, verified 2026-09-18, but not something to assume forever)
+    # can't land as a numberless 'reported' row (merge.check_observations).
     observation = con.sql(f"""
         SELECT 'RUCA' AS source, '{edition}' AS source_release, 'RUCA:primary' AS measure_id,
                'tract:' || lpad("{tract_col}", 11, '0') AS geo_id, {geo_vintage} AS geo_vintage,
@@ -323,7 +327,9 @@ def transform(cat, release, edition):
                CASE WHEN "{primary_col}" = '99' THEN NULL ELSE TRY_CAST("{primary_col}" AS DOUBLE) END AS value,
                NULL::DOUBLE AS lower, NULL::DOUBLE AS upper, NULL::DOUBLE AS interval_level,
                NULL::DOUBLE AS numerator, NULL::DOUBLE AS denominator,
-               CASE WHEN "{primary_col}" = '99' THEN 'not_applicable' ELSE 'reported' END AS value_status,
+               CASE WHEN "{primary_col}" = '99' THEN 'not_applicable'
+                    WHEN TRY_CAST("{primary_col}" AS DOUBLE) IS NOT NULL THEN 'reported'
+                    ELSE 'not_available' END AS value_status,
                NULL::VARCHAR AS reliability_flag, NULL::VARCHAR AS trend
         FROM raw
         UNION ALL
@@ -332,7 +338,9 @@ def transform(cat, release, edition):
                '{edition}', '{edition}', 'RUCA:none',
                CASE WHEN "{secondary_col}" = '99' THEN NULL ELSE TRY_CAST("{secondary_col}" AS DOUBLE) END,
                NULL, NULL, NULL, NULL, NULL,
-               CASE WHEN "{secondary_col}" = '99' THEN 'not_applicable' ELSE 'reported' END,
+               CASE WHEN "{secondary_col}" = '99' THEN 'not_applicable'
+                    WHEN TRY_CAST("{secondary_col}" AS DOUBLE) IS NOT NULL THEN 'reported'
+                    ELSE 'not_available' END,
                NULL, NULL
         FROM raw
     """).to_arrow_table()

@@ -1,0 +1,10 @@
+[Unit]
+Description=cancerOnIce weekly snapshot landers: FDA MQSA + HRSA sites/HPSA (#107)
+OnFailure=ntfy-notify@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/davsean/Documents/git/cancer-on-ice
+ExecStart=/home/davsean/Documents/git/cancer-on-ice/systemd/snapshot-landers.sh
+# Both landers finish in a few minutes; a hang becomes a failure becomes an alert.
+TimeoutStartSec=3600

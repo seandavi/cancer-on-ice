@@ -1,0 +1,4 @@
+group_id,group_label,cancer_site_code,mapping_relation,basis,source_url,note
+test_group_a,Test Group A,21010,exact,"Test Source, ""Test Page"" (checked 2026-09-19): ""Esophagus is a test site.""",http://example.org/a,
+test_group_a,Test Group A,21041,broader,"Test Source, ""Test Page"" (checked 2026-09-19): ""Colon and rectum is a test site.""",http://example.org/a,SCP combined category constituent
+test_group_b,Test Group B,34000,exact,"Other Test Source, ""Other Page"" (checked 2026-09-19): ""Myeloma is a test site.""",http://example.org/b,
