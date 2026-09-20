@@ -1,4 +1,4 @@
-cancer_site_code,label,ncit_id,ncit_label,mondo_id,mondo_label,note
-21010,Esophagus,NCIT:C7478,Malignant Esophageal Neoplasm,MONDO:0007576,esophageal cancer,
-21041,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
-31040,Brain and Other Nervous System,NCIT:C4788,Malignant Nervous System Neoplasm,MONDO:0005872,nervous system cancer,SCP combined category; SEER site recode 31010 (Brain) + 31040 (Cranial Nerves Other Nervous System)
+cancer_site_code,label,ncit_id,ncit_label,mondo_id,mondo_label,mapping_relation,note
+21010,Esophagus,NCIT:C7478,Malignant Esophageal Neoplasm,MONDO:0007576,esophageal cancer,exact,
+21041,Colon and Rectum,NCIT:C4978,Malignant Colorectal Neoplasm,MONDO:0005575,colorectal cancer,broader,SCP combined category; SEER site recode 21041-21049+21051-21052 (excludes anus 21060)
+31040,Brain and Other Nervous System,NCIT:C4788,Malignant Nervous System Neoplasm,MONDO:0005872,nervous system cancer,broader,SCP combined category; SEER site recode 31010 (Brain) + 31040 (Cranial Nerves Other Nervous System)
