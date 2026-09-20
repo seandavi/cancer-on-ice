@@ -126,18 +126,29 @@ Bile Duct" groupings use the identical wording SCP's site list uses) -- a
 mapping was exact or broader only in prose; #90 asks for that as its own
 column so a cross-lake join to biocOnIce's `ontology` namespace (#60, #61)
 can filter to exact matches only, the same way a stratum pooling is made
-visible via `measure.stratum_map.relation` (SPEC.md). Every one of the 40
-curated rows already documented above as a "SCP combined category" (Colon &
-Rectum's 11 subsites, NHL's 2, Leukemia's 9, Liver & Bile Duct's 2,
-Uterus/Corpus's 2, Brain & ONS's 2 -- 28 rows) is `broader`: the ontology
-term names the combined disease, and the row's own `cancer_site_code` is one
-narrower constituent of it. Kidney and Renal Pelvis (29020) is also
-`broader`, for the different reason already in its `note` (no NCIt/MONDO
-term splits kidney parenchyma from renal pelvis at SEER's granularity). The
-remaining 11 single-site rows (Breast, Cervix, Lung, Prostate, Melanoma,
-Bladder, Pancreas, Thyroid, Ovary, Stomach, Esophagus) are `exact` -- a 1:1
-match between the SEER code and the ontology term. `mapping_relation` is
-NULL exactly where `mapping_basis` is NULL (no ontology id at all).
+visible via `measure.stratum_map.relation` (SPEC.md) -- the same four-value
+vocabulary (`exact` | `broader` | `narrower` | `overlap`) that column
+declares, not a cancer_site-only pair.
+
+Most of the 40 curated rows already documented above as a "SCP combined
+category" (Colon & Rectum's 11 subsites, NHL's 2, Leukemia's 9, Liver & Bile
+Duct's 2, Brain & ONS's 2 -- 26 rows) are `broader`: the ontology term names
+the combined disease, and the row's own `cancer_site_code` is one narrower
+constituent of it. Kidney and Renal Pelvis (29020) is also `broader`, for
+the different reason already in its `note` (no NCIt/MONDO term splits
+kidney parenchyma from renal pelvis at SEER's granularity) -- 27 `broader`
+rows in total. The Corpus/Uterus pair splits instead of matching that
+pattern: Corpus Uteri (27020, C540-C549) is exactly the anatomic site
+"Malignant Uterine Corpus Neoplasm"/"uterine corpus cancer" names, so it is
+`exact`; Uterus, NOS (27030, C559) is unclassified by subsite -- some cases
+are corpus, some are not -- so it is neither a subset nor a superset of the
+ontology term and is `overlap` rather than `broader` (which would wrongly
+claim every NOS case is a corpus case). The remaining 11 single-site rows
+(Breast, Cervix, Lung, Prostate, Melanoma, Bladder, Pancreas, Thyroid,
+Ovary, Stomach, Esophagus) are `exact` -- a 1:1 match between the SEER code
+and the ontology term, for 12 `exact` rows total with Corpus Uteri. Final
+split: 12 `exact`, 27 `broader`, 1 `overlap`. `mapping_relation` is NULL
+exactly where `mapping_basis` is NULL (no ontology id at all).
 
 ponytail: `parent_code` is declared but always NULL for this edition (see
 above) -- add real values if a future SEER edition (e.g. the 2023 revision,
