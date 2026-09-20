@@ -222,7 +222,11 @@ never silently dropped -- a blank cell for a county still gets a raw row
 column for every county row; it just leaves some cells empty rather than
 omitting the row (unlike RUCC's Rose Island, which omits the row entirely).
 A `0` (e.g. Chugach's `fedly_qualfd_hlth_ctr_24 = 0`) is a real reported
-zero, never read as missing.
+zero, never read as missing. `value_status` is derived from the same
+`TRY_CAST` that produces `value` (not from the raw cell's presence), so a
+hypothetical present-but-non-numeric cell -- never seen in the real curated
+columns, but not something the source format rules out -- lands as
+`not_available` rather than a numberless `'reported'` row (issue #148).
 """
 
 import re
@@ -596,8 +600,12 @@ def transform(cat, release, ahrf_release):
                TRY_CAST(r.value AS DOUBLE) AS value,
                NULL::DOUBLE AS lower, NULL::DOUBLE AS upper, NULL::DOUBLE AS interval_level,
                NULL::DOUBLE AS numerator, NULL::DOUBLE AS denominator,
-               CASE WHEN r.value IS NOT NULL THEN 'reported' ELSE 'not_available' END
-                   AS value_status,
+               -- Status follows the CAST that actually produced `value`, not
+               -- the raw cell's presence -- a present-but-non-numeric cell
+               -- (never seen in the real file, verified 2026-09-19) must not
+               -- land as a numberless 'reported' row (merge.check_observations).
+               CASE WHEN TRY_CAST(r.value AS DOUBLE) IS NOT NULL THEN 'reported'
+                    ELSE 'not_available' END AS value_status,
                NULL::VARCHAR AS reliability_flag, NULL::VARCHAR AS trend
         FROM raw r JOIN field_map m ON r.column_name = m.column_name
     """).to_arrow_table()
