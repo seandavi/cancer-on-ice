@@ -60,6 +60,17 @@ requires quantities; every real Form A row's release columns are '0.000'
 (verified against the full 2023 file, all 8,838 Form A rows). They are
 landed and summed like any other row -- they simply contribute nothing.
 
+**An unparseable ON-SITE RELEASE TOTAL never reads as a reported zero.**
+Every row's real value parses cleanly in every year checked, but `TRY_CAST`
+is silent on failure, and SQL's `sum()` skips a NULL rather than propagating
+it -- so a row that failed to parse would otherwise vanish from a county-
+year's total without changing its `value_status`, silently understating a
+"reported" sum. `_measures` tracks whether any contributing row's cast
+failed and marks that whole county-year total (or, independently, its
+carcinogen-only total) `value_status='not_available'` with `value=NULL`
+instead, never `'reported'` with a value that quietly dropped a row
+(SPEC.md Acceptance C, the other direction from suppression).
+
 **Geography: county name + state, matched against geography.unit --
 never fuzzy.** The file carries no FIPS column, only `COUNTY` (a name) and
 `ST` (a USPS state abbreviation). `_geo_match` resolves each distinct
@@ -108,9 +119,15 @@ danger is two calls sharing one scope; deriving from a moving "latest raw
 year" target instead of "whatever I just landed" means backfilling an
 OLDER year never retires a newer year's facilities, and landing a NEWER
 year correctly advances the live list). A facility reports many rows (one
-per chemical); `QUALIFY row_number() ... = 1` picks one deterministically
-(ORDER BY CHEMICAL) since every facility-level column is identical across
-a TRIFD's rows within one year (verified against the real file).
+per chemical, sometimes more than one row per chemical too -- 660 real
+TRIFD+CHEMICAL duplicate groups in the 2023 file, e.g. a chemical reported
+once per plant unit); `QUALIFY row_number() ... = 1` picks one
+deterministically, `ORDER BY CHEMICAL, DOC_CTRL_NUM` -- `DOC_CTRL_NUM` is
+EPA's own per-submission document id, verified globally unique across every
+row of the real 2023 file, so it is a real tiebreak, not an arbitrary one.
+Every facility-level column (name, address, parent company, ...) is
+identical across a TRIFD's rows within one year regardless of which row
+wins the tiebreak (verified against the real file).
 
 **measure.observation: every landed year, independently.** Each YEAR's
 county totals are merged under scope `(source='TRI', source_release=year)`
@@ -290,7 +307,7 @@ def transform(cat, release, year):
         FROM raw r
         LEFT JOIN geo_match m ON m.county = r.COUNTY AND m.st = r.ST
         WHERE TRY_CAST(r.YEAR AS INTEGER) = {latest_year}
-        QUALIFY row_number() OVER (PARTITION BY r.TRIFD ORDER BY r.CHEMICAL) = 1
+        QUALIFY row_number() OVER (PARTITION BY r.TRIFD ORDER BY r.CHEMICAL, r."DOC_CTRL_NUM") = 1
     """).to_arrow_table()
     counts = {"facility.site": merge.merge(cat, "facility.site", site, release,
                                            EqualTo("source", "TRI"))}
@@ -330,9 +347,17 @@ def _measures(con, cat, release, year):
                NULL::VARCHAR AS stage, NULL::VARCHAR AS other, 'TRI_NONE' AS scheme
     """).to_arrow_table()
 
+    # raw_lb IS NULL marks a row whose ON-SITE RELEASE TOTAL failed to parse
+    # (never seen in any real year checked -- module docstring -- but TRY_CAST
+    # is silent, so this is tracked rather than assumed). sum() skips NULLs,
+    # which would otherwise understate a group's total without any signal;
+    # `any_bad`/`any_bad_carc` instead mark the whole group's total (or
+    # carcinogen-only total) 'not_available' with a NULL value, never
+    # 'reported' with a value that silently dropped a row.
     observation = con.sql(f"""
         WITH lb AS (
             SELECT m.geo_id,
+                   TRY_CAST(r."ON-SITE RELEASE TOTAL" AS DOUBLE) AS raw_lb,
                    TRY_CAST(r."ON-SITE RELEASE TOTAL" AS DOUBLE) *
                        CASE WHEN r."UNIT OF MEASURE" = 'Grams' THEN {GRAMS_TO_LB} ELSE 1 END AS value_lb,
                    r.CARCINOGEN = 'YES' AS is_carcinogen
@@ -342,20 +367,25 @@ def _measures(con, cat, release, year):
         ),
         agg AS (
             SELECT geo_id, sum(value_lb) AS total,
-                   sum(value_lb) FILTER (WHERE is_carcinogen) AS carcinogen_total
+                   bool_or(raw_lb IS NULL) AS any_bad,
+                   sum(value_lb) FILTER (WHERE is_carcinogen) AS carcinogen_total,
+                   bool_or(raw_lb IS NULL AND is_carcinogen) AS any_bad_carc
             FROM lb GROUP BY geo_id
         )
         SELECT 'TRI' AS source, '{year}' AS source_release, 'TRI:onsite_release_total' AS measure_id,
                geo_id, {GEO_VINTAGE} AS geo_vintage, '{year}' AS period_start, '{year}' AS period_end,
-               'TRI:none' AS stratum_id, total AS value,
+               'TRI:none' AS stratum_id, CASE WHEN any_bad THEN NULL ELSE total END AS value,
                NULL::DOUBLE AS lower, NULL::DOUBLE AS upper, NULL::DOUBLE AS interval_level,
-               NULL::DOUBLE AS numerator, NULL::DOUBLE AS denominator, 'reported' AS value_status,
+               NULL::DOUBLE AS numerator, NULL::DOUBLE AS denominator,
+               CASE WHEN any_bad THEN 'not_available' ELSE 'reported' END AS value_status,
                NULL::VARCHAR AS reliability_flag, NULL::VARCHAR AS trend
         FROM agg
       UNION ALL
         SELECT 'TRI', '{year}', 'TRI:onsite_carcinogen_release_total', geo_id, {GEO_VINTAGE},
-               '{year}', '{year}', 'TRI:none', coalesce(carcinogen_total, 0.0),
-               NULL, NULL, NULL, NULL, NULL, 'reported', NULL, NULL
+               '{year}', '{year}', 'TRI:none',
+               CASE WHEN any_bad_carc THEN NULL ELSE coalesce(carcinogen_total, 0.0) END,
+               NULL, NULL, NULL, NULL, NULL,
+               CASE WHEN any_bad_carc THEN 'not_available' ELSE 'reported' END, NULL, NULL
         FROM agg
     """).to_arrow_table()
     merge.check_observations(observation)

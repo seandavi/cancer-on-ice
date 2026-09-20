@@ -28,6 +28,7 @@ covering:
     year).
 """
 
+import csv
 from pathlib import Path
 
 import pyarrow as pa
@@ -154,6 +155,47 @@ def test_derives_facility_site_and_county_measures(cat, capsys):
     # The real, reported miss rate: 3 of 4 distinct (COUNTY, ST) pairs resolved.
     out = capsys.readouterr().out
     assert "3/4" in out and "75.0%" in out
+
+
+def test_unparseable_release_total_is_not_available_not_a_silent_zero(cat, tmp_path):
+    """A row whose ON-SITE RELEASE TOTAL fails to parse never happens in any
+    real year checked (module docstring), but TRY_CAST is silent and sum()
+    skips a NULL rather than propagating it -- so this is a synthetic fixture
+    (the real 2023 excerpt with 94539NDCXX47533's release total corrupted to
+    'N/A'), not a real byte-for-byte one, to exercise the guard directly."""
+    _seed_geo(cat)
+    with open(URL_2023, newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        col = header.index("65. ON-SITE RELEASE TOTAL")
+        trifd = header.index("2. TRIFD")
+        data = list(reader)
+    for row in data:
+        if row[trifd] == "94539NDCXX47533":
+            assert row[col] == "5.000"
+            row[col] = "N/A"
+    bad = tmp_path / "bad_release_total.csv"
+    with open(bad, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+        writer.writerows(data)
+
+    epa_tri.ingest(cat, REL, 2023, url=str(bad), retrieved_on="2026-09-19")
+    obs = {r["measure_id"]: r for r in rows(cat, "measure.observation", row_filter=EqualTo("source", "TRI"))
+          if r["geo_id"] == "county:06001"}
+
+    # Alameda's total AND carcinogen total both had 94539NDCXX47533 contribute
+    # to them -- an unparseable row in either must not silently drop out of a
+    # sum that still claims 'reported'.
+    for measure_id in ("TRI:onsite_release_total", "TRI:onsite_carcinogen_release_total"):
+        assert obs[measure_id]["value_status"] == "not_available"
+        assert obs[measure_id]["value"] is None
+
+    # A county untouched by the corrupted row is unaffected.
+    forsyth = next(r for r in rows(cat, "measure.observation", row_filter=EqualTo("source", "TRI"))
+                   if r["geo_id"] == "county:37067" and r["measure_id"] == "TRI:onsite_release_total")
+    assert forsyth["value_status"] == "reported"
+    assert forsyth["value"] == pytest.approx(3.170 * GRAMS_TO_LB)
 
 
 def test_second_year_does_not_retire_facility_site_or_the_first_years_measures(cat):

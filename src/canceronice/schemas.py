@@ -189,7 +189,9 @@ TABLES = {
             NestedField(4, "units", StringType(), doc="Unit of the published value."),
             NestedField(5, "universe", StringType(), doc="Population the rate is computed over."),
             NestedField(6, "rate_basis", StringType(),
-                        doc="One of: per_100000, percent, count, index."),
+                        doc="One of: per_100000, percent, count, index, sum (a plain summed "
+                            "quantity in `units`, not a rate -- e.g. TRI's pounds-released "
+                            "totals, #100)."),
             NestedField(7, "age_adjustment", StringType(),
                         doc="Standard population used for age adjustment (e.g. '2000 US "
                             "standard'), or NULL when the measure is not age-adjusted."),
@@ -2004,8 +2006,9 @@ TABLES = {
                             "ingest; when cancerOnIce saw a given version of the row is "
                             "valid_from/valid_to, not source_release."),
             NestedField(4, "kind", StringType(), required=True,
-                        doc="'fqhc' | 'rhc' | 'mammography' | 'lung_screening' | 'provider' | 'hospital'. "
-                            "HRSA_HC rows are 'fqhc' for both true FQHCs and FQHC Look-Alikes."),
+                        doc="'fqhc' | 'rhc' | 'mammography' | 'lung_screening' | 'provider' | "
+                            "'hospital' | 'tri'. HRSA_HC rows are 'fqhc' for both true FQHCs and "
+                            "FQHC Look-Alikes; 'tri' is EPA Toxics Release Inventory facilities (#100)."),
             NestedField(5, "name", StringType(), doc="Site's own name."),
             NestedField(6, "address", StringType(), doc="Single-line street address, city, state, postal code."),
             NestedField(7, "lat", DoubleType(), doc="Latitude, WGS84, as published by the source."),
