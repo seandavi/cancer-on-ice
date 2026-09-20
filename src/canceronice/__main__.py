@@ -210,6 +210,15 @@ def main():
     bl.add_argument("--since", type=int,
                     help="derive years >= this (default: this year minus 10)")
 
+    # --- raw: cdc teenvaxview ---
+    # CDC TeenVaxView / NIS-Teen HPV vaccination coverage (#105).
+    from . import teenvaxview
+    tv = sub.add_parser("teenvax", help="land the CDC TeenVaxView / NIS-Teen vaccination "
+                        "coverage file, then derive HPV measures")
+    tv.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    tv.add_argument("--vintage", help="ISO date to record as the version (default: today)")
+    tv.add_argument("--url", help="an already-downloaded CSV file or alternate URL")
+
     # --- raw: epa airtoxscreen ---
     # EPA AirToxScreen tract-level modeled cancer risk (#98).
     from . import epa_airtoxscreen
@@ -366,6 +375,11 @@ def main():
     elif args.cmd == "laus":
         _print(bls_laus.ingest(cat, args.release, args.county_url, args.area_url, args.series_url,
                                args.measure_url, args.footnote_url, args.vintage, args.since))
+
+    # --- raw: cdc teenvaxview ---
+    # CDC TeenVaxView / NIS-Teen HPV vaccination coverage (#105).
+    elif args.cmd == "teenvax":
+        _print(teenvaxview.ingest(cat, args.release, args.vintage, args.url))
 
     # --- raw: epa airtoxscreen ---
     # EPA AirToxScreen tract-level modeled cancer risk (#98).
