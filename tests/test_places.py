@@ -137,6 +137,21 @@ DATA_2025 = [
          Geolocation="POINT (-103.579939867014 31.8491416757447)"),
 ]
 
+# Synthetic -- PLACES' real files have never published a non-numeric, present
+# Data_Value with no footnote (verified 2026-09-19); built only to exercise
+# the malformed-but-present case merge.check_observations' reverse guard
+# protects against (#148, same shape as ers_rucc.py's fix in #149).
+DATA_2025_MALFORMED = [*DATA_2025, line(
+    Year="2023", StateAbbr="CO", StateDesc="Colorado", LocationName="Boulder",
+    DataSource="BRFSS", Category="Health Risk Behaviors",
+    Measure="Current cigarette smoking among adults", Data_Value_Unit="%",
+    Data_Value_Type="Age-adjusted prevalence", Data_Value="N/A",
+    Low_Confidence_Limit="", High_Confidence_Limit="",
+    TotalPopulation="331567", TotalPop18plus="272577", LocationID="08013",
+    CategoryID="RISKBEH", MeasureId="CSMOKING", DataValueTypeID="AgeAdjPrv",
+    Short_Question_Text="Current Cigarette Smoking",
+    Geolocation="POINT (-105.358159 40.0946089)")]
+
 
 @pytest.fixture
 def cat(tmp_path, monkeypatch):
@@ -158,6 +173,11 @@ def csv2024(tmp_path):
 @pytest.fixture
 def csv2025(tmp_path):
     return write(tmp_path / "tiny_places_2025.csv", DATA_2025)
+
+
+@pytest.fixture
+def csv2025_malformed(tmp_path):
+    return write(tmp_path / "tiny_places_2025_malformed.csv", DATA_2025_MALFORMED)
 
 
 # 2024 tract release (ai6z-tcin): a Denver, CO tract with CSMOKING crude -- the
@@ -333,6 +353,22 @@ def test_suppression_maps_status_and_leaves_value_null(cat, csv2025):
 
     reported = [o for o in obs if o["value_status"] == "reported"]
     assert all(o["value"] is not None for o in reported)
+
+
+def test_a_present_non_numeric_value_lands_not_available_not_reported(cat, csv2025_malformed):
+    """A cell that is present but doesn't parse as a number must not read as a
+    numberless 'reported' row: value_status used to be derived from the raw
+    cell's presence (`Data_Value IS NOT NULL`) while `value` went through a
+    separate `TRY_CAST`, so a present-but-non-numeric cell landed as
+    value_status='reported' with value NULL -- the shape #148 flagged in this
+    module, and what merge.check_observations' reverse guard now catches for
+    any source that regresses to it."""
+    places.ingest(cat, REL2, places_release="2025", url=csv2025_malformed)
+    obs = rows(cat, "measure.observation", row_filter=EqualTo("source_release", "2025"))
+    boulder = next(o for o in obs if o["measure_id"] == "PLACES:CSMOKING:age_adjusted"
+                   and o["geo_id"] == "county:08013")
+    assert boulder["value"] is None
+    assert boulder["value_status"] == "not_available"
 
 
 def test_unmapped_footnote_raises(cat, csv2025, monkeypatch):
