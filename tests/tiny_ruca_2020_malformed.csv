@@ -1,0 +1,2 @@
+TractFIPS23,CountyFIPS23,CountyCode23,CountyName23,TractFIPS20,TractCode20,TractName20,CountyFIPS20,CountyCode20,CountyName20,StateFIPS20,StateName20,UrbanAreaCode20,UrbanAreaName20,UrbanCore,UrbanCoreType,PrimaryRUCA,PrimaryRUCADescription,PrimaryDestinationCode,PrimaryDestinationName,SecondaryRUCA,SecondaryRUCADescription,SecondaryDestinationCode,SecondaryDestinationName,Population,LandArea,PopDensity
+99999999999,99999,999,Test County,99999999999,999999,Census Tract 9999,99999,999,Test County,99,Test State,,,0,Rural,N/A,Not coded,,,N/A,Not coded,,,100,1,100

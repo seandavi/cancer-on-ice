@@ -118,6 +118,7 @@ def test_curated_ontology_bridge(cat):
     assert esophagus["ncit_id"] == "NCIT:C7478"
     assert esophagus["mondo_id"] == "MONDO:0007576"
     assert esophagus["mapping_basis"] == "curated"
+    assert esophagus["mapping_relation"] == "exact"  # single-site 1:1 match (#90)
 
     # Cecum is one of Colon & Rectum's constituent SEER codes -- same curated
     # ontology term as every other constituent code would get
@@ -125,19 +126,22 @@ def test_curated_ontology_bridge(cat):
     assert cecum["ncit_id"] == "NCIT:C4978"
     assert cecum["mondo_id"] == "MONDO:0005575"
     assert cecum["mapping_basis"] == "curated"
+    assert cecum["mapping_relation"] == "broader"  # subsite -> combined category term (#90)
 
     # not in the curated CSV at all -- left NULL, not guessed
     myeloma = sites["34000"]
     assert myeloma["ncit_id"] is None
     assert myeloma["mondo_id"] is None
     assert myeloma["mapping_basis"] is None
+    assert myeloma["mapping_relation"] is None
 
 
 def test_unknown_curated_code_is_a_hard_stop(cat, tmp_path):
     cancer_site.land_raw(cat, REL, site_url=SITE_TXT, cod_url=COD_TXT)
     bad_csv = tmp_path / "bad_ontology.csv"
-    bad_csv.write_text("cancer_site_code,label,ncit_id,ncit_label,mondo_id,mondo_label,note\n"
-                       "99998,Nonexistent,NCIT:C1,x,MONDO:1,y,\n")
+    bad_csv.write_text("cancer_site_code,label,ncit_id,ncit_label,mondo_id,mondo_label,"
+                       "mapping_relation,note\n"
+                       "99998,Nonexistent,NCIT:C1,x,MONDO:1,y,exact,\n")
     with pytest.raises(SystemExit, match="99998"):
         cancer_site.transform(cat, REL, ontology_csv=str(bad_csv))
 
@@ -154,7 +158,7 @@ def other_cancer_site_row():
     return dict(cancer_site_code="00000", label="A future edition's own code",
                parent_code=None, icdo3_topography=None, icdo3_histology_exclusions=None,
                icd10_mortality=None, ncit_id=None, mondo_id=None, mapping_basis=None,
-               source="SEER", source_release="OTHER_EDITION")
+               source="SEER", source_release="OTHER_EDITION", mapping_relation=None)
 
 
 def test_does_not_retire_a_different_source_release(cat):
