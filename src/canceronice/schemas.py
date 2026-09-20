@@ -4788,6 +4788,45 @@ TABLES = {
                 "not in this table).",
     ),
 
+    # --- raw: epa radon zones ---
+    # EPA Map of Radon Zones, county (#101).
+    "raw.epa__radon_zones": TableDef(
+        schema=Schema(
+            NestedField(1, "county_state", StringType(), required=True,
+                        doc="'County,State' column as published, e.g. 'Autauga, AL' -- a "
+                            "state-summary row (e.g. 'ALABAMA') or a blank trailer row is "
+                            "never landed (radon.py module docstring: neither carries a real "
+                            "Zone value, so neither is a county-or-equivalent row)."),
+            NestedField(2, "county_label", StringType(), required=True,
+                        doc="'COUNTY LABEL' column as published, e.g. '.Autauga County' -- the "
+                            "leading period is the source's own row-type marker for a real "
+                            "county-level row. Virginia's independent cities carry no leading "
+                            "period; see the 'state' column doc."),
+            NestedField(3, "state", StringType(), required=True,
+                        doc="'STATE' column as published: the full state name (e.g. 'Alabama') "
+                            "for almost every row, or the literal 'VA-CITY' marker the source "
+                            "uses instead of 'Virginia' on its 41 Virginia independent-city rows "
+                            "(radon.py module docstring)."),
+            NestedField(4, "zone_unfiltered", DoubleType(),
+                        doc="EPA Radon Zone (1-3) from the file's 'un-filtered-raw-data' sheet. "
+                            "Differs from zone_filtered for 9 of 3,144 counties (radon.py module "
+                            "docstring lists them); not itself derived into any measure."),
+            NestedField(5, "zone_filtered", DoubleType(), required=True,
+                        doc="EPA Radon Zone (1-3) from the file's 'filtered-raw data' sheet -- "
+                            "the version measure.observation is derived from (radon.py module "
+                            "docstring on why 'filtered' was chosen)."),
+            NestedField(6, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("state", "county_state"),
+        comment="EPA Map of Radon Zones, county-level predicted indoor radon screening zone "
+                "(SPEC.md #101), landed verbatim and whole from both of the source spreadsheet's "
+                "data sheets. Single, ever-only 1993 edition (developed by EPA + USGS; the file "
+                "itself is periodically corrected for administrative geography, not re-assessed), "
+                "so raw is replaced wholesale each time, like raw.geography__county_recodes. "
+                "Public domain (U.S. Government work, 17 U.S.C. Sec 105).",
+    ),
+
     # --- raw: epa superfund npl ---
     # EPA Superfund National Priorities List sites (#99); extends facility.site with
     # kind='superfund'. epa_superfund.py.
