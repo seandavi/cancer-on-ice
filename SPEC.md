@@ -274,7 +274,7 @@ has to parse a sentinel (`"*"`, `"3 or fewer"`, `-1`) to find out.
 ```
 measure_id, source, label, units
 universe            -- population the rate is over
-rate_basis          -- per 100,000 | percent | count | index
+rate_basis          -- per 100,000 | percent | count | index | sum
 age_adjustment      -- standard population (e.g. 2000 US standard) or NULL
 method              -- direct | model_based | survey_direct | derived
 cancer_site_code    -- FK measure.cancer_site when applicable
@@ -359,7 +359,7 @@ the mismatch, the same discipline #90 applies to the NCIt/MONDO bridge.
 
 ```
 facility_id, source, source_release
-kind                -- mammography | fqhc | rhc | lung_screening | provider | hospital
+kind                -- mammography | fqhc | rhc | lung_screening | provider | hospital | tri
 name, address, lat, lon
 geo_id (tract), geo_vintage
 attributes_json     -- JSON string, keys documented per source
