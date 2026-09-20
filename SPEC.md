@@ -274,7 +274,7 @@ has to parse a sentinel (`"*"`, `"3 or fewer"`, `-1`) to find out.
 ```
 measure_id, source, label, units
 universe            -- population the rate is over
-rate_basis          -- per 100,000 | percent | count | index
+rate_basis          -- per 100,000 | percent | count | index | sum
 age_adjustment      -- standard population (e.g. 2000 US standard) or NULL
 method              -- direct | model_based | survey_direct | derived
 cancer_site_code    -- FK measure.cancer_site when applicable
@@ -301,6 +301,57 @@ schemes will diverge across releases of the same source; this is expected.
 SEER site recode ↔ ICD-O-3 topography/histology ↔ ICD-10 (mortality) ↔ NCIt /
 MONDO. The NCIt/MONDO columns are the **bridge to biocOnIce's `ontology`
 namespace** — the one natural cross-lake join key besides publications.
+`mapping_relation` (`exact` | `broader` | `narrower` | `overlap`, #90) says
+how the NCIt/MONDO id relates to this site: exactly (a SEER subsite folded
+into an SCP combined category is `broader` there, e.g. Cecum → "colorectal
+cancer"; a code whose anatomic scope only partly matches the term, neither a
+subset nor a superset, is `overlap`, e.g. Uterus, NOS against "uterine
+corpus cancer" — some NOS cases are corpus, some are not) — the same
+vocabulary and purpose as `measure.stratum_map`'s `relation` column above —
+a consumer choosing to join on exact ontology matches only does it visibly,
+rather than silently inheriting a broader or partial term's burden.
+
+### measure.cancer_site_group
+
+A small, cited lookup beside `measure.cancer_site` for reading burden through
+a prevention lens (#126): a catchment researcher's caution is that no single
+burden metric should drive decisions, and preventability changes which sites
+matter most (e.g. it raises melanoma and cervical cancer above where
+mortality alone ranks them).
+
+```
+group_id            -- 'tobacco_associated' | 'hpv_associated' |
+                        'obesity_associated' | 'alcohol_associated' |
+                        'alcohol_associated_limited_evidence' |
+                        'uspstf_screenable' | 'vaccine_preventable' |
+                        'uv_associated'
+group_label
+cancer_site_code     -- FK measure.cancer_site
+mapping_relation     -- 'exact' | 'broader' -- same vocabulary as
+                        measure.cancer_site's column of the same name (#90)
+basis                -- the citation: publisher, page, date, verbatim quote
+source_url
+note                 -- caveats: why 'broader', evidence-strength language
+                        the citation itself uses, disagreement between
+                        authorities
+source               -- always 'CANCERONICE' (this project's own curated
+                        grouping; see Derived indices)
+```
+
+Every row cites one authoritative primary source (CDC, USPSTF, NCI, or a US
+Surgeon General's report) with a URL and a quoted sentence — no memberships
+from memory. Where CDC states weaker evidence for a site than its core causal
+list (alcohol's "some studies indicate" language for stomach, pancreatic and
+prostate cancer), that is its own `alcohol_associated_limited_evidence`
+group rather than being flattened into `alcohol_associated` alongside the
+sites CDC states plainly. Where a citation's definition is by histology or
+subsite finer than SEER site recode can express (HPV-associated oropharynx
+spans SEER's separate Oropharynx and Tonsil leaves; obesity's citation names
+adenocarcinoma of the esophagus specifically, not all esophageal histologies;
+obesity's citation names meningioma, which has no SEER leaf of its own, only
+the combined Brain and Other Nervous System code), the row is marked
+`broader` with a `note` explaining
+the mismatch, the same discipline #90 applies to the NCIt/MONDO bridge.
 
 ## Facilities
 
@@ -308,7 +359,7 @@ namespace** — the one natural cross-lake join key besides publications.
 
 ```
 facility_id, source, source_release
-kind                -- mammography | fqhc | rhc | lung_screening | provider | hospital
+kind                -- mammography | fqhc | rhc | lung_screening | provider | hospital | tri
 name, address, lat, lon
 geo_id (tract), geo_vintage
 attributes_json     -- JSON string, keys documented per source

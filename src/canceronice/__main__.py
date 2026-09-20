@@ -75,6 +75,15 @@ def main():
     cs.add_argument("--site-url", help="an already-downloaded site-recode text file or alternate URL")
     cs.add_argument("--cod-url", help="an already-downloaded cause-of-death recode text file or alternate URL")
 
+    # --- derived: measure cancer site group ---
+    # Prevention-lens groupings over measure.cancer_site (#126).
+    from . import cancer_site_group
+    cg = sub.add_parser("cancer-site-group", help="land the curated cancer-site groupings CSV, "
+                        "then derive measure.cancer_site_group (requires measure.cancer_site "
+                        "already landed by `cancer-site`)")
+    cg.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    cg.add_argument("--path", help="an alternate curated CSV; defaults to the packaged one")
+
     # --- raw: cdc atsdr svi ---
     from . import cdc_svi
     sv = sub.add_parser("svi", help="land one CDC/ATSDR SVI edition's county or tract "
@@ -210,6 +219,24 @@ def main():
     tv.add_argument("--vintage", help="ISO date to record as the version (default: today)")
     tv.add_argument("--url", help="an already-downloaded CSV file or alternate URL")
 
+    # --- raw: epa tri ---
+    # EPA Toxics Release Inventory Basic Data Files (#100).
+    from . import epa_tri
+    tr = sub.add_parser("tri", help="land one EPA TRI Basic Data Files reporting year, then "
+                        "derive facility.site (kind='tri') and county-year release totals")
+    tr.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    tr.add_argument("--year", required=True, type=int, help="reporting year, e.g. 2023")
+    tr.add_argument("--url", help="an already-downloaded CSV file or alternate URL")
+    tr.add_argument("--retrieved-on", dest="retrieved_on",
+                    help="ISO date to record as the version (default: today)")
+
+    # --- raw: epa radon zones ---
+    # EPA Map of Radon Zones, county (#101).
+    from . import epa_radon
+    rz = sub.add_parser("radon", help="land the EPA Map of Radon Zones (county), then derive")
+    rz.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    rz.add_argument("--url", help="an already-downloaded .xls file or alternate URL")
+
     # --- raw: epa superfund npl ---
     # EPA Superfund National Priorities List sites (#99); extends facility.site with kind='superfund'.
     from . import epa_superfund
@@ -266,6 +293,11 @@ def main():
     # --- derived: measure cancer site ---
     elif args.cmd == "cancer-site":
         _print(cancer_site.ingest(cat, args.release, args.site_url, args.cod_url))
+
+    # --- derived: measure cancer site group ---
+    # Prevention-lens groupings over measure.cancer_site (#126).
+    elif args.cmd == "cancer-site-group":
+        _print(cancer_site_group.ingest(cat, args.release, args.path))
 
     # --- raw: cdc atsdr svi ---
     elif args.cmd == "svi":
@@ -335,6 +367,15 @@ def main():
     # CDC TeenVaxView / NIS-Teen HPV vaccination coverage (#105).
     elif args.cmd == "teenvax":
         _print(teenvaxview.ingest(cat, args.release, args.vintage, args.url))
+
+    # --- raw: epa tri ---
+    # EPA Toxics Release Inventory Basic Data Files (#100).
+    elif args.cmd == "tri":
+        _print(epa_tri.ingest(cat, args.release, args.year, args.url, args.retrieved_on))
+
+    # --- raw: epa radon zones ---
+    elif args.cmd == "radon":
+        _print(epa_radon.ingest(cat, args.release, args.url))
 
     # --- raw: epa superfund npl ---
     # EPA Superfund National Priorities List sites (#99); extends facility.site with kind='superfund'.
