@@ -69,6 +69,10 @@ each table's real header and variable labels, 2026-09-18):
     C16002  Household language by household limited
             English speaking status                     (limited English)
     B19083  Gini Index of Income Inequality             (Gini index)
+    B27001  Health Insurance Coverage Status
+            by Sex by Age                                (uninsured)
+    C27007  Medicaid/Means-Tested Public
+            Coverage by Sex by Age                        (Medicaid coverage)
 
 Age 18-64 is not published anywhere in ACS as a single variable (every age
 table bins in 5- or 10-year spans that straddle 18); it is derived as the
@@ -81,21 +85,31 @@ higher" sums bachelor's + master's + professional + doctorate (022-025).
 Rent burden's denominator is `B25070_E001 - B25070_E011` (excluding "Not
 computed"), matching DP04's own GRAPI universe definition.
 
-**Dropped: health insurance / Medicaid.** CIF's insurance indicators
+**Health insurance / Medicaid (#125).** CIF's insurance indicators
 (uninsured; Medicaid) map cleanly onto Subject tables S2701/S2704 (a single
 "Percent Uninsured" / "Percent Public Coverage, Medicaid row" variable each)
--- but those are API-only (see above). Their detailed-table equivalents
-(B27001 "Health Insurance Coverage Status by Sex by Age", 230 variables;
-B27010 "Types of Health Insurance Coverage by Age", 266 variables) are
-230-266 columns each because ACS never publishes an un-stratified insurance
-total as a detailed table -- landing either whole (this module's own
-convention: land every variable of a requested table) is 250-580MB per
-release for a single overall rate, table-based-SF bulk file size scaling
-observed directly: 1 variable-pair (B19083) = ~10MB, 11 (B25070) = ~46MB, so
-~4MB/variable-pair; not worth it for two numbers.
-ponytail: revisit once an API key is available (S2701/S2704 directly), or if
-a compact insurance-total detailed table turns out to exist that this survey
-missed.
+-- but those are API-only (see above). #29/#124 dropped this rather than
+land either of the two detailed-table equivalents whole: the Census API's
+`/groups/<table>.json` metadata endpoint reports B27001 as "230 variables"
+and B27010 as "266 variables", which is what that decision was made on --
+but that count includes the four E/M/EA/MA suffix variants the *API* serves
+per cell; the table-based Summary File this module actually reads ships only
+E/M, verified directly against the real 2023/2021 downloads' headers:
+B27001 is 57 variable-pairs (114 + GEO_ID columns) and C27007 -- "Medicaid/
+Means-Tested Public Coverage by Sex by Age", the smaller table that already
+carries the with/without-Medicaid split CIF needs, so B27010's 66
+variable-pairs (with/without/by *type* of coverage -- employer, Medicare,
+Medicaid, TRICARE, ... -- strictly more than CIF's single Medicaid rate
+needs) is not landed -- is 21. At ~4MB/variable-pair (see the size-scaling
+note this replaces), that is ~228MB (B27001) + ~84MB (C27007) per release,
+not the 250-580MB the #29/#124 estimate assumed. Landed whole, this
+module's own convention: every "No health insurance coverage" cell (9 age
+brackets x 2 sexes = 18 leaves) summed over B27001's own total universe for
+`ACS:uninsured`; every "With Medicaid/means-tested public coverage" cell (3
+age brackets x 2 sexes = 6 leaves) summed over C27007's own total universe
+for `ACS:medicaid_coverage`. Both tables share B27001's "civilian
+noninstitutionalized population" universe (verified against both tables'
+real `/groups/<table>.json` `universe` field, 2026-09-19).
 
 **Licence.** U.S. Census Bureau content is a federal government work. Per
 resources.data.gov/open-licenses/: "Data and content created by government
@@ -116,6 +130,12 @@ files joined against a sequence-to-variable crosswalk), a different enough
 parser that supporting it is out of scope here. 2019-2023 and 2017-2021
 overlap by three years -- the closest "non-overlapping-ish" pair this format
 reaches, exactly as the issue brief anticipated might be necessary.
+**#125 part 2 (pre-2021 releases) stays out of scope in this PR** for the
+same reason: the sequence-based format is a genuinely different parser (per-
+state fixed-layout files against a sequence-to-variable crosswalk, not one
+national pipe-delimited file per table), and #125's own text says CIF parity
+does not need it -- there is no keyless blocker here to work around, just a
+second format not worth building speculatively.
 `geo_vintage` is verified directly against each release's own Connecticut
 county rows, not assumed from a landed Gazetteer vintage (SPEC.md): the
 2019-2023 file's county rows for state 09 are the nine 2022 planning regions
@@ -192,17 +212,24 @@ in an unbounded bracket): it gets the extra `-333333333 -> not_available`
 rule; every other measure treats a jammed MOE as "value reported, interval
 unavailable" per the brief.
 
-**Composed-measure suppression.** Measures built by summing or ratio-ing
-several raw cells (race "other", education, poverty, vehicle access, rent
-burden, limited English) collapse any contributing jam value to
-`suppressed_small_count`, rather than distinguishing `not_applicable`
-per-leaf.
-ponytail: acceptable because at county granularity (this module's actual
-real-ingest target) these tables show effectively zero suppression, and where
-suppression does appear (small tracts) `-888888888`/"not applicable" on a
-*population-count* table is rare -- the dominant real cause is small sample.
-Revisit with a per-leaf cause if a future ingest surfaces meaningful
-`not_applicable` volume among composed measures.
+**Composed-measure suppression, resolved (#125 part 3).** Measures built by
+summing or ratio-ing several raw cells (race "other", education, poverty,
+vehicle access, rent burden, limited English, uninsured, Medicaid) collapse
+any contributing jam value to `suppressed_small_count`, rather than
+distinguishing `not_applicable` per-leaf. #29/#124 left this as a ponytail
+note pending real volumes; #125 checked directly against every landed row so
+far (2019-2023 county + tract, 2017-2021 county -- 91,823 rows, all 216
+estimate columns across all 15 tables, every level and release this module
+lands): `-666666666` ("insufficient sample cases") is the ONLY estimate jam
+value that occurs anywhere, 2,749 times; `-888888888` ("not applicable") and
+`-999999999` never occur once, in any table, at either geography level. So
+the collapse is not losing information in practice, not just "acceptable" --
+every real `suppressed_small_count` in a composed measure genuinely is a
+small-sample suppression, matching the status's own documented meaning
+exactly. No further work item here; re-run this same check
+(`_check_sentinels` already hard-stops on an unmapped jam shape, so a future
+edition introducing `-888888888` for the first time would be caught, not
+silently mis-classified) if a future release changes that.
 """
 
 import re
@@ -225,7 +252,7 @@ BASE = "https://www2.census.gov/programs-surveys/acs/summary_file"
 TABLE_VARS = {
     "B01003": 1, "B09001": 10, "B09020": 21, "B03002": 21, "B15003": 25,
     "B19013": 1, "C17002": 8, "B23025": 7, "B25044": 15, "B25002": 3,
-    "B25070": 11, "C16002": 14, "B19083": 1,
+    "B25070": 11, "C16002": 14, "B19083": 1, "B27001": 57, "C27007": 21,
 }
 
 # 5-year release end year -> boundary vintage, verified directly against each
@@ -345,23 +372,37 @@ def land_raw(cat, release, year, level, dat_dir=None):
 # transform(): jam-value resolution and Compass-handbook MOE combination.
 #
 # Every raw cell is resolved to est_<col>/moe_<col>/status_<col> ONCE, in a
-# single wide "resolved" view (`_build_resolved`) -- not inline in each
+# single wide "resolved" TEMP TABLE (`_build_resolved`) -- not inline in each
 # measure's SQL. Composed measures (race "other", education, poverty,
-# vehicle access, rent burden, limited English) reference several cells at
-# once, and each of _combine/_pct below re-embeds its inputs a few times
-# (once per branch of a CASE); inlining raw CASE-over-jam-values expressions
-# directly would re-embed THOSE, several cells deep, at every reuse --
-# textually small per measure, but multiplying across 21 measures' nested
-# composition made DuckDB's query planner take minutes on a two-ROW table
-# (observed directly: fixed by this indirection).
+# vehicle access, rent burden, limited English, uninsured, Medicaid) reference
+# several cells at once, and each of _combine/_pct below re-embeds its inputs
+# a few times (once per branch of a CASE); inlining raw CASE-over-jam-values
+# expressions directly would re-embed THOSE, several cells deep, at every
+# reuse -- textually small per measure, but multiplying across every measure's
+# nested composition made DuckDB's query planner take minutes on a two-ROW
+# table (observed directly: fixed by this indirection). `resolved` is a TEMP
+# TABLE rather than a VIEW for the same reason one level up (#125): a VIEW is
+# inlined at each reference, so transform()'s ~23-branch UNION ALL was
+# re-planning/re-optimizing the whole wide CASE-expression tree once per
+# measure anyway -- 138s in a single transform() call once B27001/C27007
+# widened `resolved`, confirmed by swapping VIEW for TABLE with nothing else
+# changed (0.05s afterward for the same union).
 # ---------------------------------------------------------------------------
 
 def _build_resolved(con):
-    """A view over "raw" with est_<col>/moe_<col>/status_<col> DOUBLE/VARCHAR
-    columns for every declared ACS variable, resolved from its jam values
-    exactly once (module docstring's sentinel table). Also passes through
-    geo_id and B19013_M001's raw string (needed unresolved for the
-    median-in-open-interval special case in `transform`)."""
+    """A TEMP TABLE (not a view -- #125 found this materializes once instead
+    of being re-planned/re-inlined by every one of the 23 measures' branches
+    in transform()'s big UNION ALL, which is what "indirection" above was
+    counting on but a view doesn't actually give you: DuckDB inlines a view's
+    definition at each reference, so a VIEW here re-optimized the whole wide
+    CASE-expression tree once per measure -- 138s in a single transform()
+    call for one 4-row table, confirmed directly by swapping VIEW for TABLE
+    with everything else unchanged, 0.05s afterward) with est_<col>/
+    moe_<col>/status_<col> DOUBLE/VARCHAR columns for every declared ACS
+    variable, resolved from its jam values exactly once (module docstring's
+    sentinel table). Also passes through geo_id and B19013_M001's raw string
+    (needed unresolved for the median-in-open-interval special case in
+    `transform`)."""
     cols = ['geo_id', '"B19013_M001" AS "raw_B19013_M001"']
     for table_id, n in TABLE_VARS.items():
         for i in range(1, n + 1):
@@ -374,7 +415,7 @@ def _build_resolved(con):
             cols.append(f'CASE WHEN "{e_col}" IN {("-666666666", "-999999999")} '
                        f"THEN 'suppressed_small_count' WHEN \"{e_col}\" = '-888888888' "
                        f"THEN 'not_applicable' ELSE 'reported' END AS \"status_{e_col}\"")
-    con.execute(f"CREATE OR REPLACE VIEW resolved AS SELECT {', '.join(cols)} FROM raw")
+    con.execute(f"CREATE OR REPLACE TEMP TABLE resolved AS SELECT {', '.join(cols)} FROM raw")
 
 
 def _leaf(e_col, m_col):
@@ -484,6 +525,14 @@ def _measures():
 
     limited_english = _combine([(f"C16002_E{i:03d}", f"C16002_M{i:03d}") for i in (4, 7, 10, 13)])
     households_pair, _ = leaf_pair("C16002_E001", "C16002_M001")
+
+    uninsured = _combine([(f"B27001_E{i:03d}", f"B27001_M{i:03d}")
+                          for i in (5, 8, 11, 14, 17, 20, 23, 26, 29,
+                                    33, 36, 39, 42, 45, 48, 51, 54, 57)])
+    insurance_universe_pair, _ = leaf_pair("B27001_E001", "B27001_M001")
+
+    medicaid = _combine([(f"C27007_E{i:03d}", f"C27007_M{i:03d}") for i in (4, 7, 10, 14, 17, 20)])
+    medicaid_universe_pair, _ = leaf_pair("C27007_E001", "C27007_M001")
 
     income_e, income_m, income_status = _leaf("B19013_E001", "B19013_M001")
     gini_e, gini_m, gini_status = _leaf("B19083_E001", "B19083_M001")
@@ -606,6 +655,23 @@ def _measures():
                       "(C16002, summed across Spanish/other Indo-European/Asian-Pacific/other "
                       "language groups).",
                       val, moe, _composed_status(val), numerator=limited_english[0], denominator=households_pair[0]))
+
+    val, moe = _pct(uninsured, insurance_universe_pair)
+    m.append(_Measure("ACS:uninsured", "ACS:ALL", "Uninsured",
+                      "Civilian noninstitutionalized population", "percent",
+                      "Percent of the civilian noninstitutionalized population with no health "
+                      "insurance coverage (B27001, summed 'No health insurance coverage' cells "
+                      "across all 9 age brackets x 2 sexes).",
+                      val, moe, _composed_status(val), numerator=uninsured[0], denominator=insurance_universe_pair[0]))
+
+    val, moe = _pct(medicaid, medicaid_universe_pair)
+    m.append(_Measure("ACS:medicaid_coverage", "ACS:ALL", "Medicaid or means-tested public coverage",
+                      "Civilian noninstitutionalized population", "percent",
+                      "Percent of the civilian noninstitutionalized population with Medicaid or "
+                      "other means-tested public health insurance coverage (C27007, summed 'With "
+                      "Medicaid/means-tested public coverage' cells across all 3 age brackets x 2 "
+                      "sexes).",
+                      val, moe, _composed_status(val), numerator=medicaid[0], denominator=medicaid_universe_pair[0]))
     return m
 
 
