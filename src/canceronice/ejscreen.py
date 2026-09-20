@@ -21,8 +21,9 @@ domain and is not subject to domestic copyright protection under 17 U.S.C. Sec 1
 -- EJScreen's block group/tract files are exactly such EPA-produced geospatial data.
 
 **Version axis: the edition** (2015-2024), landed as `ejscreen_edition`. Geography
-vintage per the issue: 2015-2021 editions carry 2010-vintage Census geography,
-2022-2024 carry 2020-vintage (`GEO_VINTAGE`).
+vintage is 2010 for 2015-2021, 2020 for 2022-2023, and 2022 for 2024 -- see
+`GEO_VINTAGE`'s own comment for how that's verified; it is one edition finer-
+grained than issue #97's own "2015-2021 -> 2010, 2022+ -> 2020" text.
 
 **Members, verified 2026-09-19** by range-fetching each edition's real Zenodo zip's
 central directory (the archive runs 1.1-5.9 GB per edition; only the needed member's
@@ -63,6 +64,24 @@ starts 2021. NO2 and DWATER (drinking-water non-compliance) start 2024 only.
 sampled real row across editions -- EJScreen's convention is a blank field, which
 DuckDB's `nullstr=''` already lands as NULL; `value_status` is `not_available`
 wherever the concept column is NULL after `TRY_CAST`, `reported` otherwise.
+
+**A definition, not just a column, can change under one name.** `ptraf` and `pwdis`
+keep the same column name (PTRAF/PWDIS) across every edition but not the same
+meaning -- their derived medians jump ~9,400x and ~34,000x respectively, exactly at
+the 2024 edition (see `FAMILY_SPLIT_CONCEPTS`'s comment for the verification and
+EPA's own confirmation of PTRAF's redefinition). Both are split into `pre2024`/
+`2024` measure_ids so one id never spans incompatible definitions.
+
+**Some territory tract ids are malformed in EPA's own file, not reconstructed
+here.** 1,977 AS/GU/MP/VI rows (never PR) across the 2022-2024 tract editions carry
+a geo_id shorter than the standard 11-digit tract GEOID -- e.g. American Samoa's
+"6000100" where a real one looks like "01001020100" -- evidently zero-padded fields
+that lost their padding somewhere in EPA's own pipeline before being concatenated,
+by an amount that varies row to row. There is no reliable way to recover the true
+11-digit id from the truncated one without an authoritative crosswalk this module
+doesn't have, so (`transform`'s comment) these rows are excluded from
+`measure.observation` rather than joined under a guessed id -- landed verbatim in
+raw regardless, per "land raw whole".
 
 **Not derived here** (ponytail, follow-up):
   - **Block group is landed (`raw.ejscreen__blockgroup`, every edition -- "the single
@@ -107,10 +126,22 @@ ZENODO_RECORD = "https://zenodo.org/records/14767363/files"
 EDITIONS = ("2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024")
 TRACT_EDITIONS = ("2021", "2022", "2023", "2024")
 
-# 2015-2021 editions carry 2010-vintage Census geography, 2022-2024 carry 2020
-# (issue #97's own note, consistent with the Alaska/Connecticut FIPS changes
-# cdc_svi.py verified for the same years in a sibling source).
-GEO_VINTAGE = {e: (2010 if int(e) <= 2021 else 2020) for e in EDITIONS}
+# Verified 2026-09-19 directly against real Census Gazetteer tract files (the same
+# check cdc_svi.py makes for SVI): Connecticut's switch from its eight legacy
+# counties (FIPS 09001-09015) to its nine planning regions (09110-09190) is the
+# tell. EJScreen's block group/tract files carry the legacy counties through the
+# 2023 edition and switch to planning regions starting 2024 -- one edition LATER
+# than SVI, which already carries planning regions by its own 2022 edition (and
+# than the Gazetteer's "2022" vintage, which already has them too, per
+# census_gazetteer.py's own docstring). So 2024's real tract GEOIDs are a byte-
+# for-byte match against the Gazetteer's "2022" vintage tract file, not "2020" --
+# confirmed by diffing every Connecticut tract GEOID EJScreen 2024 landed against
+# a real download of 2022_Gaz_tracts_national.txt (zero differences); 2022 and
+# 2023 match the "2020" vintage file the same way (also verified, zero
+# differences). geo_vintage is therefore NOT simply "2010 through 2021, 2020
+# from 2022" -- issue #97's own text undersold this by one edition.
+GEO_VINTAGE = {"2015": 2010, "2016": 2010, "2017": 2010, "2018": 2010, "2019": 2010,
+               "2020": 2010, "2021": 2010, "2022": 2020, "2023": 2020, "2024": 2022}
 
 # Path of the real member inside https://zenodo.org/records/14767363/files/<edition>.zip
 # holding the block group / tract CSV (verified 2026-09-19, module docstring). A path
@@ -174,6 +205,39 @@ CONCEPT_LABEL = {
     "pwdis": "Proximity-weighted modeled toxic concentration from NPDES wastewater dischargers",
     "no2": "NO2 (nitrogen dioxide) concentration, modeled; published from 2024 only",
     "dwater": "Drinking water non-compliance indicator; published from 2024 only",
+}
+
+# ptraf and pwdis are the same column name (PTRAF/PWDIS) in every edition
+# (CONCEPT_COLUMN), but not the same definition: verified 2026-09-19 against the
+# real derived values, ptraf's median jumps from 85.8 (2023) to 807,456 (2024) --
+# ~9,400x -- and pwdis's from 0.0017 to 58.8 -- ~34,000x -- both exactly at the
+# 2024 edition, the same boundary where cancer/resp/rsei_air and the CT geography
+# already changed (module docstring). EPA's own public description of PTRAF
+# confirms a real redefinition, not noise: version 2.3 (2024) computes it over
+# roads within 10 km divided by distance in km, replacing the prior 500 m /
+# distance-in-meters formula (https://www.epa.gov/ejscreen/ejscreen-indicators,
+# checked 2026-09-19) -- a ~1000x unit change alone, compounding with the wider
+# radius. PWDIS shows the identical magnitude-and-boundary signature so is split
+# the same way pending EPA's own documentation of its exact redefinition. Neither
+# family is "wrong"; they are different measures that happen to share a column
+# name, so they get different measure_ids rather than one id whose values are
+# incomparable across editions (SPEC.md Acceptance A depends on that not
+# happening). Every other concept's values move gradually release to release
+# (checked the same way) and are not split.
+FAMILY_SPLIT_CONCEPTS = ("ptraf", "pwdis")
+
+
+def _measure_id(concept, edition):
+    if concept in FAMILY_SPLIT_CONCEPTS:
+        family = "2024" if edition == "2024" else "pre2024"
+        return f"EJSCREEN:{concept}:{family}"
+    return f"EJSCREEN:{concept}"
+
+
+FAMILY_LABEL = {
+    "pre2024": "2021-2023 definition: roads within 500m, divided by distance in meters",
+    "2024": "2024 definition onward: roads within 10km, divided by distance in km "
+            "(EPA's own redefinition in EJScreen 2.3 -- CONCEPT_LABEL/FAMILY_SPLIT_CONCEPTS)",
 }
 
 
@@ -317,14 +381,23 @@ def land_raw(cat, release, edition=None, level="blockgroup", url=None):
     try:
         csv_bytes.decode("utf-8")
     except UnicodeDecodeError:
-        # A real stray non-UTF-8 byte in a display name column (verified 2026-09-19:
-        # 2023 block group, "Do\xf1a Ana County" written Latin-1 mid-file while the
-        # rest of the file is valid UTF-8 -- the same quirk census_gazetteer.py's
-        # 2010 county file has, but that file is ASCII apart from the stray byte, so
-        # it safely re-decodes the whole thing as Latin-1; this file has other real
-        # UTF-8 multi-byte names (Puerto Rico places) that a blanket Latin-1 re-decode
-        # would corrupt, so only the one bad byte is replaced here instead.
-        csv_bytes = csv_bytes.decode("utf-8", errors="replace").encode("utf-8")
+        # The whole file is Latin-1, not UTF-8 (verified 2026-09-19 against the real
+        # 2023 block group file, the one edition that hits this): "Do\xf1a Ana
+        # County" is the single-byte Latin-1 "n-tilde" (0xF1), and there are 226
+        # more like it -- checked for the two-byte UTF-8 "n-tilde" encoding
+        # (b"\xc3\xb1") and any latin-1-misdecoding-utf-8 mojibake ("Ã±"
+        # etc.) elsewhere in the file: zero of either. So this is the same quirk
+        # census_gazetteer.py's 2010 county file has ("Doña Ana" again), and the
+        # same fix applies for the same reason -- Latin-1 and UTF-8 agree on every
+        # ASCII byte, which is everything else in the file. An earlier version of
+        # this handler used `errors="replace"` on a UTF-8 decode instead, reasoning
+        # (without checking) that Puerto Rico place names elsewhere were valid UTF-8
+        # multi-byte sequences a blanket Latin-1 re-decode would corrupt -- checked
+        # now and that reasoning was simply wrong: every accented byte in the file,
+        # PR and NM alike, is Latin-1, so `errors="replace"` was silently mangling
+        # 687 real place names (visible only in extra_json, but still wrong) for no
+        # reason. Decoding the whole file as Latin-1 recovers all of them exactly.
+        csv_bytes = csv_bytes.decode("latin-1").encode("utf-8")
 
     with tempfile.NamedTemporaryFile(suffix=".csv") as tmp:
         tmp.write(csv_bytes)
@@ -373,21 +446,48 @@ def transform(cat, release, edition):
         return None
 
     con = duckdb.connect()
-    con.register("t", raw)
+    con.register("raw_t", raw)
+    # A real EPA data-quality issue, not this module's: some AS/GU/MP/VI (never PR)
+    # territory rows carry a geo_id shorter than the standard 11-digit tract GEOID
+    # -- verified 2026-09-19 (1,977 rows across the 2022-2024 editions, e.g.
+    # American Samoa's "6000100" where every other row is 11 digits like
+    # "01001020100"). The state+county+tract fields were evidently zero-padded
+    # separately somewhere upstream and lost their own leading zeros before being
+    # concatenated -- e.g. state "60" survives (AS has no leading zero to lose) but
+    # the county+tract remainder does not, and by how much varies row to row, so
+    # the true 11-digit GEOID can't be reconstructed from the truncated one alone
+    # without an authoritative crosswalk this module doesn't have. Rather than
+    # guess a plausible-looking but unverifiable GEOID, these rows are excluded
+    # from measure.observation the same way epa_sdwis.py excludes a PWSID whose
+    # ANSI_ENTITY_CODE doesn't resolve to a real county -- "report the unmatched
+    # rate honestly" rather than fabricate a join key. They stay in
+    # raw.ejscreen__tract verbatim, exactly as EPA published them (land raw whole
+    # holds regardless of what derive can use).
+    con.execute("CREATE OR REPLACE TABLE t AS SELECT * FROM raw_t "
+                "WHERE geo_id SIMILAR TO '[0-9]{11}'")
+    excluded = raw.num_rows - con.sql("SELECT count(*) FROM t").fetchone()[0]
+
     concepts = CONCEPT_COLUMN[edition]
     geo_vintage = GEO_VINTAGE[edition]
 
-    definition = pa.Table.from_pylist([
-        dict(measure_id=f"EJSCREEN:{c}", source="EJSCREEN", label=CONCEPT_LABEL[c],
-             units=None, universe=None,
-             rate_basis="percent" if c == "pre1960pct" else "index",
-             age_adjustment=None, method="model_based", cancer_site_code=None,
-             doc=f"{CONCEPT_LABEL[c]}. EPA EJScreen block-group/tract environmental "
-                 f"indicator; see the technical documentation "
-                 f"(https://www.epa.gov/ejscreen/technical-documentation-ejscreen) "
-                 f"for the exact modeling method.")
-        for c in CONCEPTS
-    ])
+    def_rows = []
+    for c in CONCEPTS:
+        base_doc = (f"{CONCEPT_LABEL[c]}. EPA EJScreen block-group/tract environmental "
+                    f"indicator; see the technical documentation "
+                    f"(https://www.epa.gov/ejscreen/technical-documentation-ejscreen) "
+                    f"for the exact modeling method.")
+        families = (("pre2024", "2024") if c in FAMILY_SPLIT_CONCEPTS else (None,))
+        for family in families:
+            def_rows.append(dict(
+                measure_id=f"EJSCREEN:{c}:{family}" if family else f"EJSCREEN:{c}",
+                source="EJSCREEN", label=CONCEPT_LABEL[c], units=None, universe=None,
+                rate_basis="percent" if c == "pre1960pct" else "index",
+                age_adjustment=None, method="model_based", cancer_site_code=None,
+                doc=base_doc if not family else
+                    f"{base_doc} {FAMILY_LABEL[family]} -- not comparable across the "
+                    f"family boundary; see FAMILY_SPLIT_CONCEPTS in ejscreen.py.",
+            ))
+    definition = pa.Table.from_pylist(def_rows)
     def_ids = definition.column("measure_id").to_pylist()
 
     stratum = pa.Table.from_pylist([dict(
@@ -397,7 +497,7 @@ def transform(cat, release, edition):
 
     obs_sql = " UNION ALL ".join(f"""
         SELECT 'EJSCREEN' AS source, '{edition}' AS source_release,
-               'EJSCREEN:{c}' AS measure_id, 'tract:' || geo_id AS geo_id,
+               '{_measure_id(c, edition)}' AS measure_id, 'tract:' || geo_id AS geo_id,
                {geo_vintage} AS geo_vintage, '{edition}' AS period_start,
                '{edition}' AS period_end, 'EJSCREEN:ALL' AS stratum_id,
                TRY_CAST({c} AS DOUBLE) AS value,
@@ -421,6 +521,7 @@ def transform(cat, release, edition):
         "measure.observation": merge.merge(
             cat, "measure.observation", observation, release,
             And(scope, EqualTo("source_release", edition))),
+        "excluded_malformed_geo_id": excluded,
     }
 
 
