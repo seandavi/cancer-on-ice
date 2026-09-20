@@ -2297,6 +2297,907 @@ TABLES = {
                 "(see ers_food_access.py docstring). Public domain (17 U.S.C. § 105).",
     ),
 
+    # --- raw: usda ers food access, SRAM (2025+ edition) ---
+    # USDA ERS Food Access Research Atlas, SNAP-authorized Retailer Access Map
+    # (#112): the successor to raw.ers__food_access on 2020 census tracts, joining
+    # ERS's own "General Tract Characteristics" and "Straight-Line Distance" files
+    # on CensusTract20 (verbatim upstream column names -- no cross-edition aliasing,
+    # same house rule ers_ruca.py uses for genuinely different real layouts). Public
+    # domain (17 U.S.C. Sec 105), same basis as raw.ers__food_access. See
+    # ers_food_access.py's docstring for the SRAM-vs-LRAM verification, the
+    # Driving-Distance-file and County24 ponytail cuts, and the blank-cell
+    # missing-value convention.
+    "raw.ers__food_access_sram": TableDef(
+        schema=Schema(
+            NestedField(1, "CensusTract20", StringType(), required=True,
+                        doc="Census tract 2020: Census tract number in 2020."),
+            NestedField(2, "State", StringType(), doc="State: State name."),
+            NestedField(3, "County20", StringType(), doc="County 2020: County name in 2020."),
+            NestedField(4, "County24", StringType(), doc="County 2024: County name in 2024."),
+            NestedField(5, "Urban", StringType(), doc="Urban tract: Flag for urban tract."),
+            NestedField(6, "POP2020", StringType(),
+                        doc="Population, tract total: Population count from 2020 census."),
+            NestedField(7, "OHU2020", StringType(),
+                        doc="Housing units, total: Occupied housing unit count from 2020 "
+                            "census."),
+            NestedField(8, "GroupQuartersFlag", StringType(),
+                        doc="Group quarters, tract with high share: Flag for tract where "
+                            ">=67%."),
+            NestedField(9, "NUMGQTRS", StringType(),
+                        doc="Group quarters, tract population residing in, number: Count of "
+                            "tract population residing in group quarters."),
+            NestedField(10, "PCTGQTRS", StringType(),
+                        doc="Group quarters, tract population residing in, share: Percent of "
+                            "tract population residing in group quarters."),
+            NestedField(11, "LowIncomeTracts", StringType(),
+                        doc="Low income tract: Flag for low income tract."),
+            NestedField(12, "PovertyRate", StringType(),
+                        doc="Tract poverty rate: Share of the tract population living with "
+                            "income at or below the Federal poverty thresholds for family "
+                            "size."),
+            NestedField(13, "MedianFamilyIncome", StringType(),
+                        doc="Tract median family income: Tract median family income."),
+            NestedField(14, "TractLOWI", StringType(),
+                        doc="Tract low-income population, number: Total count of low-income "
+                            "population in tract."),
+            NestedField(15, "TractKids", StringType(),
+                        doc="Tract children age 0-17, number: Total count of children age "
+                            "0-17 in tract."),
+            NestedField(16, "TractSeniors", StringType(),
+                        doc="Tract seniors age 65+, number: Total count of seniors age 65+ "
+                            "in tract."),
+            NestedField(17, "TractWhite", StringType(),
+                        doc="Tract White population, number: Total count of White population "
+                            "in tract."),
+            NestedField(18, "TractBlack", StringType(),
+                        doc="Tract Black or African American population, number: Total count "
+                            "of Black or African American population in tract."),
+            NestedField(19, "TractAsian", StringType(),
+                        doc="Tract Asian population, number: Total count of Asian population "
+                            "in tract."),
+            NestedField(20, "TractNHOPI", StringType(),
+                        doc="Tract Native Hawaiian and Other Pacific Islander population, "
+                            "number: Total count of Native Hawaiian and Other Pacific "
+                            "Islander population in tract."),
+            NestedField(21, "TractAIAN", StringType(),
+                        doc="Tract American Indian and Alaska Native population, number: "
+                            "Total count of American Indian and Alaska Native population in "
+                            "tract."),
+            NestedField(22, "TractOMultir", StringType(),
+                        doc="Tract Other/Multiple race population, number: Total count of "
+                            "Other/Multiple race population in tract."),
+            NestedField(23, "TractHispanic", StringType(),
+                        doc="Tract Hispanic or Latino population, number: Total count of "
+                            "Hispanic or Latino population in tract."),
+            NestedField(24, "TractHUNV", StringType(),
+                        doc="Tract housing units without a vehicle, number: Total count of "
+                            "housing units without a vehicle in tract."),
+            NestedField(25, "TractSNAP", StringType(),
+                        doc="Tract housing units receiving SNAP benefits, number: Total "
+                            "count of housing units receiving SNAP benefits in tract."),
+            NestedField(26, "TractVeteran", StringType(),
+                        doc="Tract Veteran population, number: Total count of Veteran "
+                            "population in tract."),
+            NestedField(27, "TractTribalArea", StringType(),
+                        doc="Tract Tribal area, share: Share of the tract that is American "
+                            "Indian tribal subdivision area (administrative subdivisions of "
+                            "federally recognized American Indian "
+                            "reservations/off-reservation trust lands or Oklahoma tribal "
+                            "statistical areas (OTSAs)."),
+
+            # --- straight-line-distance (SD_SRAM_) measures, USDA's own field names verbatim ---
+            NestedField(28, "SD_SRAM_LILATracts_1And10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low income and low access tract measured at 1 mile for urban "
+                            "areas and 10 miles for rural areas: Flag for low-income and low "
+                            "access when considering low accessibilty at 1 and 10 miles, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(29, "SD_SRAM_LILATracts_halfAnd10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low income and low access tract measured at 1/2 mile for urban "
+                            "areas and 10 miles for rural areas: Flag for low-income and low "
+                            "access when considering low accessibilty at 1/2 and 10 miles, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(30, "SD_SRAM_LILATracts_1And20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low income and low access tract measured at 1 mile for urban "
+                            "areas and 20 miles for rural areas: Flag for low-income and low "
+                            "access when considering low accessibilty at 1 and 20 miles, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(31, "SD_SRAM_LILATracts_Vehicle", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low income and low access tract using vehicle access or low "
+                            "income and low access tract measured at 20 miles: Flag for "
+                            "low-income and low access when considering vehicle access or at "
+                            "20 miles, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(32, "SD_SRAM_HUNVFlag", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, tract with low vehicle access: Flag for tract "
+                            "where >= 100 of households do not have a vehicle, and beyond "
+                            "1/2 mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(33, "SD_SRAM_LA1and10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 1 mile for urban areas and 10 miles for "
+                            "rural areas: Flag for low access tract at 1 mile for urban "
+                            "areas or 10 miles for rural areas, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(34, "SD_SRAM_LAhalfand10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 1/2 mile for urban areas and 10 miles for "
+                            "rural areas: Flag for low access tract at 1/2 mile for urban "
+                            "areas or 10 miles for rural areas, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(35, "SD_SRAM_LA1and20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 1 mile for urban areas and 20 miles for "
+                            "rural areas: Flag for low access tract at 1 mile for urban "
+                            "areas or 20 miles for rural areas, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(36, "SD_SRAM_LATracts_half", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 1/2 mile: Flag for low access tract when "
+                            "considering 1/2 mile distance, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(37, "SD_SRAM_LATracts1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 1 mile: Flag for low access tract when "
+                            "considering 1 mile distance, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(38, "SD_SRAM_LATracts10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 10 miles: Flag for low access tract when "
+                            "considering 10 mile distance, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(39, "SD_SRAM_LATracts20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 20 miles: Flag for low access tract when "
+                            "considering 20 mile distance, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(40, "SD_SRAM_LATractsVehicle_20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract using vehicle access and at 20 miles  in rural "
+                            "areas: Flag for tract where >= 100 of households do not have a "
+                            "vehicle, and beyond 1/2 mile from SNAP-authorized foodstore; or "
+                            ">= 500 individuals are beyond 20 miles from SNAP-authorized "
+                            "foodstore ; or >= 33% of individuals are beyond 20 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(41, "SD_SRAM_LAPOP1_10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1 mile for urban areas and 10 miles "
+                            "for rural areas, number: Population count beyond 1 mile for "
+                            "urban areas or 10 miles for rural areas from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(42, "SD_SRAM_LAPOP05_10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1/2 mile for urban areas and 10 miles "
+                            "for rural areas, number: Population count beyond 1/2 mile for "
+                            "urban areas or 10 miles for rural areas from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(43, "SD_SRAM_LAPOP1_20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1 mile for urban areas and 20 miles "
+                            "for rural areas, number: Population count beyond 1 mile for "
+                            "urban areas or 20 miles for rural areas from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(44, "SD_SRAM_LALOWI1_10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1 mile for urban areas and "
+                            "10 miles for rural areas, number: Low income population count "
+                            "beyond 1 mile for urban areas or 10 miles for rural areas from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(45, "SD_SRAM_LALOWI05_10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1/2 mile for urban areas "
+                            "and 10 miles for rural areas, number: Low income population "
+                            "count beyond 1/2 mile for urban areas or 10 miles for rural "
+                            "areas from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(46, "SD_SRAM_LALOWI1_20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1 mile for urban areas and "
+                            "20 miles for rural areas, number: Low income population count "
+                            "beyond 1 mile for urban areas or 20 miles for rural areas from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(47, "SD_SRAM_lapophalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1/2 mile, number: Population count "
+                            "beyond 1/2 mile from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(48, "SD_SRAM_lapophalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1/2 mile, share: Share of tract "
+                            "population that are beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(49, "SD_SRAM_lalowihalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1/2 mile, number: Low "
+                            "income population count beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(50, "SD_SRAM_lalowihalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1/2 mile, share: Share of "
+                            "tract population that are low income individuals beyond 1/2 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(51, "SD_SRAM_lakidshalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 1/2 mile, number: Kids "
+                            "population count beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(52, "SD_SRAM_lakidshalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 1/2 mile, share: Share of "
+                            "tract population that are kids beyond 1/2 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(53, "SD_SRAM_laseniorshalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 1/2 mile, number: Seniors "
+                            "population count beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(54, "SD_SRAM_laseniorshalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 1/2 mile, share: Share of tract "
+                            "population that are seniors beyond 1/2 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(55, "SD_SRAM_lawhitehalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 1/2 mile, number: White "
+                            "population count beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(56, "SD_SRAM_lawhitehalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 1/2 mile, share: Share of tract "
+                            "population that are white beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(57, "SD_SRAM_lablackhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 1/2 mile, "
+                            "number: Black or African American population count beyond 1/2 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(58, "SD_SRAM_lablackhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 1/2 mile, "
+                            "share: Share of tract population that are Black or African "
+                            "American beyond 1/2 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(59, "SD_SRAM_laasianhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 1/2 mile, number: Asian "
+                            "population count beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(60, "SD_SRAM_laasianhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 1/2 mile, share: Share of tract "
+                            "population that are Asian beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(61, "SD_SRAM_lanhopihalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian or Other Pacific Islander "
+                            "population at 1/2 mile, number: Native Hawaiian or Other "
+                            "Pacific Islander population count beyond 1/2 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(62, "SD_SRAM_lanhopihalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian or Other Pacific Islander "
+                            "population at 1/2 mile, share: Share of tract population that "
+                            "are Native Hawaiian or Other Pacific Islander beyond 1/2 mile "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(63, "SD_SRAM_laaianhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian or Alaska Native population at 1/2 "
+                            "mile, number: American Indian or Alaska Native population count "
+                            "beyond 1/2 mile from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(64, "SD_SRAM_laaianhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian or Alaska Native population at 1/2 "
+                            "mile, share: Share of tract population that are American Indian "
+                            "or Alaska Native beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(65, "SD_SRAM_laomultirhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 1/2 mile, number: "
+                            "Other/Multiple race population count beyond 1/2 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(66, "SD_SRAM_laomultirhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 1/2 mile, share: "
+                            "Share of tract population that are Other/Multiple race beyond "
+                            "1/2 mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(67, "SD_SRAM_lahisphalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 1/2 mile, number: "
+                            "Hispanic or Latino ethnicity population count beyond 1/2 mile "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(68, "SD_SRAM_lahisphalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 1/2 mile, share: "
+                            "Share of tract population that are of Hispanic or Latino "
+                            "ethnicity beyond 1/2 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(69, "SD_SRAM_lahunvhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 1/2 "
+                            "mile, number: Housing units without vehicle count beyond 1/2 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(70, "SD_SRAM_lahunvhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 1/2 "
+                            "mile, share: Share of tract housing units that are without "
+                            "vehicle and beyond 1/2 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(71, "SD_SRAM_lasnaphalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 1/2 mile, "
+                            "number: Housing units receiving SNAP benefits count beyond 1/2 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(72, "SD_SRAM_lasnaphalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 1/2 mile, "
+                            "share: Share of tract housing units receiving SNAP benefits "
+                            "count beyond 1/2 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(73, "SD_SRAM_laveteranhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 1/2 mile, "
+                            "number: Veterans of the U.S. Armed Forces count beyond 1/2 mile "
+                            "from SNAP-authorized foodstore,calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(74, "SD_SRAM_laveteranhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 1/2 mile, "
+                            "share: Share of tract veterans of the U.S. Armed Forces count "
+                            "beyond 1/2 mile from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(75, "SD_SRAM_lapop1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1 mile, number: Population count "
+                            "beyond 1 mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(76, "SD_SRAM_lapop1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1 mile, share: Share of tract "
+                            "population that are beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(77, "SD_SRAM_lalowi1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1 mile, number: Low income "
+                            "population count beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(78, "SD_SRAM_lalowi1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1 mile, share: Share of "
+                            "tract population that are low income individuals beyond 1 mile "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(79, "SD_SRAM_lakids1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 1 mile, number: Kids "
+                            "population count beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(80, "SD_SRAM_lakids1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 1 mile, share: Share of tract "
+                            "population that are kids beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(81, "SD_SRAM_laseniors1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 1 mile, number: Seniors "
+                            "population count beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(82, "SD_SRAM_laseniors1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 1 mile, share: Share of tract "
+                            "population that are seniors beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(83, "SD_SRAM_lawhite1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 1 mile, number: White "
+                            "population count beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(84, "SD_SRAM_lawhite1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 1 mile, share: Share of tract "
+                            "population that are white beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(85, "SD_SRAM_lablack1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 1 mile, "
+                            "number: Black or African American population count beyond 1 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(86, "SD_SRAM_lablack1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 1 mile, "
+                            "share: Share of tract population that are Black or African "
+                            "American beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(87, "SD_SRAM_laasian1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 1 mile, number: Asian "
+                            "population count beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(88, "SD_SRAM_laasian1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 1 mile, share: Share of tract "
+                            "population that are Asian beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(89, "SD_SRAM_lanhopi1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 1 mile, number: Native Hawaiian or Other Pacific "
+                            "Islander population count beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(90, "SD_SRAM_lanhopi1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 1 mile, share: Share of tract population that are "
+                            "Native Hawaiian or Other Pacific Islander beyond 1 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(91, "SD_SRAM_laaian1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 1 "
+                            "mile, number: American Indian or Alaska Native population count "
+                            "beyond 1 mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(92, "SD_SRAM_laaian1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 1 "
+                            "mile, share: Share of tract population that are American Indian "
+                            "or Alaska Native beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(93, "SD_SRAM_laomultir1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 1 mile, number: "
+                            "Other/Multiple race population count beyond 1 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(94, "SD_SRAM_laomultir1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 1 mile, share: "
+                            "Share of tract population that are Other/Multiple race beyond 1 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(95, "SD_SRAM_lahisp1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 1 mile, number: "
+                            "Hispanic or Latino ethnicity population count beyond 1 mile "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(96, "SD_SRAM_lahisp1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 1 mile, share: "
+                            "Share of tract population that are of Hispanic or Latino "
+                            "ethnicity beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(97, "SD_SRAM_lahunv1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 1 mile, "
+                            "number: Housing units without vehicle count beyond 1 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(98, "SD_SRAM_lahunv1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 1 mile, "
+                            "share: Share of tract housing units that are without vehicle "
+                            "and beyond 1 mile from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(99, "SD_SRAM_lasnap1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 1 mile, "
+                            "number: Housing units receiving SNAP benefits count beyond 1 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(100, "SD_SRAM_lasnap1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 1 mile, "
+                            "share: Share of tract housing units receiving SNAP benefits "
+                            "count beyond 1 mile from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(101, "SD_SRAM_laveteran1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 1 mile, "
+                            "number: Veterans of the U.S. Armed Forces count beyond 1 mile "
+                            "from SNAP-authorized foodstore,calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(102, "SD_SRAM_laveteran1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 1 mile, share: "
+                            "Share of tract veterans of the U.S. Armed Forces count beyond 1 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(103, "SD_SRAM_lapop10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 10 miles, number: Population count "
+                            "beyond 10 miles from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(104, "SD_SRAM_lapop10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 10 miles, share: Share of tract "
+                            "population that are beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(105, "SD_SRAM_lalowi10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 10 miles, number: Low "
+                            "income population count beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(106, "SD_SRAM_lalowi10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 10 miles, share: Share of "
+                            "tract population that are low income individuals beyond 10 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(107, "SD_SRAM_lakids10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 10 miles, number: Kids "
+                            "population count beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(108, "SD_SRAM_lakids10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 10 miles, share: Share of "
+                            "tract population that are kids beyond 10 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(109, "SD_SRAM_laseniors10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 10 miles, number: Seniors "
+                            "population count beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(110, "SD_SRAM_laseniors10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 10 miles, share: Share of tract "
+                            "population that are seniors beyond 10 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(111, "SD_SRAM_lawhite10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 10 miles, number: White "
+                            "population count beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(112, "SD_SRAM_lawhite10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 10 miles, share: Share of tract "
+                            "population that are white beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(113, "SD_SRAM_lablack10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 10 miles, "
+                            "number: Black or African American population count beyond 10 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(114, "SD_SRAM_lablack10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 10 miles, "
+                            "share: Share of tract population that are Black or African "
+                            "American beyond 10 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(115, "SD_SRAM_laasian10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 10 miles, number: Asian "
+                            "population count beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(116, "SD_SRAM_laasian10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 10 miles, share: Share of tract "
+                            "population that are Asian beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(117, "SD_SRAM_lanhopi10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 10 miles, number: Native Hawaiian or Other "
+                            "Pacific Islander population count beyond 10 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(118, "SD_SRAM_lanhopi10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 10 miles, share: Share of tract population that "
+                            "are Native Hawaiian or Other Pacific Islander beyond 10 miles "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(119, "SD_SRAM_laaian10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 10 "
+                            "miles, number: American Indian or Alaska Native population "
+                            "count beyond 10 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(120, "SD_SRAM_laaian10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 10 "
+                            "miles, share: Share of tract population that are American "
+                            "Indian or Alaska Native beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(121, "SD_SRAM_laomultir10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 10 miles, number: "
+                            "Other/Multiple race population count beyond 10 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(122, "SD_SRAM_laomultir10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 10 miles, share: "
+                            "Share of tract population that are Other/Multiple race beyond "
+                            "10 miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(123, "SD_SRAM_lahisp10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 10 miles, number: "
+                            "Hispanic or Latino ethnicity population count beyond 10 miles "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(124, "SD_SRAM_lahisp10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 10 miles, share: "
+                            "Share of tract population that are of Hispanic or Latino "
+                            "ethnicity beyond 10 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(125, "SD_SRAM_lahunv10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 10 "
+                            "miles, number: Housing units without vehicle count beyond 10 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(126, "SD_SRAM_lahunv10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 10 "
+                            "miles, share: Share of tract housing units that are without "
+                            "vehicle and beyond 10 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(127, "SD_SRAM_lasnap10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 10 miles, "
+                            "number: Housing units receiving SNAP benefits count beyond 10 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(128, "SD_SRAM_lasnap10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access,housing units receiving SNAP benefits at 10 miles, "
+                            "share: Share of tract housing units receiving SNAP benefits "
+                            "count beyond 10 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(129, "SD_SRAM_laveteran10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 10 miles, "
+                            "number: Veterans of the U.S. Armed Forces count beyond 10 miles "
+                            "from SNAP-authorized foodstore,calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(130, "SD_SRAM_laveteran10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 10 miles, "
+                            "share: Share of tract veterans of the U.S. Armed Forces count "
+                            "beyond 10 miles from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(131, "SD_SRAM_lapop20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 20 miles, number: Population count "
+                            "beyond 20 miles from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(132, "SD_SRAM_lapop20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 20 miles, share: Share of tract "
+                            "population that are beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(133, "SD_SRAM_lalowi20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 20 miles, number: Low "
+                            "income population count beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(134, "SD_SRAM_lalowi20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 20 miles, share: Share of "
+                            "tract population that are low income individuals beyond 20 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(135, "SD_SRAM_lakids20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 20 miles, number: Kids "
+                            "population count beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(136, "SD_SRAM_lakids20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 20 miles, share: Share of "
+                            "tract population that are kids beyond 20 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(137, "SD_SRAM_laseniors20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 20 miles, number: Seniors "
+                            "population count beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(138, "SD_SRAM_laseniors20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 20 miles, share: Share of tract "
+                            "population that are seniors beyond 20 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(139, "SD_SRAM_lawhite20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 20 miles, number: White "
+                            "population count beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(140, "SD_SRAM_lawhite20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 20 miles, share: Share of tract "
+                            "population that are white beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(141, "SD_SRAM_lablack20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 20 miles, "
+                            "number: Black or African American population count beyond 20 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(142, "SD_SRAM_lablack20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 20 miles, "
+                            "share: Share of tract population that are Black or African "
+                            "American beyond 20 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(143, "SD_SRAM_laasian20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 20 miles, number: Asian "
+                            "population count beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(144, "SD_SRAM_laasian20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 20 miles, share: Share of tract "
+                            "population that are Asian beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(145, "SD_SRAM_lanhopi20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 20 miles, number: Native Hawaiian or Other "
+                            "Pacific Islander population count beyond 20 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(146, "SD_SRAM_lanhopi20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 20 miles, share: Share of tract population that "
+                            "are Native Hawaiian or Other Pacific Islander beyond 20 miles "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(147, "SD_SRAM_laaian20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 20 "
+                            "miles, number: American Indian or Alaska Native population "
+                            "count beyond 20 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(148, "SD_SRAM_laaian20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 20 "
+                            "miles, share: Share of tract population that are American "
+                            "Indian or Alaska Native beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(149, "SD_SRAM_laomultir20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 20 miles, number: "
+                            "Other/Multiple race population count beyond 20 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(150, "SD_SRAM_laomultir20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 20 miles, share: "
+                            "Share of tract population that are Other/Multiple race beyond "
+                            "20 miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(151, "SD_SRAM_lahisp20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 20 miles, number: "
+                            "Hispanic or Latino ethnicity population count beyond 20 miles "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(152, "SD_SRAM_lahisp20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 20 miles, share: "
+                            "Share of tract population that are of Hispanic or Latino "
+                            "ethnicity beyond 20 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(153, "SD_SRAM_lahunv20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 20 "
+                            "miles, number: Housing units without vehicle count beyond 20 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(154, "SD_SRAM_lahunv20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 20 "
+                            "miles, share: Share of tract housing units that are without "
+                            "vehicle and beyond 20 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(155, "SD_SRAM_lasnap20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 20 miles, "
+                            "number: Housing units receiving SNAP benefits count beyond 20 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(156, "SD_SRAM_lasnap20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 20 miles, "
+                            "share: Share of tract housing units receiving SNAP benefits "
+                            "count beyond 20 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(157, "SD_SRAM_laveteran20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 20 miles, "
+                            "number: Veterans of the U.S. Armed Forces count beyond 20 miles "
+                            "from SNAP-authorized foodstore,calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(158, "SD_SRAM_laveteran20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 20 miles, "
+                            "share: Share of tract veterans of the U.S. Armed Forces count "
+                            "beyond 20 miles from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(159, "atlas_edition", StringType(), required=True,
+                        doc="The Food Access Research Atlas edition this row was published "
+                            "in -- '2025' for SRAM, the version axis for this source "
+                            "(SPEC.md Versioning model). Raw is replaced wholesale per value "
+                            "of this column."),
+            NestedField(160, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("atlas_edition", "CensusTract20"),
+        comment="USDA ERS Food Access Research Atlas, SNAP-authorized Retailer Access Map "
+                "(SRAM) landed verbatim and whole, every published column from the General "
+                "Tract Characteristics and Straight-Line Distance files joined on "
+                "CensusTract20, one row per 2020 census tract per edition (issue #112). "
+                "Driving (Network-Based) Distance file not landed -- a new methodology axis "
+                "with no analog in raw.ers__food_access, see ers_food_access.py docstring. "
+                "Public domain (17 U.S.C. Sec 105).",
+    ),
+
     # --- raw: hrsa ahrf ---
     # HRSA Area Health Resources Files, county (#39). Landed LONG (one row per
     # county/field cell) rather than one wide row per county -- see
