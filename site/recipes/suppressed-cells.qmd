@@ -1,0 +1,68 @@
+---
+title: "Suppressed and unavailable cells"
+---
+
+Every row whose `value_status` isn't `'reported'`, for a chosen source —
+proving `value` reads as `NULL` for every one of them, never a number (see
+[Concepts › Suppression](/concepts/suppression.qmd)).
+
+{{< include _duckdb-shared.qmd >}}
+
+```{ojs}
+//| echo: false
+SOURCES = ["SCP", "PLACES", "SVI", "AHRF", "FARA", "RUCC", "RUCA", "SDWIS", "HPSA"]
+```
+
+```{ojs}
+//| echo: false
+viewof sourceChoice = Inputs.select(SOURCES, { label: "Source", value: "PLACES" })
+```
+
+```{ojs}
+//| echo: false
+sql = `SELECT source_release, measure_id, geo_id, value_status, value
+FROM coi.measure.observation
+WHERE source = '${sourceChoice}' AND value_status != 'reported' AND valid_to IS NULL
+ORDER BY source_release, measure_id, geo_id
+LIMIT 500`
+```
+
+```{ojs}
+//| echo: false
+queryState = {
+  sql; // reactive dependency
+  if (dbState.status !== "ready") return dbState;
+  const t0 = performance.now();
+  try {
+    const result = await dbState.conn.query(sql);
+    return { status: "ready", rows: rowsFromArrow(result), ms: performance.now() - t0 };
+  } catch (error) {
+    return { status: "error", error };
+  }
+}
+```
+
+```{ojs}
+//| echo: false
+renderStatus(dbState, queryState)
+```
+
+```{ojs}
+//| echo: false
+queryState.status === "ready"
+  ? (queryState.rows.length
+      ? html`${Inputs.table(queryState.rows, { columns: ["source_release", "measure_id", "geo_id", "value_status", "value"] })}
+         <p class="recipe-status">${queryState.rows.filter((r) => r.value !== null).length} of ${queryState.rows.length} rows shown have a non-null value — should always be 0.</p>`
+      : html`<p><em>No suppressed or unavailable rows for this source — every row is 'reported'.</em></p>`)
+  : html`<p><em>Table will render once the query returns.</em></p>`
+```
+
+<details>
+<summary>SQL run for this table</summary>
+
+```{ojs}
+//| echo: false
+html`<pre><code>${sql}</code></pre>`
+```
+
+</details>

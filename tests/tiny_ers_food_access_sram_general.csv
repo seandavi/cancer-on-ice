@@ -1,0 +1,4 @@
+CensusTract20,State,County20,County24,Urban,POP2020,OHU2020,GroupQuartersFlag,NUMGQTRS,PCTGQTRS,LowIncomeTracts,PovertyRate,MedianFamilyIncome,TractLOWI,TractKids,TractSeniors,TractWhite,TractBlack,TractAsian,TractNHOPI,TractAIAN,TractOMultir,TractHispanic,TractHUNV,TractSNAP,TractVeteran,TractTribalArea
+1001020100,Alabama,Autauga County,Autauga County,1,1775,646,0,0,0,0,17.4,76979,1316,405,284,1389,213,8,3,5,157,76,35,100,68,0
+1015981903,Alabama,Calhoun County,Calhoun County,0,0,0,,0,,0,,,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+35013001103,New Mexico,Doña Ana County,Doña Ana County,1,3912,1609,0,4,0.1,1,20.1,64875,3561,756,939,2080,38,28,3,58,1705,2286,44,341,425,0

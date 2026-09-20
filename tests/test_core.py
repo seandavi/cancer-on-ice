@@ -57,6 +57,47 @@ def test_geography_unit_merge_round_trip(cat):
     assert counts["unchanged"] == 1
 
 
+def test_merge_raises_rather_than_drop_a_sibling_calls_rows(cat):
+    """#118: merge.merge recomputes the *complete* state of `scope`, so two
+    calls sharing one scope in the same release (e.g. county then tract rows
+    under one source_release) silently lose the first call's rows -- they're
+    too new (valid_from == this release) to be 'retired', but absent from the
+    second call's `incoming` so also not 'new'/'changed'/'unchanged'. They
+    match none of the five outcomes, and the scope-filtered overwrite then
+    erases them. The guard must raise instead of losing them."""
+    v1 = pa.Table.from_pylist([county("county:08031", "08031", "Denver County")])
+    merge.merge(cat, "geography.unit", v1, REL1, AlwaysTrue())
+
+    v2 = pa.Table.from_pylist([county("county:08059", "08059", "Jefferson County")])
+    with pytest.raises(ValueError, match="08031"):
+        merge.merge(cat, "geography.unit", v2, REL1, AlwaysTrue())
+
+    # the first call's row must still be there, untouched
+    versions = {(r["geo_id"], r["valid_from"], r["valid_to"]) for r in rows(cat, "geography.unit")}
+    assert ("county:08031", REL1, None) in versions
+
+
+def test_merge_allow_draft_drop_opts_out_of_the_118_guard(cat):
+    """The #118 guard can't tell a sibling slice from a deliberate same-release
+    correction -- both are a live row opened this release and absent from
+    `incoming`. allow_draft_drop=True keeps the documented draft-drop
+    behaviour for the latter: a mistaken row is dropped as if it never
+    existed in any release, rather than raising."""
+    v1 = pa.Table.from_pylist([
+        county("county:08031", "08031", "Denver County"),
+        county("county:08999", "08999", "Parser Bug County"),  # bad row, this release
+    ])
+    merge.merge(cat, "geography.unit", v1, REL1, AlwaysTrue())
+
+    corrected = pa.Table.from_pylist([county("county:08031", "08031", "Denver County")])
+    merge.merge(cat, "geography.unit", corrected, REL1, AlwaysTrue(), allow_draft_drop=True)
+
+    versions = rows(cat, "geography.unit")
+    assert {(r["geo_id"], r["valid_from"], r["valid_to"]) for r in versions} == {
+        ("county:08031", REL1, None),
+    }
+
+
 def observation(value_status, value):
     return dict(value_status=value_status, value=value)
 
@@ -68,6 +109,21 @@ def test_check_observations_rejects_suppressed_value_and_unknown_status():
         observation("not_a_real_status", None),          # not in the closed enum
     ])
     with pytest.raises(ValueError, match="2 row"):
+        merge.check_observations(arrow)
+
+
+def test_check_observations_rejects_null_value_under_reported_status():
+    """The reverse direction: value_status='reported' promises a value, per
+    schemas.py's doc on the column. A source that derives value_status from
+    something other than its own value expression's nullness (e.g. a raw
+    cell's presence, checked separately from a TRY_CAST that can fail) can
+    produce this -- caught here rather than per source (#132/#135/#136/#141
+    all hit some form of this)."""
+    arrow = pa.Table.from_pylist([
+        observation("reported", 1.0),
+        observation("reported", None),          # promises a value, has none
+    ])
+    with pytest.raises(ValueError, match="1 row"):
         merge.check_observations(arrow)
 
 

@@ -24,6 +24,11 @@ Fixtures are real byte-for-byte excerpts of the actual Zenodo deposits
   (`lower_ci_rate`/`upper_ci_rate` literally '*').
 - tiny_scp_v3_risk.csv: a real national row (screening & risk factors,
   landed but not derived -- module docstring).
+- tiny_scp_v3_incidence_malformed.csv: SYNTHETIC, not a real excerpt -- a
+  present `age_adjusted_rate_per_100_000` cell ('N/A') with no
+  `suppression_reason`, to exercise #148's guard. The real V1/V2/V3 files
+  have never published this combination (verified 2026-09-18: `rate IS NULL
+  AND suppression_reason IS NULL` is 0 rows in every landed file).
 """
 
 from pathlib import Path
@@ -38,6 +43,7 @@ V1_INC, V1_MORT = str(FIX / "tiny_scp_v1_incidence.csv"), str(FIX / "tiny_scp_v1
 V2_INC, V2_MORT = str(FIX / "tiny_scp_v2_incidence.csv"), str(FIX / "tiny_scp_v2_mortality.csv")
 V3_INC, V3_MORT = str(FIX / "tiny_scp_v3_incidence.csv"), str(FIX / "tiny_scp_v3_mortality.csv")
 V3_RISK = str(FIX / "tiny_scp_v3_risk.csv")
+V3_INC_MALFORMED = str(FIX / "tiny_scp_v3_incidence_malformed.csv")
 REL = "2026.09"
 
 
@@ -148,6 +154,22 @@ def test_suppression_sentinels_map_to_value_status_never_a_number(cat):
 
     reported = [o for o in obs if o["value_status"] == "reported"]
     assert all(o["value"] is not None for o in reported)
+
+
+def test_a_present_non_numeric_rate_lands_not_available_not_reported(cat):
+    """A rate cell that is present but doesn't parse as a number, with no
+    known `suppression_reason`, must not read as a numberless 'reported' row
+    (#148): value_status used to be derived from `suppression_reason IS NULL`
+    alone, independent of whether `TRY_CAST(age_adjusted_rate_per_100_000 AS
+    DOUBLE)` actually produced `value` -- the same class of bug already fixed
+    in ers_rucc.py. Synthetic fixture; the real files have never published
+    this combination (module docstring)."""
+    scp.ingest(cat, REL, vintage="V3", incidence_url=V3_INC_MALFORMED,
+              mortality_url=V3_MORT, risk_url=V3_RISK)
+    obs = rows(cat, "measure.observation", row_filter=EqualTo("source_release", "V3"))
+    boulder = next(o for o in obs if o["geo_id"] == "county:08013")
+    assert boulder["value"] is None
+    assert boulder["value_status"] == "not_available"
 
 
 def test_unmapped_suppression_reason_raises(cat, monkeypatch):
