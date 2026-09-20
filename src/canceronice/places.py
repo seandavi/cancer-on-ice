@@ -160,7 +160,7 @@ import pyarrow as pa
 from pyiceberg.exceptions import NoSuchTableError
 from pyiceberg.expressions import And, EqualTo, In
 
-from . import merge
+from . import lineage, merge
 
 # data.cdc.gov dataset id for each "PLACES: Local Data for Better Health,
 # County Data <year> release" (long format; NOT "GIS Friendly Format", which
@@ -312,6 +312,7 @@ def land_raw(cat, release, places_release=None, level="county", url=None):
 
     merge.manifest(cat, release, "places" if level == "county" else "places_tract",
                    fetch_url, n, version=places_release, method="release_number")
+    lineage.record(cat, release, "places", None, {identifier: fetch_url})
     return places_release, n
 
 
@@ -353,12 +354,12 @@ def transform(cat, release, places_release):
     would retire the other level's rows landed earlier under the same release.
     """
     geo_vintage = GEO_VINTAGE[places_release]
-    con = duckdb.connect()
+    con = lineage.connect()
     selects = []
     for level in ("county", "tract"):
         try:
-            con.register(f"{level}_raw", cat.load_table(f"raw.places__{level}").scan(
-                row_filter=EqualTo("places_release", places_release)).to_arrow())
+            lineage.load(con, cat, f"{level}_raw", f"raw.places__{level}",
+                        row_filter=EqualTo("places_release", places_release))
         except NoSuchTableError:
             continue  # this level has never been landed at all yet
         selects.append(_level_select(level))
@@ -401,11 +402,12 @@ def transform(cat, release, places_release):
     # One measure.definition row per (MeasureId, Data_Value_Type) — the two
     # variants are different measures (crude vs. age-adjusted prevalence of
     # the same thing), not a stratification of one.
-    defs = con.sql(f"""
+    defs_sql = f"""
         SELECT DISTINCT MeasureId, {dvt_case} AS variant, Measure, Category,
                Data_Value_Unit, Short_Question_Text
         FROM raw
-    """).fetchall()
+    """
+    defs = con.sql(defs_sql).fetchall()
     definition_rows = [
         dict(measure_id=f"PLACES:{measure_id}:{variant}", source="PLACES",
              label=short_text, units=unit, universe=_universe(measure_text),
@@ -426,7 +428,7 @@ def transform(cat, release, places_release):
     stratum = pa.Table.from_pylist(stratum_rows)
 
     value_status = _case("Data_Value_Footnote", FOOTNOTE_STATUS)
-    observation = con.sql(f"""
+    observation_sql = f"""
         SELECT 'PLACES' AS source, '{places_release}' AS source_release,
                'PLACES:' || MeasureId || ':' || {dvt_case} AS measure_id,
                geo_id,
@@ -446,13 +448,14 @@ def transform(cat, release, places_release):
                NULL::VARCHAR AS reliability_flag,
                NULL::VARCHAR AS trend
         FROM raw
-    """).to_arrow_table()
+    """
+    observation = con.sql(observation_sql).to_arrow_table()
     merge.check_observations(observation)
 
     # Overwrite only the ids this release asserts, not the whole `source =
     # 'PLACES'` scope — a wholesale replace deleted a live definition a live
     # observation still referenced (#76).
-    return {
+    result = {
         "measure.definition": merge.write(
             cat, "measure.definition", definition,
             And(EqualTo("source", "PLACES"),
@@ -465,6 +468,14 @@ def transform(cat, release, places_release):
             cat, "measure.observation", observation, release,
             And(EqualTo("source", "PLACES"), EqualTo("source_release", places_release))),
     }
+    # measure.stratum has no SQL behind it at all (stratum_rows is a hand-written
+    # Python literal, module docstring) -- no lineage to honestly claim for it.
+    lineage.record(cat, release, "places", con, {
+        "measure.definition": defs_sql,
+        "measure.stratum": None,
+        "measure.observation": observation_sql,
+    })
+    return result
 
 
 def ingest(cat, release, places_release=None, url=None, level="county"):

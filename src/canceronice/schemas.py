@@ -143,6 +143,61 @@ TABLES = {
         properties={},
     ),
 
+    # --- provenance: lineage (#140) ---
+    # Table- and column-level lineage DAG, captured at ingest with sqlglot
+    # (canceronice.lineage). One row per edge; a table-level-only edge (no
+    # single source column identified) leaves to_column NULL, and a raw
+    # table's DAG root leaves from_column NULL with from_kind='url'.
+    "provenance.lineage": TableDef(
+        schema=Schema(
+            NestedField(1, "release", StringType(), required=True,
+                        doc="cancerOnIce release whose ingest recorded this edge. "
+                            "FK provenance.release.release."),
+            NestedField(2, "job", StringType(), required=True,
+                        doc="The ingest module that produced this edge, by its module name "
+                            "(e.g. 'ers_rucc', 'places')."),
+            NestedField(3, "to_table", StringType(), required=True,
+                        doc="Target table, dotted namespace.table (e.g. 'measure.observation')."),
+            NestedField(4, "to_column", StringType(),
+                        doc="Target column. NULL means this edge is table-level only: known to "
+                            "feed to_table, but not narrowed to one column -- e.g. an output "
+                            "built in Python from a query's rows rather than by the query's own "
+                            "column aliases (measure.definition from PLACES' MeasureId lookup)."),
+            NestedField(5, "to_variable", StringType(),
+                        doc="For a long table keyed by a literal value per row (measure_id in "
+                            "measure.observation; a future typed.*__long's variable, #139), the "
+                            "specific key value this edge applies to, when the source SQL states "
+                            "it as a literal in that branch. NULL when the table isn't keyed this "
+                            "way, or when the key is a computed expression rather than a literal "
+                            "-- PLACES' measure_id is built from two columns, not asserted as one "
+                            "value per branch, so its edges legitimately carry no to_variable."),
+            NestedField(6, "from_table", StringType(), required=True,
+                        doc="Source: a catalog table identifier, or -- when from_kind='url' -- "
+                            "the upstream URL a raw table was landed from (the DAG's root)."),
+            NestedField(7, "from_column", StringType(),
+                        doc="Source column. NULL for a table-level-only edge or a from_kind='url' "
+                            "root edge."),
+            NestedField(8, "from_kind", StringType(), required=True,
+                        doc="'table' when from_table is a catalog table identifier, 'url' when "
+                            "it is the upstream URL a raw table was landed from."),
+            NestedField(9, "expression", StringType(),
+                        doc="The SQL expression that produced to_column from from_column, "
+                            "verbatim from sqlglot (e.g. 'CASE WHEN EP_POV150 = -999 THEN NULL "
+                            "ELSE EP_POV150 END'). NULL for a table-level-only or url-root edge."),
+            NestedField(10, "code_version", StringType(), required=True,
+                        doc="git sha of canceronice (short form) at the time this edge was "
+                            "recorded, or the installed package version when git is unavailable."),
+        ),
+        sort_by=("release", "job", "to_table", "to_column"),
+        comment="Table- and column-level lineage DAG, one row per edge, captured at ingest with "
+                "sqlglot (canceronice.lineage, #140). Rebuildable from each ingest's own SQL, so "
+                "merge.write scopes it on (release, job, to_table) -- no Type 2 history, same as "
+                "provenance.release. The table-level DAG is `SELECT DISTINCT from_table, "
+                "to_table`; never stored twice, since a table-level-only row (to_column NULL) is "
+                "written only for a pair no column-level edge already covers.",
+        properties={},
+    ),
+
     "geography.unit": TableDef(
         schema=Schema(
             NestedField(1, "geo_id", StringType(), required=True,

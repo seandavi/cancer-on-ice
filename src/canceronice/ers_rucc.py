@@ -64,7 +64,7 @@ from pathlib import Path
 import duckdb
 from pyiceberg.expressions import And, EqualTo, In
 
-from . import merge
+from . import lineage, merge
 
 URL = "https://www.ers.usda.gov/media/5768/2023-rural-urban-continuum-codes.csv"
 EDITION = "2023"
@@ -129,6 +129,7 @@ def land_raw(cat, release, url=None):
 
     n = merge.write(cat, "raw.ers__rucc", arrow, EqualTo("rucc_edition", EDITION))
     merge.manifest(cat, release, "ers_rucc", url, n, version=EDITION, method="release_number")
+    lineage.record(cat, release, "ers_rucc", None, {"raw.ers__rucc": url})
     return EDITION, n
 
 
@@ -139,29 +140,30 @@ def transform(cat, release, edition):
     Scoped to `edition`'s rows: raw accumulates every landed edition, so an
     unscoped read would derive from all of them at once.
     """
-    con = duckdb.connect()
-    con.register("raw", cat.load_table("raw.ers__rucc").scan(
-        row_filter=EqualTo("rucc_edition", edition)).to_arrow())
+    con = lineage.connect()
+    lineage.load(con, cat, "raw", "raw.ers__rucc", row_filter=EqualTo("rucc_edition", edition))
 
-    definition = con.sql(f"""
+    definition_sql = f"""
         SELECT 'RUCC:code' AS measure_id, 'RUCC' AS source,
                'Rural-Urban Continuum Code' AS label, 'code 1-9' AS units,
                NULL::VARCHAR AS universe, 'index' AS rate_basis,
                NULL::VARCHAR AS age_adjustment, 'derived' AS method,
                NULL::VARCHAR AS cancer_site_code, '{CODE_DOC}' AS doc
-    """).to_arrow_table()
+    """
+    definition = con.sql(definition_sql).to_arrow_table()
 
-    stratum = con.sql("""
+    stratum_sql = """
         SELECT 'RUCC:none' AS stratum_id, 'RUCC' AS source,
                NULL::VARCHAR AS sex, NULL::VARCHAR AS age_group,
                NULL::VARCHAR AS race_ethnicity, NULL::VARCHAR AS stage,
                NULL::VARCHAR AS other, 'RUCC_NONE' AS scheme
-    """).to_arrow_table()
+    """
+    stratum = con.sql(stratum_sql).to_arrow_table()
 
     # One row per county (from any attribute) LEFT JOINed to its RUCC value --
     # Rose Island and Swains Island carry no RUCC_2023 row at all, so the join
     # leaves Value NULL rather than dropping them or inventing a code.
-    observation = con.sql(f"""
+    observation_sql = f"""
         SELECT 'RUCC' AS source, '{edition}' AS source_release, 'RUCC:code' AS measure_id,
                'county:' || lpad(c.FIPS, 5, '0') AS geo_id, {GEO_VINTAGE} AS geo_vintage,
                '{edition}' AS period_start, '{edition}' AS period_end,
@@ -178,7 +180,8 @@ def transform(cat, release, edition):
                NULL::VARCHAR AS reliability_flag, NULL::VARCHAR AS trend
         FROM (SELECT DISTINCT FIPS FROM raw) c
         LEFT JOIN raw r ON r.FIPS = c.FIPS AND r.Attribute = 'RUCC_{edition}'
-    """).to_arrow_table()
+    """
+    observation = con.sql(observation_sql).to_arrow_table()
     merge.check_observations(observation)
 
     scope = EqualTo("source", "RUCC")
@@ -186,7 +189,7 @@ def transform(cat, release, edition):
     # 'RUCC'` scope — the same wholesale-replace shape PLACES hit in #76 (RUCC
     # has only ever published one measure_id/stratum_id, but the scope should
     # not depend on that staying true).
-    return {
+    result = {
         "measure.definition": merge.write(cat, "measure.definition", definition,
                                           And(scope, In("measure_id", ["RUCC:code"]))),
         "measure.stratum": merge.write(cat, "measure.stratum", stratum,
@@ -195,6 +198,12 @@ def transform(cat, release, edition):
             cat, "measure.observation", observation, release,
             And(scope, EqualTo("source_release", edition))),
     }
+    lineage.record(cat, release, "ers_rucc", con, {
+        "measure.definition": definition_sql,
+        "measure.stratum": stratum_sql,
+        "measure.observation": observation_sql,
+    })
+    return result
 
 
 def ingest(cat, release, url=None):

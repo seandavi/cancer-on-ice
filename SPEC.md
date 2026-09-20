@@ -360,6 +360,22 @@ CIF downloads): what exists, its licence, its
 geography/time coverage, and where to fetch it. Same shape as biocOnIce's
 `resource` namespace; inherits whatever biocOnIce decides in its #30.
 
+## Provenance
+
+### provenance.lineage
+
+Table- and column-level lineage DAG, captured at ingest with sqlglot (#140):
+what fed each derived column's values, down to the raw table and — where the
+module's own SQL states it directly — the raw column and the expression that
+produced it. One row per edge; `to_column` NULL is a table-level-only edge
+(the source is known, the column isn't), `from_kind='url'` roots a raw table
+at the upstream URL it was landed from. Captured from the SQL a module
+already writes, never inferred from read/write order. Rebuildable, so
+`merge.write` scopes it on `(release, job, to_table)` — no Type 2 history, same as
+`provenance.release`. Full column contract in `schemas.py`; capture API in
+`canceronice.lineage`. Wired module by module — see AGENTS.md / the module's
+own docstring for whether a given source calls it yet.
+
 ---
 
 # Licence gate
