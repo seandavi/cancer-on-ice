@@ -281,8 +281,19 @@ def merge(cat, identifier, incoming, release, scope, allow_draft_drop=False):
 
 
 def check_observations(arrow_table):
-    """SPEC.md Acceptance C, enforced before write: no suppressed cell ever
-    reads as a number, and value_status is always one of the closed enum.
+    """SPEC.md Acceptance C, enforced before write: `value` is NULL exactly
+    when value_status != 'reported' -- checked in both directions -- and
+    value_status is always one of the closed enum.
+
+    The reverse direction (`value_status='reported'` but `value` NULL) is a
+    source deriving `value_status` from something other than whether its own
+    value expression actually parsed -- e.g. a raw cell's nullness/sentinel
+    checked directly while `value` goes through a separate `TRY_CAST` that can
+    fail independently. Caught here, once, rather than per source: schemas.py
+    documents `value` as "NULL whenever value_status != 'reported'", and that
+    promise runs both ways or a NULL cell reads as a silently missing
+    'reported' observation rather than the suppressed/unavailable/whatever
+    reading it actually got.
 
     Sources call this on their measure.observation Arrow table before handing
     it to `write` or `merge`.
@@ -294,10 +305,12 @@ def check_observations(arrow_table):
         SELECT count(*) FROM obs
         WHERE value_status NOT IN ({statuses})
            OR (value_status != 'reported' AND value IS NOT NULL)
+           OR (value_status = 'reported' AND value IS NULL)
     """).fetchone()[0]
     if bad:
         raise ValueError(f"measure.observation: {bad} row(s) have an unknown value_status, "
-                         f"or a non-NULL value under a non-reported value_status")
+                         f"a non-NULL value under a non-reported value_status, or a NULL "
+                         f"value under value_status='reported'")
 
 
 def write(cat, identifier, arrow, overwrite_filter):
