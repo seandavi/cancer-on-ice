@@ -274,7 +274,7 @@ has to parse a sentinel (`"*"`, `"3 or fewer"`, `-1`) to find out.
 ```
 measure_id, source, label, units
 universe            -- population the rate is over
-rate_basis          -- per 100,000 | percent | count | index
+rate_basis          -- per 100,000 | per 1,000,000 | percent | count | index
 age_adjustment      -- standard population (e.g. 2000 US standard) or NULL
 method              -- direct | model_based | survey_direct | derived
 cancer_site_code    -- FK measure.cancer_site when applicable
