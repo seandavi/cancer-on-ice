@@ -64,6 +64,15 @@ def main():
     cs.add_argument("--site-url", help="an already-downloaded site-recode text file or alternate URL")
     cs.add_argument("--cod-url", help="an already-downloaded cause-of-death recode text file or alternate URL")
 
+    # --- derived: measure cancer site group ---
+    # Prevention-lens groupings over measure.cancer_site (#126).
+    from . import cancer_site_group
+    cg = sub.add_parser("cancer-site-group", help="land the curated cancer-site groupings CSV, "
+                        "then derive measure.cancer_site_group (requires measure.cancer_site "
+                        "already landed by `cancer-site`)")
+    cg.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    cg.add_argument("--path", help="an alternate curated CSV; defaults to the packaged one")
+
     # --- raw: cdc atsdr svi ---
     from . import cdc_svi
     sv = sub.add_parser("svi", help="land one CDC/ATSDR SVI edition's county or tract "
@@ -228,6 +237,11 @@ def main():
     # --- derived: measure cancer site ---
     elif args.cmd == "cancer-site":
         _print(cancer_site.ingest(cat, args.release, args.site_url, args.cod_url))
+
+    # --- derived: measure cancer site group ---
+    # Prevention-lens groupings over measure.cancer_site (#126).
+    elif args.cmd == "cancer-site-group":
+        _print(cancer_site_group.ingest(cat, args.release, args.path))
 
     # --- raw: cdc atsdr svi ---
     elif args.cmd == "svi":
