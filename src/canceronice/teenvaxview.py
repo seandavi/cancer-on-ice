@@ -333,13 +333,20 @@ def transform(cat, release, vintage):
     _known("dose_type_text", set(DOSE_TYPE) | DOSE_TYPE_NOT_DERIVED, "HPV dose family")
     _known("sex_text", set(SEX_CODE), "sex value")
     _known("dimension_type", set(DIMENSION_TYPE), "Dimension Type")
+    # `!=` is NULL-unsafe (`NULL != 'NA'` is NULL, not TRUE), so an actual blank
+    # cell -- landed as SQL NULL, not the 'NA' sentinel text -- would silently
+    # skip this check and fall through to the observation query's ELSE branch as
+    # a NULL value under value_status='reported' (the #132/#136/#141 bug class:
+    # a non-numeric/unparseable estimate must never be marked 'reported'). `IS
+    # NULL` is checked explicitly so a blank cell raises here instead.
     bad_estimates = con.sql("""
         SELECT DISTINCT coverage_estimate FROM mapped
-        WHERE coverage_estimate != 'NA' AND TRY_CAST(coverage_estimate AS DOUBLE) IS NULL
+        WHERE coverage_estimate IS NULL
+           OR (coverage_estimate != 'NA' AND TRY_CAST(coverage_estimate AS DOUBLE) IS NULL)
     """).fetchall()
     if bad_estimates:
         raise SystemExit(f"teenvaxview: unparseable Estimate (%) value(s) in {vintage}: "
-                         f"{sorted(v for (v,) in bad_estimates)}")
+                         f"{sorted((v for (v,) in bad_estimates), key=lambda v: (v is None, v))}")
 
     unmapped = con.sql("SELECT DISTINCT geography FROM mapped WHERE geo_id IS NULL "
                        "ORDER BY 1").fetchall()
@@ -402,16 +409,19 @@ def transform(cat, release, vintage):
                     ELSE year_season END AS period_end,
                'NIS_TEEN:' || {_case('sex_text', SEX_CODE)} || ':' || dim_key || ':' ||
                    dim_slug AS stratum_id,
-               CASE WHEN coverage_estimate = 'NA' THEN NULL
-                    ELSE TRY_CAST(coverage_estimate AS DOUBLE) END AS value,
+               TRY_CAST(coverage_estimate AS DOUBLE) AS value,
                CASE WHEN ci_95 IS NULL THEN NULL
                     ELSE TRY_CAST(split_part(ci_95, ' to ', 1) AS DOUBLE) END AS lower,
                CASE WHEN ci_95 IS NULL THEN NULL
                     ELSE TRY_CAST(split_part(ci_95, ' to ', 2) AS DOUBLE) END AS upper,
                CASE WHEN ci_95 IS NULL THEN NULL ELSE 0.95 END AS interval_level,
                NULL::DOUBLE AS numerator, NULL::DOUBLE AS denominator,
-               CASE WHEN coverage_estimate = 'NA' THEN 'suppressed_reliability'
-                    ELSE 'reported' END AS value_status,
+               -- Derived from the SAME TRY_CAST as `value`, not a separate
+               -- `coverage_estimate = 'NA'` check, so the two can never
+               -- disagree (the bad_estimates guard above already means the
+               -- only way TRY_CAST fails here is the real 'NA' sentinel).
+               CASE WHEN TRY_CAST(coverage_estimate AS DOUBLE) IS NULL
+                        THEN 'suppressed_reliability' ELSE 'reported' END AS value_status,
                NULL::VARCHAR AS reliability_flag, NULL::VARCHAR AS trend
         FROM final
     """).to_arrow_table()

@@ -320,6 +320,29 @@ def test_unparseable_estimate_raises(cat, tmp_path):
         teenvaxview.transform(cat, REL, "2026-09-01")
 
 
+def test_blank_estimate_is_rejected_at_landing(cat, tmp_path):
+    """A genuinely blank Estimate (%) cell lands as SQL NULL (nullstr=''), not
+    the 'NA' sentinel text. `coverage_estimate` is declared required=True
+    (schemas.py) precisely so this is rejected here, at land_raw, before
+    transform ever sees it -- the first of two guards against the
+    #132/#136/#141 bug class (an unparseable estimate silently landing as
+    value=NULL under value_status='reported'). transform's own
+    bad_estimates/value_status guard (test_unparseable_estimate_raises) is
+    the second, independent guard: it also checks `coverage_estimate IS
+    NULL` explicitly (a plain `!= 'NA'` is NULL-unsafe -- `NULL != 'NA'` is
+    NULL, not TRUE, so it would silently miss a NULL row) and derives
+    value_status from the very same TRY_CAST that produces `value`, so the
+    two can never disagree even if a future landing path relaxes this
+    column's nullability."""
+    bad = [line(**{"Vaccine/Sample": "HPV", "Dose": "≥1 Dose, Males and Females",
+                  "Geography Type": "States/Local Areas", "Geography": "Colorado",
+                  "Survey Year": "2025", "Dimension Type": "Overall", "Dimension": "Overall",
+                  "95% CI (%)": "", "Sample Size": ""})]  # Estimate (%) omitted -> blank -> NULL
+    csv_path = write(tmp_path / "blank_estimate.csv", bad)
+    with pytest.raises(ValueError, match="coverage_estimate"):
+        teenvaxview.land_raw(cat, REL, vintage="2026-09-01", url=csv_path)
+
+
 def test_every_column_is_documented(cat, csv_v1):
     teenvaxview.ingest(cat, REL, vintage="2026-09-01", url=csv_v1)
     for identifier in ("raw.teenvaxview__coverage", "measure.definition",
