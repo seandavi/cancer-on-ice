@@ -15,6 +15,21 @@ Fixtures are real byte-for-byte excerpts of the actual downloaded CSVs (verified
     suppressed tract (Trigg County, KY 21221980100: poverty150 reported, no high
     school diploma and no vehicle suppressed, RPL_THEME1/2/4 and RPL_THEMES
     suppressed but RPL_THEME3 = 0.0).
+
+Added for #92, same "real excerpt" rule, verified 2026-09-19:
+  - tiny_svi_county_2000.csv / tiny_svi_tract_2000.csv (2000 layout, its own two-header-
+    line real files verbatim): Autauga County AL, Fairfield County CT -- the real
+    download has zero -999 rows anywhere (county or tract, checked directly), so
+    suppression-sentinel handling for the 2000 family is covered by a separate,
+    explicitly synthetic fixture built in-test (test_2000_suppression_is_synthetic_
+    because_the_real_files_have_none) rather than faked into this real excerpt.
+  - tiny_svi_county_2010.csv: Autauga County AL, Clearfield County PA (42033) with a
+    real partial suppression (E_PCI/M_PCI = -999, cascading to RPL_THEME1/S_PL_THEME1
+    = -999) while POV/NOHSDIP/AGE65/MINORITY/etc. and RPL_THEME2-4 stay reported.
+  - tiny_svi_tract_2010.csv: an Autauga County tract, and Calhoun County AL tract
+    9819.01 (01015981901) with the same real PCI-only suppression pattern plus a
+    genuine 0.0 (not suppressed) on RPL_THEME3 and RPL_THEME4, and a genuine 0.0 (not
+    suppressed) reported poverty rate.
 """
 
 from pathlib import Path
@@ -31,6 +46,10 @@ COUNTY_2018 = str(FIX / "tiny_svi_county_2018.csv")
 COUNTY_2020 = str(FIX / "tiny_svi_county_2020.csv")
 COUNTY_2022 = str(FIX / "tiny_svi_county_2022.csv")
 TRACT_2022 = str(FIX / "tiny_svi_tract_2022.csv")
+COUNTY_2000 = str(FIX / "tiny_svi_county_2000.csv")
+TRACT_2000 = str(FIX / "tiny_svi_tract_2000.csv")
+COUNTY_2010 = str(FIX / "tiny_svi_county_2010.csv")
+TRACT_2010 = str(FIX / "tiny_svi_tract_2010.csv")
 
 
 def rows(cat, identifier, **kw):
@@ -70,7 +89,7 @@ def test_a_changed_header_fails_before_landing(cat, tmp_path):
 
 def test_unknown_edition_or_tract_combo_rejected(cat):
     with pytest.raises(SystemExit, match="no known layout"):
-        cdc_svi.land_raw(cat, REL, "2010", "county", url=COUNTY_2018)
+        cdc_svi.land_raw(cat, REL, "2012", "county", url=COUNTY_2018)
     with pytest.raises(SystemExit, match="tract is only landed"):
         cdc_svi.land_raw(cat, REL, "2018", "tract", url=COUNTY_2018)
 
@@ -219,8 +238,198 @@ def test_svi_does_not_retire_another_writer(cat):
 def test_every_column_is_documented(cat):
     cdc_svi.ingest(cat, REL, "2018", "county", url=COUNTY_2018)
     cdc_svi.ingest(cat, REL, "2022", "tract", url=TRACT_2022)
-    for identifier in ("raw.svi__county", "raw.svi__tract"):
+    cdc_svi.ingest(cat, REL, "2000", "county", url=COUNTY_2000)
+    cdc_svi.ingest(cat, REL, "2000", "tract", url=TRACT_2000)
+    cdc_svi.ingest(cat, REL, "2010", "county", url=COUNTY_2010)
+    cdc_svi.ingest(cat, REL, "2010", "tract", url=TRACT_2010)
+    for identifier in ("raw.svi__county", "raw.svi__tract", "raw.svi__county_2000",
+                       "raw.svi__tract_2000", "raw.svi__county_2010", "raw.svi__tract_2010"):
         table = cat.load_table(identifier)
         assert table.properties.get("comment")
         for f in table.schema().fields:
             assert f.doc, f"{identifier}.{f.name} has no doc"
+
+
+# ---------------------------------------------------------------------------
+# #92: SVI 2000 and 2010, landed into their own dedicated tables (module docstring).
+
+def test_2000_lands_verbatim_skipping_the_stale_header_line(cat):
+    """The real 2000 file's line 1 doesn't match its own data (module docstring) --
+    land_raw must skip it and land the real line 2 header/data, not line 1's names."""
+    edition, n = cdc_svi.land_raw(cat, REL, "2000", "county", url=COUNTY_2000)
+    assert edition == "2000"
+    assert n == 2
+
+    raw = rows(cat, "raw.svi__county_2000")
+    assert {r["STCNTY"] for r in raw} == {"01001", "09001"}
+    assert {r["svi_edition"] for r in raw} == {"2000"}
+    # the real line-2 header's own columns, not line 1's stale "G1V1R"-style names
+    assert "P_POV" in cat.load_table("raw.svi__county_2000").schema().column_names
+    assert "G1V1R" not in cat.load_table("raw.svi__county_2000").schema().column_names
+    # 2000's "STATE" holds the full name (unlike 2010's, see below) -- landed verbatim
+    autauga = next(r for r in raw if r["STCNTY"] == "01001")
+    assert autauga["STATE"] == "Alabama"
+    assert autauga["ST"] == "01"  # 2-digit FIPS in 2000, NOT the USPS abbreviation
+    # unparsed text, not silently cast
+    assert autauga["P_POV"] == "0.1092"
+
+    # 2000 county has no FIPS column at all -- STCNTY is the county-grain identifier
+    assert "FIPS" not in cat.load_table("raw.svi__county_2000").schema().column_names
+
+    # re-landing replaces rather than appends
+    cdc_svi.land_raw(cat, REL, "2000", "county", url=COUNTY_2000)
+    assert len(rows(cat, "raw.svi__county_2000")) == 2
+
+
+def test_2010_state_column_is_the_fips_code_not_the_name(cat):
+    """The exact collision documented in the module docstring for why 2010 isn't
+    unioned into raw.svi__county: 2010's STATE column holds the 2-digit FIPS code,
+    the opposite of every 2014+ layout's STATE (the state name)."""
+    cdc_svi.land_raw(cat, REL, "2010", "county", url=COUNTY_2010)
+    raw = {r["FIPS"]: r for r in rows(cat, "raw.svi__county_2010")}
+    assert raw["01001"]["STATE"] == "01"
+    assert raw["01001"]["ST"] == "AL"  # opposite of 2000's (ST, STATE) meaning above
+
+
+def test_2000_and_2010_derive_stable_ids_alongside_family_suffixed_themes(cat):
+    cdc_svi.ingest(cat, REL, "2000", "county", url=COUNTY_2000)
+    cdc_svi.ingest(cat, REL, "2010", "county", url=COUNTY_2010)
+    cdc_svi.ingest(cat, REL, "2018", "county", url=COUNTY_2018)  # a third, ACS family
+
+    defs = {d["measure_id"]: d for d in rows(cat, "measure.definition", row_filter="source = 'SVI'")}
+    # the six concepts shared verbatim across every family that asserts them (module
+    # docstring) -- one shared definition, not one per family
+    for concept_id in ("SVI:poverty", "SVI:no_hs_diploma", "SVI:no_vehicle",
+                       "SVI:age_65_plus", "SVI:minority", "SVI:limited_english"):
+        assert concept_id in defs
+    # neither 2000 nor 2010 publishes an uninsured variable (module docstring); the
+    # 2014-family ingest above is what would assert it, and this proves it's still the
+    # only source of it
+    assert defs["SVI:uninsured"]["method"] == "survey_direct"
+    # theme/percentile ids are family-suffixed, one full set per family, none shared
+    for family in ("2000", "2010", "2014"):
+        assert f"SVI:RPL_THEMES:{family}" in defs
+        for n in (1, 2, 3, 4):
+            assert f"SVI:RPL_THEME{n}:{family}" in defs
+    assert "SVI:RPL_THEMES" not in defs  # never unsuffixed
+
+
+def test_2010_age65_and_minority_have_no_interval_but_poverty_does(cat):
+    """2010's age_65_plus/minority are 2010 Census SF1 100%-count (no MOE at all);
+    poverty is ACS 2006-2010 (has MOE) -- module docstring."""
+    cdc_svi.ingest(cat, REL, "2010", "county", url=COUNTY_2010)
+    obs = {(r["geo_id"], r["measure_id"]): r
+           for r in rows(cat, "measure.observation", row_filter="source = 'SVI'")}
+
+    age65 = obs[("county:42033", "SVI:age_65_plus")]
+    assert age65["value"] == pytest.approx(0.1746)
+    assert age65["interval_level"] is None
+    assert age65["lower"] is None and age65["upper"] is None
+    assert age65["period_start"] == "2010" and age65["period_end"] == "2010"
+
+    minority = obs[("county:42033", "SVI:minority")]
+    assert minority["interval_level"] is None
+    assert minority["period_start"] == "2010" and minority["period_end"] == "2010"
+
+    poverty = obs[("county:42033", "SVI:poverty")]
+    assert poverty["value"] == pytest.approx(0.14687701)
+    assert poverty["interval_level"] == 0.90
+    assert poverty["lower"] == pytest.approx(0.14687701 - 0.01284473)
+    assert poverty["upper"] == pytest.approx(0.14687701 + 0.01284473)
+    assert poverty["period_start"] == "2006" and poverty["period_end"] == "2010"
+
+
+def test_2010_theme1_suppressed_via_pci_does_not_suppress_other_themes(cat):
+    """Real partial suppression (Clearfield County PA, 42033): E_PCI/M_PCI = -999
+    cascades to RPL_THEME1 = not_available, but themes 2-4 (which don't depend on PCI)
+    stay reported -- each theme is checked independently, same invariant as the
+    2014/2020 fixtures' county/tract suppression tests."""
+    cdc_svi.ingest(cat, REL, "2010", "county", url=COUNTY_2010)
+    obs = {r["measure_id"]: r for r in rows(cat, "measure.observation",
+           row_filter="source = 'SVI' AND geo_id = 'county:42033'")}
+    assert obs["SVI:RPL_THEME1:2010"]["value_status"] == "not_available"
+    assert obs["SVI:RPL_THEME1:2010"]["value"] is None
+    assert obs["SVI:RPL_THEMES:2010"]["value_status"] == "not_available"
+    assert obs["SVI:RPL_THEME2:2010"]["value_status"] == "reported"
+    assert obs["SVI:RPL_THEME2:2010"]["value"] == pytest.approx(0.176)
+    assert obs["SVI:RPL_THEME3:2010"]["value_status"] == "reported"
+    assert obs["SVI:RPL_THEME4:2010"]["value_status"] == "reported"
+
+
+def test_2010_tract_zero_values_are_not_mistaken_for_suppressed(cat):
+    """Calhoun County AL tract 9819.01 (01015981901): the same PCI-only suppression as
+    the county case above, plus a genuine 0.0 poverty rate and 0.0 RPL_THEME3/4 -- 0.0
+    must read as reported, not as a missing/suppressed sentinel (SPEC.md Acceptance C)."""
+    cdc_svi.ingest(cat, REL, "2010", "tract", url=TRACT_2010)
+    obs = {r["measure_id"]: r for r in rows(cat, "measure.observation",
+           row_filter="source = 'SVI' AND geo_id = 'tract:01015981901'")}
+    assert obs["SVI:poverty"]["value"] == 0.0
+    assert obs["SVI:poverty"]["value_status"] == "reported"
+    assert obs["SVI:RPL_THEME1:2010"]["value_status"] == "not_available"
+    assert obs["SVI:RPL_THEME3:2010"]["value"] == 0.0
+    assert obs["SVI:RPL_THEME3:2010"]["value_status"] == "reported"
+    assert obs["SVI:RPL_THEME4:2010"]["value"] == 0.0
+    assert obs["SVI:RPL_THEME4:2010"]["value_status"] == "reported"
+
+
+def test_2000_period_is_a_single_year_not_a_five_year_window(cat):
+    """2000 draws on Census 2000 directly, no ACS at all (module docstring)."""
+    cdc_svi.ingest(cat, REL, "2000", "county", url=COUNTY_2000)
+    poverty = next(r for r in rows(cat, "measure.observation",
+                   row_filter="source = 'SVI' AND geo_id = 'county:01001'")
+                   if r["measure_id"] == "SVI:poverty")
+    assert poverty["period_start"] == "2000"
+    assert poverty["period_end"] == "2000"
+    assert poverty["interval_level"] is None  # no MOE published for anything in 2000
+
+
+def test_2000_county_and_tract_combine_like_every_other_edition(cat):
+    """Same merge-scope accumulation behavior as the 2022 case already covered
+    (module docstring: transform rebuilds from every landed level every time)."""
+    cdc_svi.ingest(cat, REL, "2000", "county", url=COUNTY_2000)
+    cdc_svi.ingest(cat, REL, "2000", "tract", url=TRACT_2000)
+    live = rows(cat, "measure.observation",
+               row_filter="source = 'SVI' AND source_release = '2000' AND valid_to IS NULL")
+    assert {r["geo_id"].split(":")[0] for r in live} == {"county", "tract"}
+
+
+def test_2000_suppression_is_synthetic_because_the_real_files_have_none(cat, tmp_path):
+    """The real 2000 county/tract downloads (both checked whole, 2026-09-19) contain
+    zero -999 sentinel rows -- unlike every other landed edition, there is no real
+    excerpt to demonstrate suppression with. SPEC.md Acceptance C still requires the
+    2000 family's suppression handling to be covered, so this builds one synthetic row
+    (real header, fabricated -999 cells) rather than faking one into the "real excerpt"
+    fixture above."""
+    header_line1 = ",".join("X" for _ in cdc_svi.COUNTY_COLUMNS["2000"])  # stale, unread
+    header_line2 = ",".join(cdc_svi.COUNTY_COLUMNS["2000"])
+    values = {c: "0" for c in cdc_svi.COUNTY_COLUMNS["2000"]}
+    values.update(ST="01", COU="099", STCNTY="01099", STATE="Alabama", ST_ABBR="AL",
+                  COUNTY="Synthetic", P_POV="-999", PL_POV="-999", RPL_THEME1="-999",
+                  RPL_THEMES="-999", P_AGE65="0.15", PL_AGE65="0.5", RPL_THEME2="0.5")
+    row = ",".join(values[c] for c in cdc_svi.COUNTY_COLUMNS["2000"])
+    synthetic = tmp_path / "synthetic_2000_county.csv"
+    synthetic.write_text(f"{header_line1}\n{header_line2}\n{row}\n")
+
+    cdc_svi.ingest(cat, REL, "2000", "county", url=str(synthetic))
+    obs = {r["measure_id"]: r for r in rows(cat, "measure.observation",
+           row_filter="source = 'SVI' AND geo_id = 'county:01099'")}
+    assert obs["SVI:poverty"]["value"] is None
+    assert obs["SVI:poverty"]["value_status"] == "not_available"
+    assert obs["SVI:RPL_THEME1:2000"]["value_status"] == "not_available"
+    assert obs["SVI:RPL_THEMES:2000"]["value_status"] == "not_available"
+    assert obs["SVI:age_65_plus"]["value"] == pytest.approx(0.15)
+    assert obs["SVI:age_65_plus"]["value_status"] == "reported"
+    assert obs["SVI:RPL_THEME2:2000"]["value_status"] == "reported"
+
+
+def test_ingest_reports_the_right_raw_table_key(cat):
+    """2000/2010 land into raw.svi__{level}_{edition}, not the shared raw.svi__{level}
+    (module docstring) -- ingest()'s summary dict must key on the table it actually
+    wrote, not the shared name every other edition uses."""
+    counts = cdc_svi.ingest(cat, REL, "2010", "county", url=COUNTY_2010)
+    assert "raw.svi__county_2010" in counts
+    assert "raw.svi__county" not in counts
+
+    counts = cdc_svi.ingest(cat, REL, "2018", "county", url=COUNTY_2018)
+    assert "raw.svi__county" in counts
+    assert "raw.svi__county_2018" not in counts

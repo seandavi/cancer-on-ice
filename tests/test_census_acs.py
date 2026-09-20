@@ -1,5 +1,6 @@
 """US Census ACS 5-year Summary File -> raw.acs__{county,tract} -> the
-Cancer InFocus indicator subset in measure.observation (source='ACS').
+Cancer InFocus indicator subset in measure.observation (source='ACS'),
+including insurance/Medicaid (#125: B27001, C27007).
 
 The fixtures (tests/tiny_acs/acsdt5y2023-<table>.dat) are real byte-for-byte
 excerpts of the downloaded 2023 5-year table-based Summary File, one file per
@@ -75,14 +76,14 @@ def test_county_and_tract_share_a_release_without_retiring_each_other(cat):
                row_filter="source = 'ACS' AND source_release = '2019-2023' AND valid_to IS NULL")
     county_rows = [r for r in live if r["geo_id"].startswith("county:")]
     tract_rows = [r for r in live if r["geo_id"].startswith("tract:")]
-    assert len(county_rows) == 4 * 21
-    assert len(tract_rows) == 2 * 21
+    assert len(county_rows) == 4 * 23
+    assert len(tract_rows) == 2 * 23
 
     # re-landing county alone afterwards must not retire the tract rows either
     census_acs.ingest(cat, "2026.10", 2023, "county", dat_dir=DAT_DIR)
     live = rows(cat, "measure.observation",
                row_filter="source = 'ACS' AND source_release = '2019-2023' AND valid_to IS NULL")
-    assert len([r for r in live if r["geo_id"].startswith("tract:")]) == 2 * 21
+    assert len([r for r in live if r["geo_id"].startswith("tract:")]) == 2 * 23
 
 
 def test_a_changed_header_fails_before_landing(cat, tmp_path):
@@ -101,7 +102,7 @@ def test_derives_definition_stratum_and_observations(cat):
     assert counts["raw.acs__county"] == 4
 
     defs = {d["measure_id"]: d for d in rows(cat, "measure.definition", row_filter="source = 'ACS'")}
-    assert len(defs) == 15  # 13 unstratified + age_distribution + race_ethnicity
+    assert len(defs) == 17  # 15 unstratified + age_distribution + race_ethnicity
     assert defs["ACS:gini_index"]["rate_basis"] == "index"
     assert defs["ACS:total_population"]["method"] == "survey_direct"
     assert "18-64" in defs["ACS:age_distribution"]["doc"] or "residual" in defs["ACS:age_distribution"]["doc"]
@@ -112,7 +113,7 @@ def test_derives_definition_stratum_and_observations(cat):
                       "ACS:race:nh_asian", "ACS:race:other"}
 
     obs = rows(cat, "measure.observation", row_filter="source = 'ACS'")
-    assert len(obs) == 4 * 21  # 4 counties x 21 (measure_id, stratum_id) rows
+    assert len(obs) == 4 * 23  # 4 counties x 23 (measure_id, stratum_id) rows
     by_geo_measure = {(r["geo_id"], r["measure_id"], r["stratum_id"]): r for r in obs}
 
     autauga = by_geo_measure[("county:01001", "ACS:total_population", "ACS:ALL")]
@@ -124,6 +125,18 @@ def test_derives_definition_stratum_and_observations(cat):
     # B01003_M001 = -555555555 (controlled estimate) for every real county here:
     # value stays reported, the interval is unavailable -- never dropped, never zeroed.
     assert autauga["lower"] is None and autauga["upper"] is None and autauga["interval_level"] is None
+
+    # #125: insurance/Medicaid, composed the same way as every other rate --
+    # 4,268 of 57,953 (B27001) uninsured, 9,518 of 57,953 (C27007) on Medicaid.
+    autauga_uninsured = by_geo_measure[("county:01001", "ACS:uninsured", "ACS:ALL")]
+    assert autauga_uninsured["value"] == pytest.approx(100.0 * 4268 / 57953)
+    assert autauga_uninsured["value_status"] == "reported"
+    assert autauga_uninsured["numerator"] == 4268.0
+    assert autauga_uninsured["denominator"] == 57953.0
+
+    autauga_medicaid = by_geo_measure[("county:01001", "ACS:medicaid_coverage", "ACS:ALL")]
+    assert autauga_medicaid["value"] == pytest.approx(100.0 * 9518 / 57953)
+    assert autauga_medicaid["value_status"] == "reported"
 
     # Connecticut's 2022 planning region lands fine, same vintage
     assert by_geo_measure[("county:09110", "ACS:total_population", "ACS:ALL")]["geo_vintage"] == 2020
@@ -171,7 +184,7 @@ def test_rerun_is_idempotent(cat):
     census_acs.ingest(cat, REL, 2023, "county", dat_dir=DAT_DIR)
     counts = census_acs.ingest(cat, "2026.10", 2023, "county", dat_dir=DAT_DIR)
     assert counts["measure.observation"]["written"] == 0
-    assert counts["measure.observation"]["unchanged"] == 4 * 21
+    assert counts["measure.observation"]["unchanged"] == 4 * 23
 
 
 def test_second_release_does_not_retire_the_first(cat):
@@ -184,8 +197,8 @@ def test_second_release_does_not_retire_the_first(cat):
                      row_filter="source = 'ACS' AND source_release = '2019-2023' AND valid_to IS NULL")
     live_2021 = rows(cat, "measure.observation",
                      row_filter="source = 'ACS' AND source_release = '2017-2021' AND valid_to IS NULL")
-    assert len(live_2023) == 4 * 21
-    assert len(live_2021) == 4 * 21
+    assert len(live_2023) == 4 * 23
+    assert len(live_2021) == 4 * 23
 
 
 def test_every_column_is_documented(cat):

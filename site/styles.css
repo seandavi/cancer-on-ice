@@ -1,0 +1,56 @@
+/* Small deliberate stylesheet — readable measure, tables that scroll on
+   phones instead of breaking layout, light + dark via prefers-color-scheme
+   (Quarto's cosmo theme already ships a dark variant's color tokens; this
+   only adds what cosmo doesn't). */
+
+body {
+  max-width: 46rem;
+}
+
+.column-page, .column-screen {
+  max-width: 70rem;
+}
+
+/* Every generated/queried table (dictionary, sources, recipe output) scrolls
+   horizontally on a narrow screen instead of forcing the page to. */
+.cell-output table,
+table.table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.proto-status, .recipe-status {
+  font-size: 0.9em;
+  color: var(--bs-secondary-color, #666);
+}
+
+.status-error {
+  color: #b00020;
+}
+
+.status-error a, .status-error {
+  font-weight: 600;
+}
+
+@media (prefers-color-scheme: dark) {
+  .status-error {
+    color: #ff8a80;
+  }
+}
+
+.suppressed-swatch {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  background: #ddd;
+  opacity: 0.6;
+  border: 1px solid #999;
+  vertical-align: middle;
+}
+
+.stub-callout {
+  border-left: 4px solid #999;
+  padding: 0.25rem 1rem;
+  margin: 1rem 0;
+}

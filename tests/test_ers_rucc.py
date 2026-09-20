@@ -17,6 +17,10 @@ from canceronice import ers_rucc, merge
 
 REL = "2026.08"
 CSV = str(Path(__file__).parent / "tiny_ers_rucc.csv")
+# Synthetic -- ERS's real file has never published a non-numeric, present
+# RUCC_2023 value (verified 2026-09-18) -- built only to exercise the
+# malformed-but-present case below.
+MALFORMED_CSV = str(Path(__file__).parent / "tiny_ers_rucc_malformed.csv")
 
 
 def rows(cat, identifier, **kw):
@@ -75,6 +79,21 @@ def test_derives_definition_stratum_and_observations(cat):
     # Rose Island has no RUCC_2023 row at all: not_available, never a number, never dropped
     assert obs["county:60030"]["value"] is None
     assert obs["county:60030"]["value_status"] == "not_available"
+
+
+def test_a_present_non_numeric_value_lands_not_available_not_reported(cat):
+    """A cell that is present but doesn't parse as a number must not read as
+    a numberless 'reported' row: value_status was derived from the raw cell's
+    presence (`r.Value IS NOT NULL`) while `value` went through a separate
+    `TRY_CAST`, so a present-but-non-numeric cell used to land as
+    value_status='reported' with value NULL -- the same class of bug #141
+    flagged in this module, and what merge.check_observations' reverse
+    guard now catches for any source that regresses to it."""
+    ers_rucc.ingest(cat, REL, url=MALFORMED_CSV)
+    obs = rows(cat, "measure.observation", row_filter="source = 'RUCC'")
+    assert len(obs) == 1
+    assert obs[0]["value"] is None
+    assert obs[0]["value_status"] == "not_available"
 
 
 def test_rerun_is_idempotent(cat):

@@ -147,6 +147,18 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 
 .muted { color: var(--muted); }
 .status { padding: 1rem 0; color: var(--muted); }
+.status[aria-busy="true"] {
+  display: flex; align-items: center; gap: 0.6rem;
+}
+.status[aria-busy="true"]::before {
+  content: ""; width: 1em; height: 1em; flex: none;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .status[aria-busy="true"]::before { animation: none; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 label.toggle { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; margin: 0.75rem 0; }
 textarea#sql-box {
   width: 100%; min-height: 6rem; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.85rem;

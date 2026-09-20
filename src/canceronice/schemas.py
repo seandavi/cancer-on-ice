@@ -143,14 +143,70 @@ TABLES = {
         properties={},
     ),
 
+    # --- provenance: lineage (#140) ---
+    # Table- and column-level lineage DAG, captured at ingest with sqlglot
+    # (canceronice.lineage). One row per edge; a table-level-only edge (no
+    # single source column identified) leaves to_column NULL, and a raw
+    # table's DAG root leaves from_column NULL with from_kind='url'.
+    "provenance.lineage": TableDef(
+        schema=Schema(
+            NestedField(1, "release", StringType(), required=True,
+                        doc="cancerOnIce release whose ingest recorded this edge. "
+                            "FK provenance.release.release."),
+            NestedField(2, "job", StringType(), required=True,
+                        doc="The ingest module that produced this edge, by its module name "
+                            "(e.g. 'ers_rucc', 'places')."),
+            NestedField(3, "to_table", StringType(), required=True,
+                        doc="Target table, dotted namespace.table (e.g. 'measure.observation')."),
+            NestedField(4, "to_column", StringType(),
+                        doc="Target column. NULL means this edge is table-level only: known to "
+                            "feed to_table, but not narrowed to one column -- e.g. an output "
+                            "built in Python from a query's rows rather than by the query's own "
+                            "column aliases (measure.definition from PLACES' MeasureId lookup)."),
+            NestedField(5, "to_variable", StringType(),
+                        doc="For a long table keyed by a literal value per row (measure_id in "
+                            "measure.observation; a future typed.*__long's variable, #139), the "
+                            "specific key value this edge applies to, when the source SQL states "
+                            "it as a literal in that branch. NULL when the table isn't keyed this "
+                            "way, or when the key is a computed expression rather than a literal "
+                            "-- PLACES' measure_id is built from two columns, not asserted as one "
+                            "value per branch, so its edges legitimately carry no to_variable."),
+            NestedField(6, "from_table", StringType(), required=True,
+                        doc="Source: a catalog table identifier, or -- when from_kind='url' -- "
+                            "the upstream URL a raw table was landed from (the DAG's root)."),
+            NestedField(7, "from_column", StringType(),
+                        doc="Source column. NULL for a table-level-only edge or a from_kind='url' "
+                            "root edge."),
+            NestedField(8, "from_kind", StringType(), required=True,
+                        doc="'table' when from_table is a catalog table identifier, 'url' when "
+                            "it is the upstream URL a raw table was landed from."),
+            NestedField(9, "expression", StringType(),
+                        doc="The SQL expression that produced to_column from from_column, "
+                            "verbatim from sqlglot (e.g. 'CASE WHEN EP_POV150 = -999 THEN NULL "
+                            "ELSE EP_POV150 END'). NULL for a table-level-only or url-root edge."),
+            NestedField(10, "code_version", StringType(), required=True,
+                        doc="git sha of canceronice (short form) at the time this edge was "
+                            "recorded, or the installed package version when git is unavailable."),
+        ),
+        sort_by=("release", "job", "to_table", "to_column"),
+        comment="Table- and column-level lineage DAG, one row per edge, captured at ingest with "
+                "sqlglot (canceronice.lineage, #140). Rebuildable from each ingest's own SQL, so "
+                "merge.write scopes it on (release, job, to_table) -- no Type 2 history, same as "
+                "provenance.release. The table-level DAG is `SELECT DISTINCT from_table, "
+                "to_table`; never stored twice, since a table-level-only row (to_column NULL) is "
+                "written only for a pair no column-level edge already covers.",
+        properties={},
+    ),
+
     "geography.unit": TableDef(
         schema=Schema(
             NestedField(1, "geo_id", StringType(), required=True,
                         doc="Canonical id: '<level>:<fips>', e.g. 'county:08031'. Part of the "
                             "business key together with vintage."),
             NestedField(2, "level", StringType(), required=True,
-                        doc="One of: nation, state, county, tract, block_group, zcta, place, "
-                            "custom."),
+                        doc="One of: nation, state, county, tract, block_group, zcta, place, cd "
+                            "(congressional district), sldu (state legislative district, upper "
+                            "chamber), sldl (state legislative district, lower chamber), custom."),
             NestedField(3, "fips", StringType(), doc="The bare code, without the level prefix."),
             NestedField(4, "vintage", IntegerType(), required=True,
                         doc="Boundary vintage year, e.g. 2020. Part of the business key: a FIPS "
@@ -383,6 +439,100 @@ TABLES = {
                 "wholesale each time — not versioned by gazetteer year, since FIPS-to-state "
                 "assignment doesn't move on that cadence. Feeds geography.unit's state-level "
                 "names. Licence: U.S. government work, public domain (17 U.S.C. § 105).",
+    ),
+
+    # --- raw: census gazetteer districts ---
+    # Congressional (CD) and state legislative (SLDU/SLDL) districts (#104).
+    # Tract -> district weights (the block-to-district relationship) are
+    # deferred to #25 -- see census_gazetteer.py's module docstring.
+    "raw.census__gazetteer_cd": TableDef(
+        schema=Schema(
+            NestedField(1, "usps", StringType(), doc="Two-letter USPS state/territory abbreviation."),
+            NestedField(2, "geoid", StringType(), required=True,
+                        doc="4-digit state+district FIPS-style code, e.g. '0101' (Alabama's 1st). "
+                            "The last two digits are '00' for an at-large (single-district) state. "
+                            "Unique per row within one gazetteer_year."),
+            NestedField(3, "geoidfq", StringType(),
+                        doc="Fully qualified GEOID used to join data.census.gov tables. Only "
+                            "present from the 2025 gazetteer layout; NULL in earlier vintages."),
+            NestedField(4, "aland", StringType(), doc="Land area, square meters, as published."),
+            NestedField(5, "awater", StringType(), doc="Water area, square meters, as published."),
+            NestedField(6, "aland_sqmi", StringType(), doc="Land area, square miles, as published."),
+            NestedField(7, "awater_sqmi", StringType(), doc="Water area, square miles, as published."),
+            NestedField(8, "intptlat", StringType(), doc="Internal point latitude, as published."),
+            NestedField(9, "intptlong", StringType(), doc="Internal point longitude, as published."),
+            NestedField(10, "gazetteer_year", IntegerType(), required=True,
+                        doc="The gazetteer vintage year this row was published under. Census "
+                            "labels the underlying CD file with the Congress number that vintage "
+                            "serves (census_gazetteer.CD_CONGRESS), not this year — this column is "
+                            "geography.unit's boundary vintage, kept parallel to every other "
+                            "level. Raw is replaced wholesale per value of this column."),
+            NestedField(11, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("gazetteer_year", "geoid"),
+        comment="Census Gazetteer congressional-district (CD) file landed verbatim and whole, one "
+                "row per district per vintage year (SPEC.md § Geography; #104). No NAME column "
+                "(census_gazetteer.transform synthesizes one). Licence: U.S. government work, "
+                "public domain (17 U.S.C. § 105).",
+    ),
+
+    "raw.census__gazetteer_sldu": TableDef(
+        schema=Schema(
+            NestedField(1, "usps", StringType(), doc="Two-letter USPS state/territory abbreviation."),
+            NestedField(2, "geoid", StringType(), required=True,
+                        doc="5-digit state+district code, e.g. '01001' (Alabama Senate District 1). "
+                            "Unique per row within one gazetteer_year."),
+            NestedField(3, "geoidfq", StringType(),
+                        doc="Fully qualified GEOID used to join data.census.gov tables. Only "
+                            "present from the 2025 gazetteer layout; NULL in earlier vintages."),
+            NestedField(4, "name", StringType(), doc="District name, as published, e.g. 'State "
+                                                      "Senate District 1'."),
+            NestedField(5, "aland", StringType(), doc="Land area, square meters, as published."),
+            NestedField(6, "awater", StringType(), doc="Water area, square meters, as published."),
+            NestedField(7, "aland_sqmi", StringType(), doc="Land area, square miles, as published."),
+            NestedField(8, "awater_sqmi", StringType(), doc="Water area, square miles, as published."),
+            NestedField(9, "intptlat", StringType(), doc="Internal point latitude, as published."),
+            NestedField(10, "intptlong", StringType(), doc="Internal point longitude, as published."),
+            NestedField(11, "gazetteer_year", IntegerType(), required=True,
+                        doc="The gazetteer vintage year this row was published under. Raw is "
+                            "replaced wholesale per value of this column."),
+            NestedField(12, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("gazetteer_year", "geoid"),
+        comment="Census Gazetteer state-legislative upper-chamber (SLDU) file landed verbatim and "
+                "whole, one row per district per vintage year (SPEC.md § Geography; #104). Licence: "
+                "U.S. government work, public domain (17 U.S.C. § 105).",
+    ),
+
+    "raw.census__gazetteer_sldl": TableDef(
+        schema=Schema(
+            NestedField(1, "usps", StringType(), doc="Two-letter USPS state/territory abbreviation."),
+            NestedField(2, "geoid", StringType(), required=True,
+                        doc="5-digit state+district code, e.g. '01001' (Alabama House District 1). "
+                            "Unique per row within one gazetteer_year."),
+            NestedField(3, "geoidfq", StringType(),
+                        doc="Fully qualified GEOID used to join data.census.gov tables. Only "
+                            "present from the 2025 gazetteer layout; NULL in earlier vintages."),
+            NestedField(4, "name", StringType(), doc="District name, as published, e.g. 'State "
+                                                      "House District 1'."),
+            NestedField(5, "aland", StringType(), doc="Land area, square meters, as published."),
+            NestedField(6, "awater", StringType(), doc="Water area, square meters, as published."),
+            NestedField(7, "aland_sqmi", StringType(), doc="Land area, square miles, as published."),
+            NestedField(8, "awater_sqmi", StringType(), doc="Water area, square miles, as published."),
+            NestedField(9, "intptlat", StringType(), doc="Internal point latitude, as published."),
+            NestedField(10, "intptlong", StringType(), doc="Internal point longitude, as published."),
+            NestedField(11, "gazetteer_year", IntegerType(), required=True,
+                        doc="The gazetteer vintage year this row was published under. Raw is "
+                            "replaced wholesale per value of this column."),
+            NestedField(12, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("gazetteer_year", "geoid"),
+        comment="Census Gazetteer state-legislative lower-chamber (SLDL) file landed verbatim and "
+                "whole, one row per district per vintage year (SPEC.md § Geography; #104). Licence: "
+                "U.S. government work, public domain (17 U.S.C. § 105).",
     ),
 
     # --- raw: cdc places ---
@@ -1068,6 +1218,416 @@ TABLES = {
                 "2020/2022 rows, verified byte-identical. Public domain (17 U.S.C. § "
                 "105; https://www.cdc.gov/other/agencymaterials.html).",
     ),
+
+    # 2000 and 2010 editions land into their own per-layout tables, not unioned into
+    # raw.svi__county/raw.svi__tract above (#92; module docstring: 2010's STATE column
+    # holds the 2-digit FIPS code where 2014+ holds the state name -- a same-name,
+    # different-meaning collision; 2000 has no ACS E_/M_ columns at all and a stale,
+    # non-matching first header line CDC never removed).
+    "raw.svi__county_2000": TableDef(
+        schema=Schema(
+            NestedField(1, "ST", StringType(), doc="2-digit state FIPS code."),
+            NestedField(2, "COU", StringType(), doc="3-digit county FIPS code (within-state)."),
+            NestedField(3, "STCNTY", StringType(), required=True, doc="5-digit state+county FIPS code -- the county-level geographic identifier in the county file (which has no separate FIPS column); the containing county's code in the tract file."),
+            NestedField(4, "STATE", StringType(), doc="State name, as published (e.g. 'Alabama')."),
+            NestedField(5, "ST_ABBR", StringType(), doc="2-letter USPS state abbreviation."),
+            NestedField(6, "COUNTY", StringType(), doc="County (or county-equivalent) name, as published."),
+            NestedField(7, "P_POV", StringType(), doc="Proportion of individuals below the poverty level (SVI 2000 Data Dictionary, theme 1: Socioeconomic)."),
+            NestedField(8, "P_UNEMP", StringType(), doc="Proportion of civilian population (age 16+) unemployed (theme 1)."),
+            NestedField(9, "P_PCI", StringType(), doc="Per capita income in 1999 dollars -- despite the 'P_' prefix shared with the proportion variables, this is a dollar amount, not a percentage (theme 1; same naming quirk as the 2010/2014+ layouts' EP_PCI)."),
+            NestedField(10, "P_NOHSDP", StringType(), doc="Proportion of persons age 25+ with no high school diploma (theme 1)."),
+            NestedField(11, "P_AGE65", StringType(), doc="Proportion of persons aged 65 and older (theme 2: Household Composition/Disability)."),
+            NestedField(12, "P_AGE17", StringType(), doc="Proportion of persons aged 17 and younger (theme 2)."),
+            NestedField(13, "P_DISABL", StringType(), doc="Proportion of persons age 5+ with a disability (theme 2)."),
+            NestedField(14, "P_SNGPNT", StringType(), doc="Proportion of single-parent households with children under 18 (theme 2)."),
+            NestedField(15, "P_MINRTY", StringType(), doc="Proportion minority (all persons except white, non-Hispanic) (theme 3: Minority Status/Language)."),
+            NestedField(16, "P_LIMENG", StringType(), doc="Proportion of persons age 5+ who speak English \"less than well\" (theme 3)."),
+            NestedField(17, "P_MUNIT", StringType(), doc="Proportion of housing in structures with 10 or more units (theme 4: Housing Type/Transportation)."),
+            NestedField(18, "P_MOBILE", StringType(), doc="Proportion of mobile homes (theme 4)."),
+            NestedField(19, "P_CROWD", StringType(), doc="Proportion of households with more people than rooms (theme 4)."),
+            NestedField(20, "P_NOVEH", StringType(), doc="Proportion of households with no vehicle available (theme 4)."),
+            NestedField(21, "P_GROUPQ", StringType(), doc="Proportion of persons in institutional and non-institutional group quarters (theme 4)."),
+            NestedField(22, "PL_POV", StringType(), doc="Percentile ranking (0-1) of the poverty proportion, among all units landed in this edition; one of the four components summed into RPL_THEME1."),
+            NestedField(23, "PL_UNEMP", StringType(), doc="Percentile ranking (0-1) of the unemployment proportion; one of the four components summed into RPL_THEME1."),
+            NestedField(24, "PL_PCI", StringType(), doc="Percentile ranking (0-1) of per capita income (ranked low-to-high, since unlike the other variables a higher income is lower vulnerability); one of the four components summed into RPL_THEME1."),
+            NestedField(25, "PL_NOHSDP", StringType(), doc="Percentile ranking (0-1) of the no-high-school-diploma proportion; one of the four components summed into RPL_THEME1."),
+            NestedField(26, "RPL_THEME1", StringType(), doc="Overall percentile ranking (0-1) for theme 1 (Socioeconomic: poverty, unemployment, per capita income, no high school diploma), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME1:2000'."),
+            NestedField(27, "PL_AGE65", StringType(), doc="Percentile ranking (0-1) of the age-65+ proportion; one of the four components summed into RPL_THEME2."),
+            NestedField(28, "PL_AGE17", StringType(), doc="Percentile ranking (0-1) of the age-17-and-under proportion; one of the four components summed into RPL_THEME2."),
+            NestedField(29, "PL_DISABL", StringType(), doc="Percentile ranking (0-1) of the disability proportion; one of the four components summed into RPL_THEME2."),
+            NestedField(30, "PL_SNGPNT", StringType(), doc="Percentile ranking (0-1) of the single-parent-household proportion; one of the four components summed into RPL_THEME2."),
+            NestedField(31, "RPL_THEME2", StringType(), doc="Overall percentile ranking (0-1) for theme 2 (Household Composition/Disability: age 65+, age 17 and under, disability, single-parent households), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME2:2000'."),
+            NestedField(32, "PL_MINRTY", StringType(), doc="Percentile ranking (0-1) of the minority proportion; one of the two components summed into RPL_THEME3."),
+            NestedField(33, "PL_LIMENG", StringType(), doc="Percentile ranking (0-1) of the limited-English proportion; one of the two components summed into RPL_THEME3."),
+            NestedField(34, "RPL_THEME3", StringType(), doc="Overall percentile ranking (0-1) for theme 3 (Minority Status/Language: minority population, limited English), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME3:2000'."),
+            NestedField(35, "PL_MUNIT", StringType(), doc="Percentile ranking (0-1) of the multi-unit-housing proportion; one of the five components summed into RPL_THEME4."),
+            NestedField(36, "PL_MOBILE", StringType(), doc="Percentile ranking (0-1) of the mobile-home proportion; one of the five components summed into RPL_THEME4."),
+            NestedField(37, "PL_CROWD", StringType(), doc="Percentile ranking (0-1) of the crowding proportion; one of the five components summed into RPL_THEME4."),
+            NestedField(38, "PL_NOVEH", StringType(), doc="Percentile ranking (0-1) of the no-vehicle proportion; one of the five components summed into RPL_THEME4."),
+            NestedField(39, "PL_GROUPQ", StringType(), doc="Percentile ranking (0-1) of the group-quarters proportion; one of the five components summed into RPL_THEME4."),
+            NestedField(40, "RPL_THEME4", StringType(), doc="Overall percentile ranking (0-1) for theme 4 (Housing Type/Transportation: multi-unit housing, mobile homes, crowding, no vehicle, group quarters), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME4:2000'."),
+            NestedField(41, "RPL_THEMES", StringType(), doc="Overall SVI percentile ranking (0-1) across all four themes, among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEMES:2000'. Unlike the 2010/2014+ layouts, 2000 publishes no separate SPL_THEME sum-of-percentiles column, only the PL_ per-variable percentiles and this RPL_ theme/overall ranking (verified against the real header)."),
+            NestedField(42, "F_POV", StringType(), doc="Flag: 1 if the poverty proportion is in the 90th percentile (high-vulnerability), 0 otherwise."),
+            NestedField(43, "F_UNEMP", StringType(), doc="Flag: 1 if the unemployment proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(44, "F_PCI", StringType(), doc="Flag: 1 if per capita income is in the 90th percentile (of vulnerability, i.e. low income), 0 otherwise."),
+            NestedField(45, "F_NOHSDP", StringType(), doc="Flag: 1 if the no-high-school-diploma proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(46, "F_THEME1", StringType(), doc="Sum of the theme 1 flags (F_POV + F_UNEMP + F_PCI + F_NOHSDP)."),
+            NestedField(47, "F_AGE65", StringType(), doc="Flag: 1 if the age-65+ proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(48, "F_AGE17", StringType(), doc="Flag: 1 if the age-17-and-under proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(49, "F_DISABL", StringType(), doc="Flag: 1 if the disability proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(50, "F_SNGPNT", StringType(), doc="Flag: 1 if the single-parent-household proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(51, "F_THEME2", StringType(), doc="Sum of the theme 2 flags (F_AGE65 + F_AGE17 + F_DISABL + F_SNGPNT)."),
+            NestedField(52, "F_MINRTY", StringType(), doc="Flag: 1 if the minority proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(53, "F_LIMENG", StringType(), doc="Flag: 1 if the limited-English proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(54, "F_THEME3", StringType(), doc="Sum of the theme 3 flags (F_MINRTY + F_LIMENG)."),
+            NestedField(55, "F_MUNIT", StringType(), doc="Flag: 1 if the multi-unit-housing proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(56, "F_MOBILE", StringType(), doc="Flag: 1 if the mobile-home proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(57, "F_CROWD", StringType(), doc="Flag: 1 if the crowding proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(58, "F_NOVEH", StringType(), doc="Flag: 1 if the no-vehicle proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(59, "F_GROUPQ", StringType(), doc="Flag: 1 if the group-quarters proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(60, "F_THEME4", StringType(), doc="Sum of the theme 4 flags (F_MUNIT + F_MOBILE + F_CROWD + F_NOVEH + F_GROUPQ)."),
+            NestedField(61, "F_TOTAL", StringType(), doc="Sum of all four theme flag sums (F_THEME1 + F_THEME2 + F_THEME3 + F_THEME4)."),
+            NestedField(62, "TOTPOP", StringType(), doc="Total 2000 population."),
+            NestedField(63, "HU", StringType(), doc="Total 2000 housing units."),
+            NestedField(64, "POV", StringType(), doc="Number of individuals below the poverty level."),
+            NestedField(65, "UNEMP", StringType(), doc="Number of civilian (age 16+) population unemployed."),
+            NestedField(66, "NOHSDP", StringType(), doc="Number of persons age 25+ with no high school diploma."),
+            NestedField(67, "AGE65", StringType(), doc="Number of persons aged 65 and older."),
+            NestedField(68, "AGE17", StringType(), doc="Number of persons aged 17 and younger."),
+            NestedField(69, "DISABL", StringType(), doc="Number of persons age 5+ with a disability."),
+            NestedField(70, "SNGPNT", StringType(), doc="Number of single-parent households with children under 18."),
+            NestedField(71, "MINRTY", StringType(), doc="Number of minority persons (all persons except white, non-Hispanic)."),
+            NestedField(72, "LIMENG", StringType(), doc="Number of persons age 5+ who speak English \"less than well\"."),
+            NestedField(73, "MUNIT", StringType(), doc="Number of housing units in structures with 10 or more units."),
+            NestedField(74, "MOBILE", StringType(), doc="Number of mobile homes."),
+            NestedField(75, "CROWD", StringType(), doc="Number of households with more people than rooms."),
+            NestedField(76, "NOVEH", StringType(), doc="Number of households with no vehicle available."),
+            NestedField(77, "GROUPQ", StringType(), doc="Number of persons in institutional and non-institutional group quarters."),
+            NestedField(78, "svi_edition", StringType(), required=True, doc="The SVI edition this row was published in ('2000' or '2010' for this table) -- the version axis for this source (module docstring). Raw is replaced wholesale per value of this column."),
+            NestedField(79, "landed_in", StringType(), required=True, doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("svi_edition", "STCNTY"),
+        comment="CDC/ATSDR Social Vulnerability Index 2000 edition, county file, landed verbatim and whole under its own real column layout -- NOT unioned into raw.svi__county (module docstring: no ACS E_/M_ columns at all, decennial-Census-based; the real file's line 1 is a stale header CDC never removed, so this table's schema matches the file's real line-2 header, and land_raw skips line 1 on read). Public domain (17 U.S.C. Sec 105; https://www.cdc.gov/other/agencymaterials.html).",
+    ),
+
+    "raw.svi__tract_2000": TableDef(
+        schema=Schema(
+            NestedField(1, "ST", StringType(), doc="2-digit state FIPS code."),
+            NestedField(2, "COU", StringType(), doc="3-digit county FIPS code (within-state)."),
+            NestedField(3, "STCNTY", StringType(), doc="5-digit state+county FIPS code -- the county-level geographic identifier in the county file (which has no separate FIPS column); the containing county's code in the tract file."),
+            NestedField(4, "TRACT", StringType(), doc="Local tract number (tract file only), e.g. '020100'."),
+            NestedField(5, "FIPS", StringType(), required=True, doc="11-digit tract FIPS code (tract file only)."),
+            NestedField(6, "STATE", StringType(), doc="State name, as published (e.g. 'Alabama')."),
+            NestedField(7, "ST_ABBR", StringType(), doc="2-letter USPS state abbreviation."),
+            NestedField(8, "COUNTY", StringType(), doc="County (or county-equivalent) name, as published."),
+            NestedField(9, "P_POV", StringType(), doc="Proportion of individuals below the poverty level (SVI 2000 Data Dictionary, theme 1: Socioeconomic)."),
+            NestedField(10, "P_UNEMP", StringType(), doc="Proportion of civilian population (age 16+) unemployed (theme 1)."),
+            NestedField(11, "P_PCI", StringType(), doc="Per capita income in 1999 dollars -- despite the 'P_' prefix shared with the proportion variables, this is a dollar amount, not a percentage (theme 1; same naming quirk as the 2010/2014+ layouts' EP_PCI)."),
+            NestedField(12, "P_NOHSDP", StringType(), doc="Proportion of persons age 25+ with no high school diploma (theme 1)."),
+            NestedField(13, "P_AGE65", StringType(), doc="Proportion of persons aged 65 and older (theme 2: Household Composition/Disability)."),
+            NestedField(14, "P_AGE17", StringType(), doc="Proportion of persons aged 17 and younger (theme 2)."),
+            NestedField(15, "P_DISABL", StringType(), doc="Proportion of persons age 5+ with a disability (theme 2)."),
+            NestedField(16, "P_SNGPNT", StringType(), doc="Proportion of single-parent households with children under 18 (theme 2)."),
+            NestedField(17, "P_MINRTY", StringType(), doc="Proportion minority (all persons except white, non-Hispanic) (theme 3: Minority Status/Language)."),
+            NestedField(18, "P_LIMENG", StringType(), doc="Proportion of persons age 5+ who speak English \"less than well\" (theme 3)."),
+            NestedField(19, "P_MUNIT", StringType(), doc="Proportion of housing in structures with 10 or more units (theme 4: Housing Type/Transportation)."),
+            NestedField(20, "P_MOBILE", StringType(), doc="Proportion of mobile homes (theme 4)."),
+            NestedField(21, "P_CROWD", StringType(), doc="Proportion of households with more people than rooms (theme 4)."),
+            NestedField(22, "P_NOVEH", StringType(), doc="Proportion of households with no vehicle available (theme 4)."),
+            NestedField(23, "P_GROUPQ", StringType(), doc="Proportion of persons in institutional and non-institutional group quarters (theme 4)."),
+            NestedField(24, "PL_POV", StringType(), doc="Percentile ranking (0-1) of the poverty proportion, among all units landed in this edition; one of the four components summed into RPL_THEME1."),
+            NestedField(25, "PL_UNEMP", StringType(), doc="Percentile ranking (0-1) of the unemployment proportion; one of the four components summed into RPL_THEME1."),
+            NestedField(26, "PL_PCI", StringType(), doc="Percentile ranking (0-1) of per capita income (ranked low-to-high, since unlike the other variables a higher income is lower vulnerability); one of the four components summed into RPL_THEME1."),
+            NestedField(27, "PL_NOHSDP", StringType(), doc="Percentile ranking (0-1) of the no-high-school-diploma proportion; one of the four components summed into RPL_THEME1."),
+            NestedField(28, "RPL_THEME1", StringType(), doc="Overall percentile ranking (0-1) for theme 1 (Socioeconomic: poverty, unemployment, per capita income, no high school diploma), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME1:2000'."),
+            NestedField(29, "PL_AGE65", StringType(), doc="Percentile ranking (0-1) of the age-65+ proportion; one of the four components summed into RPL_THEME2."),
+            NestedField(30, "PL_AGE17", StringType(), doc="Percentile ranking (0-1) of the age-17-and-under proportion; one of the four components summed into RPL_THEME2."),
+            NestedField(31, "PL_DISABL", StringType(), doc="Percentile ranking (0-1) of the disability proportion; one of the four components summed into RPL_THEME2."),
+            NestedField(32, "PL_SNGPNT", StringType(), doc="Percentile ranking (0-1) of the single-parent-household proportion; one of the four components summed into RPL_THEME2."),
+            NestedField(33, "RPL_THEME2", StringType(), doc="Overall percentile ranking (0-1) for theme 2 (Household Composition/Disability: age 65+, age 17 and under, disability, single-parent households), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME2:2000'."),
+            NestedField(34, "PL_MINRTY", StringType(), doc="Percentile ranking (0-1) of the minority proportion; one of the two components summed into RPL_THEME3."),
+            NestedField(35, "PL_LIMENG", StringType(), doc="Percentile ranking (0-1) of the limited-English proportion; one of the two components summed into RPL_THEME3."),
+            NestedField(36, "RPL_THEME3", StringType(), doc="Overall percentile ranking (0-1) for theme 3 (Minority Status/Language: minority population, limited English), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME3:2000'."),
+            NestedField(37, "PL_MUNIT", StringType(), doc="Percentile ranking (0-1) of the multi-unit-housing proportion; one of the five components summed into RPL_THEME4."),
+            NestedField(38, "PL_MOBILE", StringType(), doc="Percentile ranking (0-1) of the mobile-home proportion; one of the five components summed into RPL_THEME4."),
+            NestedField(39, "PL_CROWD", StringType(), doc="Percentile ranking (0-1) of the crowding proportion; one of the five components summed into RPL_THEME4."),
+            NestedField(40, "PL_NOVEH", StringType(), doc="Percentile ranking (0-1) of the no-vehicle proportion; one of the five components summed into RPL_THEME4."),
+            NestedField(41, "PL_GROUPQ", StringType(), doc="Percentile ranking (0-1) of the group-quarters proportion; one of the five components summed into RPL_THEME4."),
+            NestedField(42, "RPL_THEME4", StringType(), doc="Overall percentile ranking (0-1) for theme 4 (Housing Type/Transportation: multi-unit housing, mobile homes, crowding, no vehicle, group quarters), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME4:2000'."),
+            NestedField(43, "RPL_THEMES", StringType(), doc="Overall SVI percentile ranking (0-1) across all four themes, among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEMES:2000'. Unlike the 2010/2014+ layouts, 2000 publishes no separate SPL_THEME sum-of-percentiles column, only the PL_ per-variable percentiles and this RPL_ theme/overall ranking (verified against the real header)."),
+            NestedField(44, "F_POV", StringType(), doc="Flag: 1 if the poverty proportion is in the 90th percentile (high-vulnerability), 0 otherwise."),
+            NestedField(45, "F_UNEMP", StringType(), doc="Flag: 1 if the unemployment proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(46, "F_PCI", StringType(), doc="Flag: 1 if per capita income is in the 90th percentile (of vulnerability, i.e. low income), 0 otherwise."),
+            NestedField(47, "F_NOHSDP", StringType(), doc="Flag: 1 if the no-high-school-diploma proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(48, "F_THEME1", StringType(), doc="Sum of the theme 1 flags (F_POV + F_UNEMP + F_PCI + F_NOHSDP)."),
+            NestedField(49, "F_AGE65", StringType(), doc="Flag: 1 if the age-65+ proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(50, "F_AGE17", StringType(), doc="Flag: 1 if the age-17-and-under proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(51, "F_DISABL", StringType(), doc="Flag: 1 if the disability proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(52, "F_SNGPNT", StringType(), doc="Flag: 1 if the single-parent-household proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(53, "F_THEME2", StringType(), doc="Sum of the theme 2 flags (F_AGE65 + F_AGE17 + F_DISABL + F_SNGPNT)."),
+            NestedField(54, "F_MINRTY", StringType(), doc="Flag: 1 if the minority proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(55, "F_LIMENG", StringType(), doc="Flag: 1 if the limited-English proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(56, "F_THEME3", StringType(), doc="Sum of the theme 3 flags (F_MINRTY + F_LIMENG)."),
+            NestedField(57, "F_MUNIT", StringType(), doc="Flag: 1 if the multi-unit-housing proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(58, "F_MOBILE", StringType(), doc="Flag: 1 if the mobile-home proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(59, "F_CROWD", StringType(), doc="Flag: 1 if the crowding proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(60, "F_NOVEH", StringType(), doc="Flag: 1 if the no-vehicle proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(61, "F_GROUPQ", StringType(), doc="Flag: 1 if the group-quarters proportion is in the 90th percentile, 0 otherwise."),
+            NestedField(62, "F_THEME4", StringType(), doc="Sum of the theme 4 flags (F_MUNIT + F_MOBILE + F_CROWD + F_NOVEH + F_GROUPQ)."),
+            NestedField(63, "F_TOTAL", StringType(), doc="Sum of all four theme flag sums (F_THEME1 + F_THEME2 + F_THEME3 + F_THEME4)."),
+            NestedField(64, "TOTPOP", StringType(), doc="Total 2000 population."),
+            NestedField(65, "HU", StringType(), doc="Total 2000 housing units."),
+            NestedField(66, "POV", StringType(), doc="Number of individuals below the poverty level."),
+            NestedField(67, "UNEMP", StringType(), doc="Number of civilian (age 16+) population unemployed."),
+            NestedField(68, "NOHSDP", StringType(), doc="Number of persons age 25+ with no high school diploma."),
+            NestedField(69, "AGE65", StringType(), doc="Number of persons aged 65 and older."),
+            NestedField(70, "AGE17", StringType(), doc="Number of persons aged 17 and younger."),
+            NestedField(71, "DISABL", StringType(), doc="Number of persons age 5+ with a disability."),
+            NestedField(72, "SNGPNT", StringType(), doc="Number of single-parent households with children under 18."),
+            NestedField(73, "MINRTY", StringType(), doc="Number of minority persons (all persons except white, non-Hispanic)."),
+            NestedField(74, "LIMENG", StringType(), doc="Number of persons age 5+ who speak English \"less than well\"."),
+            NestedField(75, "MUNIT", StringType(), doc="Number of housing units in structures with 10 or more units."),
+            NestedField(76, "MOBILE", StringType(), doc="Number of mobile homes."),
+            NestedField(77, "CROWD", StringType(), doc="Number of households with more people than rooms."),
+            NestedField(78, "NOVEH", StringType(), doc="Number of households with no vehicle available."),
+            NestedField(79, "GROUPQ", StringType(), doc="Number of persons in institutional and non-institutional group quarters."),
+            NestedField(80, "svi_edition", StringType(), required=True, doc="The SVI edition this row was published in ('2000' or '2010' for this table) -- the version axis for this source (module docstring). Raw is replaced wholesale per value of this column."),
+            NestedField(81, "landed_in", StringType(), required=True, doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("svi_edition", "FIPS"),
+        comment="CDC/ATSDR Social Vulnerability Index 2000 edition, tract file, landed verbatim and whole under its own real column layout -- see raw.svi__county_2000 for why this is a dedicated table rather than a union. Public domain (17 U.S.C. Sec 105; https://www.cdc.gov/other/agencymaterials.html).",
+    ),
+
+    "raw.svi__county_2010": TableDef(
+        schema=Schema(
+            NestedField(1, "ST", StringType(), doc="2-letter USPS state abbreviation (county file only; note this is the opposite of STATE in this same layout -- see STATE)."),
+            NestedField(2, "STATE", StringType(), doc="2-digit state FIPS code in the county file (opposite meaning from the 2014+ layouts, where STATE is the state name -- module docstring: this is exactly the collision that keeps 2010 out of the shared raw.svi__county union table)."),
+            NestedField(3, "FIPS", StringType(), required=True, doc="Geographic identifier: 5-digit county FIPS in raw.svi__county_2010, 11-digit tract FIPS in raw.svi__tract_2010."),
+            NestedField(4, "LOCATION", StringType(), doc="Human-readable location name, e.g. 'Autauga County, Alabama' (county) or 'Census Tract 201, Autauga County, Alabama' (tract)."),
+            NestedField(5, "TOTPOP", StringType(), doc="Total population, 2010 Census SF1 (100% count)."),
+            NestedField(6, "E_TOTPOP", StringType(), doc="Population estimate, 2006-2010 ACS (5-year)."),
+            NestedField(7, "M_TOTPOP", StringType(), doc="Margin of error (90% confidence) for the paired E_TOTPOP estimate, 2006-2010 ACS."),
+            NestedField(8, "HU", StringType(), doc="Total housing units, 2010 Census SF1."),
+            NestedField(9, "E_HU", StringType(), doc="Housing units estimate, 2006-2010 ACS."),
+            NestedField(10, "M_HU", StringType(), doc="Margin of error (90% confidence) for the paired E_HU estimate."),
+            NestedField(11, "HH", StringType(), doc="Number of households, 2010 Census SF1."),
+            NestedField(12, "E_POV", StringType(), doc="Persons below the poverty level estimate, 2006-2010 ACS."),
+            NestedField(13, "M_POV", StringType(), doc="Margin of error (90% confidence) for the paired E_POV estimate."),
+            NestedField(14, "E_UNEMP", StringType(), doc="Civilian (age 16+) unemployed estimate, 2006-2010 ACS."),
+            NestedField(15, "M_UNEMP", StringType(), doc="Margin of error (90% confidence) for the paired E_UNEMP estimate."),
+            NestedField(16, "E_PCI", StringType(), doc="Per capita income estimate, dollars, 2006-2010 ACS."),
+            NestedField(17, "M_PCI", StringType(), doc="Margin of error (90% confidence) for the paired E_PCI estimate."),
+            NestedField(18, "E_NOHSDIP", StringType(), doc="Persons age 25+ with no high school diploma estimate, 2006-2010 ACS."),
+            NestedField(19, "M_NOHSDIP", StringType(), doc="Margin of error (90% confidence) for the paired E_NOHSDIP estimate."),
+            NestedField(20, "AGE65", StringType(), doc="Persons aged 65 and older, 2010 Census SF1 (100% count, no sampling error -- SVI 2010 documentation)."),
+            NestedField(21, "AGE17", StringType(), doc="Persons aged 17 and younger, 2010 Census SF1 (100% count)."),
+            NestedField(22, "SNGPRNT", StringType(), doc="Single-parent households with children under 18, 2010 Census SF1 (100% count). SVI 2010 has no separate disability variable at all -- the Census Bureau collected no tract-level disability data for either the 2010 Census or the 2006-2010 ACS (SVI 2010 documentation)."),
+            NestedField(23, "MINORITY", StringType(), doc="Minority population (all persons except white, non-Hispanic), 2010 Census SF1 (100% count)."),
+            NestedField(24, "E_LIMENG", StringType(), doc="Persons age 5+ who speak English \"less than well\" estimate, 2006-2010 ACS."),
+            NestedField(25, "M_LIMENG", StringType(), doc="Margin of error (90% confidence) for the paired E_LIMENG estimate."),
+            NestedField(26, "E_MUNIT", StringType(), doc="Housing in structures with 10 or more units estimate, 2006-2010 ACS."),
+            NestedField(27, "M_MUNIT", StringType(), doc="Margin of error (90% confidence) for the paired E_MUNIT estimate."),
+            NestedField(28, "E_MOBILE", StringType(), doc="Mobile homes estimate, 2006-2010 ACS."),
+            NestedField(29, "M_MOBILE", StringType(), doc="Margin of error (90% confidence) for the paired E_MOBILE estimate."),
+            NestedField(30, "E_CROWD", StringType(), doc="Households with more people than rooms estimate, 2006-2010 ACS."),
+            NestedField(31, "M_CROWD", StringType(), doc="Margin of error (90% confidence) for the paired E_CROWD estimate."),
+            NestedField(32, "E_NOVEH", StringType(), doc="Households with no vehicle available estimate, 2006-2010 ACS."),
+            NestedField(33, "M_NOVEH", StringType(), doc="Margin of error (90% confidence) for the paired E_NOVEH estimate."),
+            NestedField(34, "GROUPQ", StringType(), doc="Persons in institutionalized and non-institutionalized group quarters, 2010 Census SF1 (100% count)."),
+            NestedField(35, "E_P_POV", StringType(), doc="Proportion of persons below poverty estimate (E_POV / persons for whom poverty status is determined estimate); multiply by 100 for a percentage."),
+            NestedField(36, "M_P_POV", StringType(), doc="Margin of error (90% confidence) for the paired E_P_POV estimate."),
+            NestedField(37, "E_P_UNEMP", StringType(), doc="Proportion of civilian (age 16+) unemployed estimate (E_UNEMP / civilians estimate); multiply by 100 for a percentage."),
+            NestedField(38, "M_P_UNEMP", StringType(), doc="Margin of error (90% confidence) for the paired E_P_UNEMP estimate."),
+            NestedField(39, "E_P_PCI", StringType(), doc="Per capita income estimate, dollars -- duplicated verbatim from E_PCI (SVI 2010 documentation: 'Same as E_PCI'; not actually a proportion despite the naming, same quirk as the 2014+ layouts' EP_PCI)."),
+            NestedField(40, "M_P_PCI", StringType(), doc="Margin of error (90% confidence) for E_PCI/E_P_PCI, duplicated verbatim from M_PCI (dollars, not a percent)."),
+            NestedField(41, "E_P_NOHSDIP", StringType(), doc="Proportion of persons with no high school diploma (age 25+) estimate; multiply by 100 for a percentage."),
+            NestedField(42, "M_P_NOHSDIP", StringType(), doc="Margin of error (90% confidence) for the paired E_P_NOHSDIP estimate."),
+            NestedField(43, "P_AGE65", StringType(), doc="Proportion of persons aged 65 and older (AGE65 / TOTPOP, 2010 Census SF1, no sampling error); multiply by 100 for a percentage."),
+            NestedField(44, "P_AGE17", StringType(), doc="Proportion of persons aged 17 and younger (AGE17 / TOTPOP, 2010 Census SF1); multiply by 100 for a percentage."),
+            NestedField(45, "P_SNGPRNT", StringType(), doc="Proportion of single-parent households with children under 18 (SNGPRNT / HH, 2010 Census SF1); multiply by 100 for a percentage."),
+            NestedField(46, "P_MINORITY", StringType(), doc="Proportion minority, all persons except white non-Hispanic (MINORITY / TOTPOP, 2010 Census SF1); multiply by 100 for a percentage."),
+            NestedField(47, "E_P_LIMENG", StringType(), doc="Proportion of persons age 5+ who speak English \"less than well\" estimate (E_LIMENG / persons aged 5+ estimate); multiply by 100 for a percentage."),
+            NestedField(48, "M_P_LIMENG", StringType(), doc="Margin of error (90% confidence) for the paired E_P_LIMENG estimate."),
+            NestedField(49, "E_P_MUNIT", StringType(), doc="Proportion of housing in structures with 10+ units estimate (E_MUNIT / E_HU); multiply by 100 for a percentage."),
+            NestedField(50, "M_P_MUNIT", StringType(), doc="Margin of error (90% confidence) for the paired E_P_MUNIT estimate."),
+            NestedField(51, "E_P_MOBILE", StringType(), doc="Proportion of mobile homes estimate (E_MOBILE / E_HU); multiply by 100 for a percentage."),
+            NestedField(52, "M_P_MOBILE", StringType(), doc="Margin of error (90% confidence) for the paired E_P_MOBILE estimate."),
+            NestedField(53, "E_P_CROWD", StringType(), doc="Proportion of households with more people than rooms estimate (E_CROWD / occupied housing units estimate); multiply by 100 for a percentage."),
+            NestedField(54, "M_P_CROWD", StringType(), doc="Margin of error (90% confidence) for the paired E_P_CROWD estimate."),
+            NestedField(55, "E_P_NOVEH", StringType(), doc="Proportion of households with no vehicle available estimate (E_NOVEH / occupied housing units estimate); multiply by 100 for a percentage."),
+            NestedField(56, "M_P_NOVEH", StringType(), doc="Margin of error (90% confidence) for the paired E_P_NOVEH estimate."),
+            NestedField(57, "P_GROUPQ", StringType(), doc="Proportion of persons in institutionalized and non-institutionalized group quarters (GROUPQ / TOTPOP, 2010 Census SF1); multiply by 100 for a percentage."),
+            NestedField(58, "E_PL_POV", StringType(), doc="Percentile of the poverty proportion estimate, no consideration of MOE; one of the four components summed into S_PL_THEME1."),
+            NestedField(59, "E_PL_UNEMP", StringType(), doc="Percentile of the unemployment proportion estimate, no consideration of MOE; one of the four components summed into S_PL_THEME1."),
+            NestedField(60, "E_PL_PCI", StringType(), doc="Percentile of per capita income estimate, no consideration of MOE; one of the four components summed into S_PL_THEME1."),
+            NestedField(61, "E_PL_NOHSDIP", StringType(), doc="Percentile of the no-high-school-diploma proportion estimate, no consideration of MOE; one of the four components summed into S_PL_THEME1."),
+            NestedField(62, "S_PL_THEME1", StringType(), doc="Sum of the E_PLxxx series for theme 1 (E_PL_POV + E_PL_UNEMP + E_PL_PCI + E_PL_NOHSDIP)."),
+            NestedField(63, "R_PL_THEME1", StringType(), doc="Percentile ranking (0-1) for theme 1 (Socioeconomic), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME1:2010'."),
+            NestedField(64, "PL_AGE65", StringType(), doc="Percentile of the age-65+ proportion, based on 100% counts (no sampling error); one of the three components summed into S_PL_THEME2."),
+            NestedField(65, "PL_AGE17", StringType(), doc="Percentile of the age-17-and-under proportion, based on 100% counts; one of the three components summed into S_PL_THEME2."),
+            NestedField(66, "PL_SNGPRNT", StringType(), doc="Percentile of the single-parent-household proportion, based on 100% counts; one of the three components summed into S_PL_THEME2."),
+            NestedField(67, "S_PL_THEME2", StringType(), doc="Sum of the PLxxx series for theme 2 (PL_AGE65 + PL_AGE17 + PL_SNGPRNT -- no disability component in this edition)."),
+            NestedField(68, "R_PL_THEME2", StringType(), doc="Percentile ranking (0-1) for theme 2 (Household Composition -- no disability variable in this edition, unlike SVI 2000 and 2014+), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME2:2010'."),
+            NestedField(69, "PL_MINORITY", StringType(), doc="Percentile of the minority proportion, based on 100% counts (no sampling error); one of the two components summed into S_PL_THEME3."),
+            NestedField(70, "E_PL_LIMENG", StringType(), doc="Percentile of the limited-English proportion estimate, no consideration of MOE; one of the two components summed into S_PL_THEME3."),
+            NestedField(71, "S_PL_THEME3", StringType(), doc="Sum of the PLxxx series for theme 3 (PL_MINORITY + E_PL_LIMENG)."),
+            NestedField(72, "R_PL_THEME3", StringType(), doc="Percentile ranking (0-1) for theme 3 (Minority Status/Language), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME3:2010'."),
+            NestedField(73, "E_PL_MUNIT", StringType(), doc="Percentile of the multi-unit-housing proportion estimate, no consideration of MOE; one of the five components summed into S_PL_THEME4."),
+            NestedField(74, "E_PL_MOBILE", StringType(), doc="Percentile of the mobile-home proportion estimate, no consideration of MOE; one of the five components summed into S_PL_THEME4."),
+            NestedField(75, "E_PL_CROWD", StringType(), doc="Percentile of the crowding proportion estimate, no consideration of MOE; one of the five components summed into S_PL_THEME4."),
+            NestedField(76, "E_PL_NOVEH", StringType(), doc="Percentile of the no-vehicle proportion estimate, no consideration of MOE; one of the five components summed into S_PL_THEME4."),
+            NestedField(77, "PL_GROUPQ", StringType(), doc="Percentile of the group-quarters proportion, based on 100% counts (no sampling error); one of the five components summed into S_PL_THEME4."),
+            NestedField(78, "S_PL_THEME4", StringType(), doc="Sum of the PLxxx series for theme 4 (E_PL_MUNIT + E_PL_MOBILE + E_PL_CROWD + E_PL_NOVEH + PL_GROUPQ)."),
+            NestedField(79, "R_PL_THEME4", StringType(), doc="Percentile ranking (0-1) for theme 4 (Housing Type/Transportation), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME4:2010'."),
+            NestedField(80, "S_PL_THEMES", StringType(), doc="Sum of the four themes' S_PL_THEME sums."),
+            NestedField(81, "R_PL_THEMES", StringType(), doc="Overall SVI percentile ranking (0-1) across all four themes, among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEMES:2010'."),
+            NestedField(82, "F_PL_POV", StringType(), doc="Flag: 1 if the poverty percentile is in the 90th percentile (high-vulnerability), 0 otherwise."),
+            NestedField(83, "F_PL_UNEMP", StringType(), doc="Flag: 1 if the unemployment percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(84, "F_PL_PCI", StringType(), doc="Flag: 1 if the per-capita-income percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(85, "F_PL_NOHSDIP", StringType(), doc="Flag: 1 if the no-high-school-diploma percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(86, "F_PL_THEME1", StringType(), doc="Sum of the theme 1 flags (F_PL_POV + F_PL_UNEMP + F_PL_PCI + F_PL_NOHSDIP)."),
+            NestedField(87, "F_PL_AGE65", StringType(), doc="Flag: 1 if the age-65+ percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(88, "F_PL_AGE17", StringType(), doc="Flag: 1 if the age-17-and-under percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(89, "F_PLSNGPRNT", StringType(), doc="Flag: 1 if the single-parent-household percentile is in the 90th percentile, 0 otherwise. Landed verbatim under its real, misspelled county-file name -- the tract file spells the equivalent column F_PL_SNGPRNT (verified against both real files); this is why county and tract are declared as separate tables rather than unioned."),
+            NestedField(90, "F_PL_THEME2", StringType(), doc="Sum of the theme 2 flags."),
+            NestedField(91, "F_PL_MINORITY", StringType(), doc="Flag: 1 if the minority percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(92, "F_PL_LIMENG", StringType(), doc="Flag: 1 if the limited-English percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(93, "F_PL_THEME3", StringType(), doc="Sum of the theme 3 flags."),
+            NestedField(94, "F_PL_MUNIT", StringType(), doc="Flag: 1 if the multi-unit-housing percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(95, "F_PL_MOBILE", StringType(), doc="Flag: 1 if the mobile-home percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(96, "F_PL_CROWD", StringType(), doc="Flag: 1 if the crowding percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(97, "F_PL_NOVEH", StringType(), doc="Flag: 1 if the no-vehicle percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(98, "F_PL_GROUPQ", StringType(), doc="Flag: 1 if the group-quarters percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(99, "F_PL_THEME4", StringType(), doc="Sum of the theme 4 flags."),
+            NestedField(100, "F_PL_TOTAL", StringType(), doc="Sum of all four theme flag sums."),
+            NestedField(101, "Shape", StringType(), doc="ArcGIS geometry byproduct (county file only), landed verbatim; not the canonical geometry representation (SPEC.md geometry non-goal)."),
+            NestedField(102, "Shape.STArea()", StringType(), doc="ArcGIS geometry byproduct (county file only), landed verbatim."),
+            NestedField(103, "Shape.STLength()", StringType(), doc="ArcGIS geometry byproduct (county file only), landed verbatim."),
+            NestedField(104, "svi_edition", StringType(), required=True, doc="The SVI edition this row was published in ('2000' or '2010' for this table) -- the version axis for this source (module docstring). Raw is replaced wholesale per value of this column."),
+            NestedField(105, "landed_in", StringType(), required=True, doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("svi_edition", "FIPS"),
+        comment="CDC/ATSDR Social Vulnerability Index 2010 edition, county file, landed verbatim and whole under its own real column layout -- NOT unioned into raw.svi__county (module docstring: this edition's own STATE column holds the 2-digit state FIPS code, while every 2014+ layout's STATE column holds the state name -- a same-name, different-meaning collision unsafe to union). Public domain (17 U.S.C. Sec 105; https://www.cdc.gov/other/agencymaterials.html).",
+    ),
+
+    "raw.svi__tract_2010": TableDef(
+        schema=Schema(
+            NestedField(1, "GEO_ID", StringType(), doc="Census fully qualified GEOID for the tract (tract file only), e.g. '1400000US01001020100'."),
+            NestedField(2, "STATE_FIPS", StringType(), doc="2-digit state FIPS code (tract file only)."),
+            NestedField(3, "CNTY_FIPS", StringType(), doc="3-digit county FIPS code, within-state (tract file only)."),
+            NestedField(4, "TRACT", StringType(), doc="Local tract number (tract file only), e.g. '020100'."),
+            NestedField(5, "CENSUSAREA", StringType(), doc="Land area of the tract, square miles, as published (tract file only)."),
+            NestedField(6, "STCOFIPS", StringType(), doc="5-digit state+county FIPS code of the containing county (tract file only; equivalent to STCNTY in the 2014+ layouts)."),
+            NestedField(7, "FIPS", StringType(), required=True, doc="Geographic identifier: 5-digit county FIPS in raw.svi__county_2010, 11-digit tract FIPS in raw.svi__tract_2010."),
+            NestedField(8, "STATE_ABBR", StringType(), doc="2-letter USPS state abbreviation (tract file only)."),
+            NestedField(9, "STATE_NAME", StringType(), doc="State name, as published (tract file only)."),
+            NestedField(10, "COUNTY", StringType(), doc="County (or county-equivalent) name, as published (tract file only)."),
+            NestedField(11, "LOCATION", StringType(), doc="Human-readable location name, e.g. 'Autauga County, Alabama' (county) or 'Census Tract 201, Autauga County, Alabama' (tract)."),
+            NestedField(12, "TOTPOP", StringType(), doc="Total population, 2010 Census SF1 (100% count)."),
+            NestedField(13, "E_TOTPOP", StringType(), doc="Population estimate, 2006-2010 ACS (5-year)."),
+            NestedField(14, "M_TOTPOP", StringType(), doc="Margin of error (90% confidence) for the paired E_TOTPOP estimate, 2006-2010 ACS."),
+            NestedField(15, "HU", StringType(), doc="Total housing units, 2010 Census SF1."),
+            NestedField(16, "E_HU", StringType(), doc="Housing units estimate, 2006-2010 ACS."),
+            NestedField(17, "M_HU", StringType(), doc="Margin of error (90% confidence) for the paired E_HU estimate."),
+            NestedField(18, "HH", StringType(), doc="Number of households, 2010 Census SF1."),
+            NestedField(19, "E_POV", StringType(), doc="Persons below the poverty level estimate, 2006-2010 ACS."),
+            NestedField(20, "M_POV", StringType(), doc="Margin of error (90% confidence) for the paired E_POV estimate."),
+            NestedField(21, "E_UNEMP", StringType(), doc="Civilian (age 16+) unemployed estimate, 2006-2010 ACS."),
+            NestedField(22, "M_UNEMP", StringType(), doc="Margin of error (90% confidence) for the paired E_UNEMP estimate."),
+            NestedField(23, "E_PCI", StringType(), doc="Per capita income estimate, dollars, 2006-2010 ACS."),
+            NestedField(24, "M_PCI", StringType(), doc="Margin of error (90% confidence) for the paired E_PCI estimate."),
+            NestedField(25, "E_NOHSDIP", StringType(), doc="Persons age 25+ with no high school diploma estimate, 2006-2010 ACS."),
+            NestedField(26, "M_NOHSDIP", StringType(), doc="Margin of error (90% confidence) for the paired E_NOHSDIP estimate."),
+            NestedField(27, "AGE65", StringType(), doc="Persons aged 65 and older, 2010 Census SF1 (100% count, no sampling error -- SVI 2010 documentation)."),
+            NestedField(28, "AGE17", StringType(), doc="Persons aged 17 and younger, 2010 Census SF1 (100% count)."),
+            NestedField(29, "SNGPRNT", StringType(), doc="Single-parent households with children under 18, 2010 Census SF1 (100% count). SVI 2010 has no separate disability variable at all -- the Census Bureau collected no tract-level disability data for either the 2010 Census or the 2006-2010 ACS (SVI 2010 documentation)."),
+            NestedField(30, "MINORITY", StringType(), doc="Minority population (all persons except white, non-Hispanic), 2010 Census SF1 (100% count)."),
+            NestedField(31, "E_LIMENG", StringType(), doc="Persons age 5+ who speak English \"less than well\" estimate, 2006-2010 ACS."),
+            NestedField(32, "M_LIMENG", StringType(), doc="Margin of error (90% confidence) for the paired E_LIMENG estimate."),
+            NestedField(33, "E_MUNIT", StringType(), doc="Housing in structures with 10 or more units estimate, 2006-2010 ACS."),
+            NestedField(34, "M_MUNIT", StringType(), doc="Margin of error (90% confidence) for the paired E_MUNIT estimate."),
+            NestedField(35, "E_MOBILE", StringType(), doc="Mobile homes estimate, 2006-2010 ACS."),
+            NestedField(36, "M_MOBILE", StringType(), doc="Margin of error (90% confidence) for the paired E_MOBILE estimate."),
+            NestedField(37, "E_CROWD", StringType(), doc="Households with more people than rooms estimate, 2006-2010 ACS."),
+            NestedField(38, "M_CROWD", StringType(), doc="Margin of error (90% confidence) for the paired E_CROWD estimate."),
+            NestedField(39, "E_NOVEH", StringType(), doc="Households with no vehicle available estimate, 2006-2010 ACS."),
+            NestedField(40, "M_NOVEH", StringType(), doc="Margin of error (90% confidence) for the paired E_NOVEH estimate."),
+            NestedField(41, "GROUPQ", StringType(), doc="Persons in institutionalized and non-institutionalized group quarters, 2010 Census SF1 (100% count)."),
+            NestedField(42, "E_P_POV", StringType(), doc="Proportion of persons below poverty estimate (E_POV / persons for whom poverty status is determined estimate); multiply by 100 for a percentage."),
+            NestedField(43, "M_P_POV", StringType(), doc="Margin of error (90% confidence) for the paired E_P_POV estimate."),
+            NestedField(44, "E_P_UNEMP", StringType(), doc="Proportion of civilian (age 16+) unemployed estimate (E_UNEMP / civilians estimate); multiply by 100 for a percentage."),
+            NestedField(45, "M_P_UNEMP", StringType(), doc="Margin of error (90% confidence) for the paired E_P_UNEMP estimate."),
+            NestedField(46, "E_P_PCI", StringType(), doc="Per capita income estimate, dollars -- duplicated verbatim from E_PCI (SVI 2010 documentation: 'Same as E_PCI'; not actually a proportion despite the naming, same quirk as the 2014+ layouts' EP_PCI)."),
+            NestedField(47, "M_P_PCI", StringType(), doc="Margin of error (90% confidence) for E_PCI/E_P_PCI, duplicated verbatim from M_PCI (dollars, not a percent)."),
+            NestedField(48, "E_P_NOHSDIP", StringType(), doc="Proportion of persons with no high school diploma (age 25+) estimate; multiply by 100 for a percentage."),
+            NestedField(49, "M_P_NOHSDIP", StringType(), doc="Margin of error (90% confidence) for the paired E_P_NOHSDIP estimate."),
+            NestedField(50, "P_AGE65", StringType(), doc="Proportion of persons aged 65 and older (AGE65 / TOTPOP, 2010 Census SF1, no sampling error); multiply by 100 for a percentage."),
+            NestedField(51, "P_AGE17", StringType(), doc="Proportion of persons aged 17 and younger (AGE17 / TOTPOP, 2010 Census SF1); multiply by 100 for a percentage."),
+            NestedField(52, "P_SNGPRNT", StringType(), doc="Proportion of single-parent households with children under 18 (SNGPRNT / HH, 2010 Census SF1); multiply by 100 for a percentage."),
+            NestedField(53, "P_MINORITY", StringType(), doc="Proportion minority, all persons except white non-Hispanic (MINORITY / TOTPOP, 2010 Census SF1); multiply by 100 for a percentage."),
+            NestedField(54, "E_P_LIMENG", StringType(), doc="Proportion of persons age 5+ who speak English \"less than well\" estimate (E_LIMENG / persons aged 5+ estimate); multiply by 100 for a percentage."),
+            NestedField(55, "M_P_LIMENG", StringType(), doc="Margin of error (90% confidence) for the paired E_P_LIMENG estimate."),
+            NestedField(56, "E_P_MUNIT", StringType(), doc="Proportion of housing in structures with 10+ units estimate (E_MUNIT / E_HU); multiply by 100 for a percentage."),
+            NestedField(57, "M_P_MUNIT", StringType(), doc="Margin of error (90% confidence) for the paired E_P_MUNIT estimate."),
+            NestedField(58, "E_P_MOBILE", StringType(), doc="Proportion of mobile homes estimate (E_MOBILE / E_HU); multiply by 100 for a percentage."),
+            NestedField(59, "M_P_MOBILE", StringType(), doc="Margin of error (90% confidence) for the paired E_P_MOBILE estimate."),
+            NestedField(60, "E_P_CROWD", StringType(), doc="Proportion of households with more people than rooms estimate (E_CROWD / occupied housing units estimate); multiply by 100 for a percentage."),
+            NestedField(61, "M_P_CROWD", StringType(), doc="Margin of error (90% confidence) for the paired E_P_CROWD estimate."),
+            NestedField(62, "E_P_NOVEH", StringType(), doc="Proportion of households with no vehicle available estimate (E_NOVEH / occupied housing units estimate); multiply by 100 for a percentage."),
+            NestedField(63, "M_P_NOVEH", StringType(), doc="Margin of error (90% confidence) for the paired E_P_NOVEH estimate."),
+            NestedField(64, "P_GROUPQ", StringType(), doc="Proportion of persons in institutionalized and non-institutionalized group quarters (GROUPQ / TOTPOP, 2010 Census SF1); multiply by 100 for a percentage."),
+            NestedField(65, "E_PL_POV", StringType(), doc="Percentile of the poverty proportion estimate, no consideration of MOE; one of the four components summed into S_PL_THEME1."),
+            NestedField(66, "E_PL_UNEMP", StringType(), doc="Percentile of the unemployment proportion estimate, no consideration of MOE; one of the four components summed into S_PL_THEME1."),
+            NestedField(67, "E_PL_PCI", StringType(), doc="Percentile of per capita income estimate, no consideration of MOE; one of the four components summed into S_PL_THEME1."),
+            NestedField(68, "E_PL_NOHSDIP", StringType(), doc="Percentile of the no-high-school-diploma proportion estimate, no consideration of MOE; one of the four components summed into S_PL_THEME1."),
+            NestedField(69, "S_PL_THEME1", StringType(), doc="Sum of the E_PLxxx series for theme 1 (E_PL_POV + E_PL_UNEMP + E_PL_PCI + E_PL_NOHSDIP)."),
+            NestedField(70, "R_PL_THEME1", StringType(), doc="Percentile ranking (0-1) for theme 1 (Socioeconomic), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME1:2010'."),
+            NestedField(71, "PL_AGE65", StringType(), doc="Percentile of the age-65+ proportion, based on 100% counts (no sampling error); one of the three components summed into S_PL_THEME2."),
+            NestedField(72, "PL_AGE17", StringType(), doc="Percentile of the age-17-and-under proportion, based on 100% counts; one of the three components summed into S_PL_THEME2."),
+            NestedField(73, "PL_SNGPRNT", StringType(), doc="Percentile of the single-parent-household proportion, based on 100% counts; one of the three components summed into S_PL_THEME2."),
+            NestedField(74, "S_PL_THEME2", StringType(), doc="Sum of the PLxxx series for theme 2 (PL_AGE65 + PL_AGE17 + PL_SNGPRNT -- no disability component in this edition)."),
+            NestedField(75, "R_PL_THEME2", StringType(), doc="Percentile ranking (0-1) for theme 2 (Household Composition -- no disability variable in this edition, unlike SVI 2000 and 2014+), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME2:2010'."),
+            NestedField(76, "PL_MINORITY", StringType(), doc="Percentile of the minority proportion, based on 100% counts (no sampling error); one of the two components summed into S_PL_THEME3."),
+            NestedField(77, "E_PL_LIMENG", StringType(), doc="Percentile of the limited-English proportion estimate, no consideration of MOE; one of the two components summed into S_PL_THEME3."),
+            NestedField(78, "S_PL_THEME3", StringType(), doc="Sum of the PLxxx series for theme 3 (PL_MINORITY + E_PL_LIMENG)."),
+            NestedField(79, "R_PL_THEME3", StringType(), doc="Percentile ranking (0-1) for theme 3 (Minority Status/Language), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME3:2010'."),
+            NestedField(80, "E_PL_MUNIT", StringType(), doc="Percentile of the multi-unit-housing proportion estimate, no consideration of MOE; one of the five components summed into S_PL_THEME4."),
+            NestedField(81, "E_PL_MOBILE", StringType(), doc="Percentile of the mobile-home proportion estimate, no consideration of MOE; one of the five components summed into S_PL_THEME4."),
+            NestedField(82, "E_PL_CROWD", StringType(), doc="Percentile of the crowding proportion estimate, no consideration of MOE; one of the five components summed into S_PL_THEME4."),
+            NestedField(83, "E_PL_NOVEH", StringType(), doc="Percentile of the no-vehicle proportion estimate, no consideration of MOE; one of the five components summed into S_PL_THEME4."),
+            NestedField(84, "PL_GROUPQ", StringType(), doc="Percentile of the group-quarters proportion, based on 100% counts (no sampling error); one of the five components summed into S_PL_THEME4."),
+            NestedField(85, "S_PL_THEME4", StringType(), doc="Sum of the PLxxx series for theme 4 (E_PL_MUNIT + E_PL_MOBILE + E_PL_CROWD + E_PL_NOVEH + PL_GROUPQ)."),
+            NestedField(86, "R_PL_THEME4", StringType(), doc="Percentile ranking (0-1) for theme 4 (Housing Type/Transportation), among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEME4:2010'."),
+            NestedField(87, "S_PL_THEMES", StringType(), doc="Sum of the four themes' S_PL_THEME sums."),
+            NestedField(88, "R_PL_THEMES", StringType(), doc="Overall SVI percentile ranking (0-1) across all four themes, among all units landed in this edition; derived into measure.observation as 'SVI:RPL_THEMES:2010'."),
+            NestedField(89, "F_PL_POV", StringType(), doc="Flag: 1 if the poverty percentile is in the 90th percentile (high-vulnerability), 0 otherwise."),
+            NestedField(90, "F_PL_UNEMP", StringType(), doc="Flag: 1 if the unemployment percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(91, "F_PL_PCI", StringType(), doc="Flag: 1 if the per-capita-income percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(92, "F_PL_NOHSDIP", StringType(), doc="Flag: 1 if the no-high-school-diploma percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(93, "F_PL_THEME1", StringType(), doc="Sum of the theme 1 flags (F_PL_POV + F_PL_UNEMP + F_PL_PCI + F_PL_NOHSDIP)."),
+            NestedField(94, "F_PL_AGE65", StringType(), doc="Flag: 1 if the age-65+ percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(95, "F_PL_AGE17", StringType(), doc="Flag: 1 if the age-17-and-under percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(96, "F_PL_SNGPRNT", StringType(), doc="Flag: 1 if the single-parent-household percentile is in the 90th percentile, 0 otherwise (tract file's spelling; see raw.svi__county_2010.F_PLSNGPRNT for the county file's differently misspelled equivalent)."),
+            NestedField(97, "F_PL_THEME2", StringType(), doc="Sum of the theme 2 flags."),
+            NestedField(98, "F_PL_MINORITY", StringType(), doc="Flag: 1 if the minority percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(99, "F_PL_LIMENG", StringType(), doc="Flag: 1 if the limited-English percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(100, "F_PL_THEME3", StringType(), doc="Sum of the theme 3 flags."),
+            NestedField(101, "F_PL_MUNIT", StringType(), doc="Flag: 1 if the multi-unit-housing percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(102, "F_PL_MOBILE", StringType(), doc="Flag: 1 if the mobile-home percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(103, "F_PL_CROWD", StringType(), doc="Flag: 1 if the crowding percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(104, "F_PL_NOVEH", StringType(), doc="Flag: 1 if the no-vehicle percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(105, "F_PL_GROUPQ", StringType(), doc="Flag: 1 if the group-quarters percentile is in the 90th percentile, 0 otherwise."),
+            NestedField(106, "F_PL_THEME4", StringType(), doc="Sum of the theme 4 flags."),
+            NestedField(107, "F_PL_TOTAL", StringType(), doc="Sum of all four theme flag sums."),
+            NestedField(108, "Shape", StringType(), doc="ArcGIS geometry byproduct (county file only), landed verbatim; not the canonical geometry representation (SPEC.md geometry non-goal)."),
+            NestedField(109, "Shape.STArea()", StringType(), doc="ArcGIS geometry byproduct (county file only), landed verbatim."),
+            NestedField(110, "Shape.STLength()", StringType(), doc="ArcGIS geometry byproduct (county file only), landed verbatim."),
+            NestedField(111, "svi_edition", StringType(), required=True, doc="The SVI edition this row was published in ('2000' or '2010' for this table) -- the version axis for this source (module docstring). Raw is replaced wholesale per value of this column."),
+            NestedField(112, "landed_in", StringType(), required=True, doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("svi_edition", "FIPS"),
+        comment="CDC/ATSDR Social Vulnerability Index 2010 edition, tract file, landed verbatim and whole under its own real column layout -- see raw.svi__county_2010 for why this is a dedicated table rather than a union. Public domain (17 U.S.C. Sec 105; https://www.cdc.gov/other/agencymaterials.html).",
+    ),
     # --- raw: usda ers ruca ---
     # USDA ERS Rural-Urban Commuting Area codes, tract level (#41). Public
     # domain; two genuinely different upstream layouts (2010 xlsx, 2020 csv)
@@ -1737,6 +2297,907 @@ TABLES = {
                 "(see ers_food_access.py docstring). Public domain (17 U.S.C. § 105).",
     ),
 
+    # --- raw: usda ers food access, SRAM (2025+ edition) ---
+    # USDA ERS Food Access Research Atlas, SNAP-authorized Retailer Access Map
+    # (#112): the successor to raw.ers__food_access on 2020 census tracts, joining
+    # ERS's own "General Tract Characteristics" and "Straight-Line Distance" files
+    # on CensusTract20 (verbatim upstream column names -- no cross-edition aliasing,
+    # same house rule ers_ruca.py uses for genuinely different real layouts). Public
+    # domain (17 U.S.C. Sec 105), same basis as raw.ers__food_access. See
+    # ers_food_access.py's docstring for the SRAM-vs-LRAM verification, the
+    # Driving-Distance-file and County24 ponytail cuts, and the blank-cell
+    # missing-value convention.
+    "raw.ers__food_access_sram": TableDef(
+        schema=Schema(
+            NestedField(1, "CensusTract20", StringType(), required=True,
+                        doc="Census tract 2020: Census tract number in 2020."),
+            NestedField(2, "State", StringType(), doc="State: State name."),
+            NestedField(3, "County20", StringType(), doc="County 2020: County name in 2020."),
+            NestedField(4, "County24", StringType(), doc="County 2024: County name in 2024."),
+            NestedField(5, "Urban", StringType(), doc="Urban tract: Flag for urban tract."),
+            NestedField(6, "POP2020", StringType(),
+                        doc="Population, tract total: Population count from 2020 census."),
+            NestedField(7, "OHU2020", StringType(),
+                        doc="Housing units, total: Occupied housing unit count from 2020 "
+                            "census."),
+            NestedField(8, "GroupQuartersFlag", StringType(),
+                        doc="Group quarters, tract with high share: Flag for tract where "
+                            ">=67%."),
+            NestedField(9, "NUMGQTRS", StringType(),
+                        doc="Group quarters, tract population residing in, number: Count of "
+                            "tract population residing in group quarters."),
+            NestedField(10, "PCTGQTRS", StringType(),
+                        doc="Group quarters, tract population residing in, share: Percent of "
+                            "tract population residing in group quarters."),
+            NestedField(11, "LowIncomeTracts", StringType(),
+                        doc="Low income tract: Flag for low income tract."),
+            NestedField(12, "PovertyRate", StringType(),
+                        doc="Tract poverty rate: Share of the tract population living with "
+                            "income at or below the Federal poverty thresholds for family "
+                            "size."),
+            NestedField(13, "MedianFamilyIncome", StringType(),
+                        doc="Tract median family income: Tract median family income."),
+            NestedField(14, "TractLOWI", StringType(),
+                        doc="Tract low-income population, number: Total count of low-income "
+                            "population in tract."),
+            NestedField(15, "TractKids", StringType(),
+                        doc="Tract children age 0-17, number: Total count of children age "
+                            "0-17 in tract."),
+            NestedField(16, "TractSeniors", StringType(),
+                        doc="Tract seniors age 65+, number: Total count of seniors age 65+ "
+                            "in tract."),
+            NestedField(17, "TractWhite", StringType(),
+                        doc="Tract White population, number: Total count of White population "
+                            "in tract."),
+            NestedField(18, "TractBlack", StringType(),
+                        doc="Tract Black or African American population, number: Total count "
+                            "of Black or African American population in tract."),
+            NestedField(19, "TractAsian", StringType(),
+                        doc="Tract Asian population, number: Total count of Asian population "
+                            "in tract."),
+            NestedField(20, "TractNHOPI", StringType(),
+                        doc="Tract Native Hawaiian and Other Pacific Islander population, "
+                            "number: Total count of Native Hawaiian and Other Pacific "
+                            "Islander population in tract."),
+            NestedField(21, "TractAIAN", StringType(),
+                        doc="Tract American Indian and Alaska Native population, number: "
+                            "Total count of American Indian and Alaska Native population in "
+                            "tract."),
+            NestedField(22, "TractOMultir", StringType(),
+                        doc="Tract Other/Multiple race population, number: Total count of "
+                            "Other/Multiple race population in tract."),
+            NestedField(23, "TractHispanic", StringType(),
+                        doc="Tract Hispanic or Latino population, number: Total count of "
+                            "Hispanic or Latino population in tract."),
+            NestedField(24, "TractHUNV", StringType(),
+                        doc="Tract housing units without a vehicle, number: Total count of "
+                            "housing units without a vehicle in tract."),
+            NestedField(25, "TractSNAP", StringType(),
+                        doc="Tract housing units receiving SNAP benefits, number: Total "
+                            "count of housing units receiving SNAP benefits in tract."),
+            NestedField(26, "TractVeteran", StringType(),
+                        doc="Tract Veteran population, number: Total count of Veteran "
+                            "population in tract."),
+            NestedField(27, "TractTribalArea", StringType(),
+                        doc="Tract Tribal area, share: Share of the tract that is American "
+                            "Indian tribal subdivision area (administrative subdivisions of "
+                            "federally recognized American Indian "
+                            "reservations/off-reservation trust lands or Oklahoma tribal "
+                            "statistical areas (OTSAs)."),
+
+            # --- straight-line-distance (SD_SRAM_) measures, USDA's own field names verbatim ---
+            NestedField(28, "SD_SRAM_LILATracts_1And10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low income and low access tract measured at 1 mile for urban "
+                            "areas and 10 miles for rural areas: Flag for low-income and low "
+                            "access when considering low accessibilty at 1 and 10 miles, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(29, "SD_SRAM_LILATracts_halfAnd10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low income and low access tract measured at 1/2 mile for urban "
+                            "areas and 10 miles for rural areas: Flag for low-income and low "
+                            "access when considering low accessibilty at 1/2 and 10 miles, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(30, "SD_SRAM_LILATracts_1And20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low income and low access tract measured at 1 mile for urban "
+                            "areas and 20 miles for rural areas: Flag for low-income and low "
+                            "access when considering low accessibilty at 1 and 20 miles, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(31, "SD_SRAM_LILATracts_Vehicle", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low income and low access tract using vehicle access or low "
+                            "income and low access tract measured at 20 miles: Flag for "
+                            "low-income and low access when considering vehicle access or at "
+                            "20 miles, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(32, "SD_SRAM_HUNVFlag", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, tract with low vehicle access: Flag for tract "
+                            "where >= 100 of households do not have a vehicle, and beyond "
+                            "1/2 mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(33, "SD_SRAM_LA1and10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 1 mile for urban areas and 10 miles for "
+                            "rural areas: Flag for low access tract at 1 mile for urban "
+                            "areas or 10 miles for rural areas, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(34, "SD_SRAM_LAhalfand10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 1/2 mile for urban areas and 10 miles for "
+                            "rural areas: Flag for low access tract at 1/2 mile for urban "
+                            "areas or 10 miles for rural areas, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(35, "SD_SRAM_LA1and20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 1 mile for urban areas and 20 miles for "
+                            "rural areas: Flag for low access tract at 1 mile for urban "
+                            "areas or 20 miles for rural areas, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(36, "SD_SRAM_LATracts_half", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 1/2 mile: Flag for low access tract when "
+                            "considering 1/2 mile distance, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(37, "SD_SRAM_LATracts1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 1 mile: Flag for low access tract when "
+                            "considering 1 mile distance, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(38, "SD_SRAM_LATracts10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 10 miles: Flag for low access tract when "
+                            "considering 10 mile distance, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(39, "SD_SRAM_LATracts20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract at 20 miles: Flag for low access tract when "
+                            "considering 20 mile distance, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(40, "SD_SRAM_LATractsVehicle_20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access tract using vehicle access and at 20 miles  in rural "
+                            "areas: Flag for tract where >= 100 of households do not have a "
+                            "vehicle, and beyond 1/2 mile from SNAP-authorized foodstore; or "
+                            ">= 500 individuals are beyond 20 miles from SNAP-authorized "
+                            "foodstore ; or >= 33% of individuals are beyond 20 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(41, "SD_SRAM_LAPOP1_10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1 mile for urban areas and 10 miles "
+                            "for rural areas, number: Population count beyond 1 mile for "
+                            "urban areas or 10 miles for rural areas from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(42, "SD_SRAM_LAPOP05_10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1/2 mile for urban areas and 10 miles "
+                            "for rural areas, number: Population count beyond 1/2 mile for "
+                            "urban areas or 10 miles for rural areas from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(43, "SD_SRAM_LAPOP1_20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1 mile for urban areas and 20 miles "
+                            "for rural areas, number: Population count beyond 1 mile for "
+                            "urban areas or 20 miles for rural areas from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(44, "SD_SRAM_LALOWI1_10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1 mile for urban areas and "
+                            "10 miles for rural areas, number: Low income population count "
+                            "beyond 1 mile for urban areas or 10 miles for rural areas from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(45, "SD_SRAM_LALOWI05_10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1/2 mile for urban areas "
+                            "and 10 miles for rural areas, number: Low income population "
+                            "count beyond 1/2 mile for urban areas or 10 miles for rural "
+                            "areas from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(46, "SD_SRAM_LALOWI1_20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1 mile for urban areas and "
+                            "20 miles for rural areas, number: Low income population count "
+                            "beyond 1 mile for urban areas or 20 miles for rural areas from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(47, "SD_SRAM_lapophalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1/2 mile, number: Population count "
+                            "beyond 1/2 mile from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(48, "SD_SRAM_lapophalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1/2 mile, share: Share of tract "
+                            "population that are beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(49, "SD_SRAM_lalowihalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1/2 mile, number: Low "
+                            "income population count beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(50, "SD_SRAM_lalowihalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1/2 mile, share: Share of "
+                            "tract population that are low income individuals beyond 1/2 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(51, "SD_SRAM_lakidshalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 1/2 mile, number: Kids "
+                            "population count beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(52, "SD_SRAM_lakidshalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 1/2 mile, share: Share of "
+                            "tract population that are kids beyond 1/2 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(53, "SD_SRAM_laseniorshalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 1/2 mile, number: Seniors "
+                            "population count beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(54, "SD_SRAM_laseniorshalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 1/2 mile, share: Share of tract "
+                            "population that are seniors beyond 1/2 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(55, "SD_SRAM_lawhitehalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 1/2 mile, number: White "
+                            "population count beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(56, "SD_SRAM_lawhitehalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 1/2 mile, share: Share of tract "
+                            "population that are white beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(57, "SD_SRAM_lablackhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 1/2 mile, "
+                            "number: Black or African American population count beyond 1/2 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(58, "SD_SRAM_lablackhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 1/2 mile, "
+                            "share: Share of tract population that are Black or African "
+                            "American beyond 1/2 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(59, "SD_SRAM_laasianhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 1/2 mile, number: Asian "
+                            "population count beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(60, "SD_SRAM_laasianhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 1/2 mile, share: Share of tract "
+                            "population that are Asian beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(61, "SD_SRAM_lanhopihalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian or Other Pacific Islander "
+                            "population at 1/2 mile, number: Native Hawaiian or Other "
+                            "Pacific Islander population count beyond 1/2 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(62, "SD_SRAM_lanhopihalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian or Other Pacific Islander "
+                            "population at 1/2 mile, share: Share of tract population that "
+                            "are Native Hawaiian or Other Pacific Islander beyond 1/2 mile "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(63, "SD_SRAM_laaianhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian or Alaska Native population at 1/2 "
+                            "mile, number: American Indian or Alaska Native population count "
+                            "beyond 1/2 mile from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(64, "SD_SRAM_laaianhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian or Alaska Native population at 1/2 "
+                            "mile, share: Share of tract population that are American Indian "
+                            "or Alaska Native beyond 1/2 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(65, "SD_SRAM_laomultirhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 1/2 mile, number: "
+                            "Other/Multiple race population count beyond 1/2 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(66, "SD_SRAM_laomultirhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 1/2 mile, share: "
+                            "Share of tract population that are Other/Multiple race beyond "
+                            "1/2 mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(67, "SD_SRAM_lahisphalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 1/2 mile, number: "
+                            "Hispanic or Latino ethnicity population count beyond 1/2 mile "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(68, "SD_SRAM_lahisphalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 1/2 mile, share: "
+                            "Share of tract population that are of Hispanic or Latino "
+                            "ethnicity beyond 1/2 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(69, "SD_SRAM_lahunvhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 1/2 "
+                            "mile, number: Housing units without vehicle count beyond 1/2 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(70, "SD_SRAM_lahunvhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 1/2 "
+                            "mile, share: Share of tract housing units that are without "
+                            "vehicle and beyond 1/2 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(71, "SD_SRAM_lasnaphalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 1/2 mile, "
+                            "number: Housing units receiving SNAP benefits count beyond 1/2 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(72, "SD_SRAM_lasnaphalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 1/2 mile, "
+                            "share: Share of tract housing units receiving SNAP benefits "
+                            "count beyond 1/2 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(73, "SD_SRAM_laveteranhalf", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 1/2 mile, "
+                            "number: Veterans of the U.S. Armed Forces count beyond 1/2 mile "
+                            "from SNAP-authorized foodstore,calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(74, "SD_SRAM_laveteranhalfshare", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 1/2 mile, "
+                            "share: Share of tract veterans of the U.S. Armed Forces count "
+                            "beyond 1/2 mile from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(75, "SD_SRAM_lapop1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1 mile, number: Population count "
+                            "beyond 1 mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(76, "SD_SRAM_lapop1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 1 mile, share: Share of tract "
+                            "population that are beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(77, "SD_SRAM_lalowi1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1 mile, number: Low income "
+                            "population count beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(78, "SD_SRAM_lalowi1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 1 mile, share: Share of "
+                            "tract population that are low income individuals beyond 1 mile "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(79, "SD_SRAM_lakids1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 1 mile, number: Kids "
+                            "population count beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(80, "SD_SRAM_lakids1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 1 mile, share: Share of tract "
+                            "population that are kids beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(81, "SD_SRAM_laseniors1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 1 mile, number: Seniors "
+                            "population count beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(82, "SD_SRAM_laseniors1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 1 mile, share: Share of tract "
+                            "population that are seniors beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(83, "SD_SRAM_lawhite1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 1 mile, number: White "
+                            "population count beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(84, "SD_SRAM_lawhite1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 1 mile, share: Share of tract "
+                            "population that are white beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(85, "SD_SRAM_lablack1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 1 mile, "
+                            "number: Black or African American population count beyond 1 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(86, "SD_SRAM_lablack1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 1 mile, "
+                            "share: Share of tract population that are Black or African "
+                            "American beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(87, "SD_SRAM_laasian1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 1 mile, number: Asian "
+                            "population count beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(88, "SD_SRAM_laasian1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 1 mile, share: Share of tract "
+                            "population that are Asian beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(89, "SD_SRAM_lanhopi1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 1 mile, number: Native Hawaiian or Other Pacific "
+                            "Islander population count beyond 1 mile from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(90, "SD_SRAM_lanhopi1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 1 mile, share: Share of tract population that are "
+                            "Native Hawaiian or Other Pacific Islander beyond 1 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(91, "SD_SRAM_laaian1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 1 "
+                            "mile, number: American Indian or Alaska Native population count "
+                            "beyond 1 mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(92, "SD_SRAM_laaian1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 1 "
+                            "mile, share: Share of tract population that are American Indian "
+                            "or Alaska Native beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(93, "SD_SRAM_laomultir1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 1 mile, number: "
+                            "Other/Multiple race population count beyond 1 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(94, "SD_SRAM_laomultir1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 1 mile, share: "
+                            "Share of tract population that are Other/Multiple race beyond 1 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(95, "SD_SRAM_lahisp1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 1 mile, number: "
+                            "Hispanic or Latino ethnicity population count beyond 1 mile "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(96, "SD_SRAM_lahisp1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 1 mile, share: "
+                            "Share of tract population that are of Hispanic or Latino "
+                            "ethnicity beyond 1 mile from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(97, "SD_SRAM_lahunv1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 1 mile, "
+                            "number: Housing units without vehicle count beyond 1 mile from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(98, "SD_SRAM_lahunv1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 1 mile, "
+                            "share: Share of tract housing units that are without vehicle "
+                            "and beyond 1 mile from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(99, "SD_SRAM_lasnap1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 1 mile, "
+                            "number: Housing units receiving SNAP benefits count beyond 1 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(100, "SD_SRAM_lasnap1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 1 mile, "
+                            "share: Share of tract housing units receiving SNAP benefits "
+                            "count beyond 1 mile from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(101, "SD_SRAM_laveteran1", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 1 mile, "
+                            "number: Veterans of the U.S. Armed Forces count beyond 1 mile "
+                            "from SNAP-authorized foodstore,calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(102, "SD_SRAM_laveteran1share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 1 mile, share: "
+                            "Share of tract veterans of the U.S. Armed Forces count beyond 1 "
+                            "mile from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(103, "SD_SRAM_lapop10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 10 miles, number: Population count "
+                            "beyond 10 miles from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(104, "SD_SRAM_lapop10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 10 miles, share: Share of tract "
+                            "population that are beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(105, "SD_SRAM_lalowi10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 10 miles, number: Low "
+                            "income population count beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(106, "SD_SRAM_lalowi10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 10 miles, share: Share of "
+                            "tract population that are low income individuals beyond 10 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(107, "SD_SRAM_lakids10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 10 miles, number: Kids "
+                            "population count beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(108, "SD_SRAM_lakids10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 10 miles, share: Share of "
+                            "tract population that are kids beyond 10 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(109, "SD_SRAM_laseniors10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 10 miles, number: Seniors "
+                            "population count beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(110, "SD_SRAM_laseniors10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 10 miles, share: Share of tract "
+                            "population that are seniors beyond 10 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(111, "SD_SRAM_lawhite10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 10 miles, number: White "
+                            "population count beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(112, "SD_SRAM_lawhite10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 10 miles, share: Share of tract "
+                            "population that are white beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(113, "SD_SRAM_lablack10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 10 miles, "
+                            "number: Black or African American population count beyond 10 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(114, "SD_SRAM_lablack10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 10 miles, "
+                            "share: Share of tract population that are Black or African "
+                            "American beyond 10 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(115, "SD_SRAM_laasian10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 10 miles, number: Asian "
+                            "population count beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(116, "SD_SRAM_laasian10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 10 miles, share: Share of tract "
+                            "population that are Asian beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(117, "SD_SRAM_lanhopi10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 10 miles, number: Native Hawaiian or Other "
+                            "Pacific Islander population count beyond 10 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(118, "SD_SRAM_lanhopi10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 10 miles, share: Share of tract population that "
+                            "are Native Hawaiian or Other Pacific Islander beyond 10 miles "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(119, "SD_SRAM_laaian10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 10 "
+                            "miles, number: American Indian or Alaska Native population "
+                            "count beyond 10 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(120, "SD_SRAM_laaian10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 10 "
+                            "miles, share: Share of tract population that are American "
+                            "Indian or Alaska Native beyond 10 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(121, "SD_SRAM_laomultir10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 10 miles, number: "
+                            "Other/Multiple race population count beyond 10 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(122, "SD_SRAM_laomultir10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 10 miles, share: "
+                            "Share of tract population that are Other/Multiple race beyond "
+                            "10 miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(123, "SD_SRAM_lahisp10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 10 miles, number: "
+                            "Hispanic or Latino ethnicity population count beyond 10 miles "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(124, "SD_SRAM_lahisp10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 10 miles, share: "
+                            "Share of tract population that are of Hispanic or Latino "
+                            "ethnicity beyond 10 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(125, "SD_SRAM_lahunv10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 10 "
+                            "miles, number: Housing units without vehicle count beyond 10 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(126, "SD_SRAM_lahunv10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 10 "
+                            "miles, share: Share of tract housing units that are without "
+                            "vehicle and beyond 10 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(127, "SD_SRAM_lasnap10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 10 miles, "
+                            "number: Housing units receiving SNAP benefits count beyond 10 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(128, "SD_SRAM_lasnap10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access,housing units receiving SNAP benefits at 10 miles, "
+                            "share: Share of tract housing units receiving SNAP benefits "
+                            "count beyond 10 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(129, "SD_SRAM_laveteran10", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 10 miles, "
+                            "number: Veterans of the U.S. Armed Forces count beyond 10 miles "
+                            "from SNAP-authorized foodstore,calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(130, "SD_SRAM_laveteran10share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 10 miles, "
+                            "share: Share of tract veterans of the U.S. Armed Forces count "
+                            "beyond 10 miles from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(131, "SD_SRAM_lapop20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 20 miles, number: Population count "
+                            "beyond 20 miles from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(132, "SD_SRAM_lapop20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, population at 20 miles, share: Share of tract "
+                            "population that are beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(133, "SD_SRAM_lalowi20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 20 miles, number: Low "
+                            "income population count beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(134, "SD_SRAM_lalowi20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, low-income population at 20 miles, share: Share of "
+                            "tract population that are low income individuals beyond 20 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(135, "SD_SRAM_lakids20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 20 miles, number: Kids "
+                            "population count beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(136, "SD_SRAM_lakids20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, children age 0-17 at 20 miles, share: Share of "
+                            "tract population that are kids beyond 20 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(137, "SD_SRAM_laseniors20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 20 miles, number: Seniors "
+                            "population count beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(138, "SD_SRAM_laseniors20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, seniors age 65+ at 20 miles, share: Share of tract "
+                            "population that are seniors beyond 20 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(139, "SD_SRAM_lawhite20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 20 miles, number: White "
+                            "population count beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(140, "SD_SRAM_lawhite20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, White population at 20 miles, share: Share of tract "
+                            "population that are white beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(141, "SD_SRAM_lablack20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 20 miles, "
+                            "number: Black or African American population count beyond 20 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(142, "SD_SRAM_lablack20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Black or African American population at 20 miles, "
+                            "share: Share of tract population that are Black or African "
+                            "American beyond 20 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(143, "SD_SRAM_laasian20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 20 miles, number: Asian "
+                            "population count beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(144, "SD_SRAM_laasian20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Asian population at 20 miles, share: Share of tract "
+                            "population that are Asian beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(145, "SD_SRAM_lanhopi20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 20 miles, number: Native Hawaiian or Other "
+                            "Pacific Islander population count beyond 20 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(146, "SD_SRAM_lanhopi20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Native Hawaiian and Other Pacific Islander "
+                            "population at 20 miles, share: Share of tract population that "
+                            "are Native Hawaiian or Other Pacific Islander beyond 20 miles "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(147, "SD_SRAM_laaian20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 20 "
+                            "miles, number: American Indian or Alaska Native population "
+                            "count beyond 20 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(148, "SD_SRAM_laaian20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, American Indian and Alaska Native population at 20 "
+                            "miles, share: Share of tract population that are American "
+                            "Indian or Alaska Native beyond 20 miles from SNAP-authorized "
+                            "foodstore, calculated using straight-line (Euclidean-based) "
+                            "distance."),
+            NestedField(149, "SD_SRAM_laomultir20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 20 miles, number: "
+                            "Other/Multiple race population count beyond 20 miles from "
+                            "SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(150, "SD_SRAM_laomultir20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Other/Multiple race population at 20 miles, share: "
+                            "Share of tract population that are Other/Multiple race beyond "
+                            "20 miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(151, "SD_SRAM_lahisp20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 20 miles, number: "
+                            "Hispanic or Latino ethnicity population count beyond 20 miles "
+                            "from SNAP-authorized foodstore, calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(152, "SD_SRAM_lahisp20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, Hispanic or Latino population at 20 miles, share: "
+                            "Share of tract population that are of Hispanic or Latino "
+                            "ethnicity beyond 20 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(153, "SD_SRAM_lahunv20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 20 "
+                            "miles, number: Housing units without vehicle count beyond 20 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(154, "SD_SRAM_lahunv20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Vehicle access, housing units without and low access at 20 "
+                            "miles, share: Share of tract housing units that are without "
+                            "vehicle and beyond 20 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(155, "SD_SRAM_lasnap20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 20 miles, "
+                            "number: Housing units receiving SNAP benefits count beyond 20 "
+                            "miles from SNAP-authorized foodstore, calculated using "
+                            "straight-line (Euclidean-based) distance."),
+            NestedField(156, "SD_SRAM_lasnap20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, housing units receiving SNAP benefits at 20 miles, "
+                            "share: Share of tract housing units receiving SNAP benefits "
+                            "count beyond 20 miles from SNAP-authorized foodstore, "
+                            "calculated using straight-line (Euclidean-based) distance."),
+            NestedField(157, "SD_SRAM_laveteran20", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 20 miles, "
+                            "number: Veterans of the U.S. Armed Forces count beyond 20 miles "
+                            "from SNAP-authorized foodstore,calculated using straight-line "
+                            "(Euclidean-based) distance."),
+            NestedField(158, "SD_SRAM_laveteran20share", StringType(),
+                        doc="Straight-line Distance, SNAP-authorized Retailer Access Map, "
+                            "Low access, veterans of the U.S. Armed Forces at 20 miles, "
+                            "share: Share of tract veterans of the U.S. Armed Forces count "
+                            "beyond 20 miles from SNAP-authorized foodstore, calculated "
+                            "using straight-line (Euclidean-based) distance."),
+            NestedField(159, "atlas_edition", StringType(), required=True,
+                        doc="The Food Access Research Atlas edition this row was published "
+                            "in -- '2025' for SRAM, the version axis for this source "
+                            "(SPEC.md Versioning model). Raw is replaced wholesale per value "
+                            "of this column."),
+            NestedField(160, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("atlas_edition", "CensusTract20"),
+        comment="USDA ERS Food Access Research Atlas, SNAP-authorized Retailer Access Map "
+                "(SRAM) landed verbatim and whole, every published column from the General "
+                "Tract Characteristics and Straight-Line Distance files joined on "
+                "CensusTract20, one row per 2020 census tract per edition (issue #112). "
+                "Driving (Network-Based) Distance file not landed -- a new methodology axis "
+                "with no analog in raw.ers__food_access, see ers_food_access.py docstring. "
+                "Public domain (17 U.S.C. Sec 105).",
+    ),
+
     # --- raw: hrsa ahrf ---
     # HRSA Area Health Resources Files, county (#39). Landed LONG (one row per
     # county/field cell) rather than one wide row per county -- see
@@ -2004,8 +3465,9 @@ TABLES = {
                             "ingest; when cancerOnIce saw a given version of the row is "
                             "valid_from/valid_to, not source_release."),
             NestedField(4, "kind", StringType(), required=True,
-                        doc="'fqhc' | 'rhc' | 'mammography' | 'lung_screening' | 'provider' | 'hospital'. "
-                            "HRSA_HC rows are 'fqhc' for both true FQHCs and FQHC Look-Alikes."),
+                        doc="'fqhc' | 'rhc' | 'mammography' | 'lung_screening' | 'provider' | "
+                            "'hospital' | 'superfund'. HRSA_HC rows are 'fqhc' for both true "
+                            "FQHCs and FQHC Look-Alikes."),
             NestedField(5, "name", StringType(), doc="Site's own name."),
             NestedField(6, "address", StringType(), doc="Single-line street address, city, state, postal code."),
             NestedField(7, "lat", DoubleType(), doc="Latitude, WGS84, as published by the source."),
@@ -2681,13 +4143,172 @@ TABLES = {
                 NestedField(277, "C16002_M014", StringType(), doc="Margin of error (90% confidence) for the paired C16002_E014 estimate."),
                 NestedField(278, "B19083_E001", StringType(), doc="ACS estimate (count): Gini Index (Gini Index of Income Inequality)."),
                 NestedField(279, "B19083_M001", StringType(), doc="Margin of error (90% confidence) for the paired B19083_E001 estimate."),
+                # #125: uninsured (B27001) and Medicaid/means-tested public coverage
+                # (C27007) -- see census_acs.py's module docstring for the table choice.
+                NestedField(280, "B27001_E001", StringType(), doc="ACS estimate (count): Total (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(281, "B27001_M001", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E001 estimate."),
+                NestedField(282, "B27001_E002", StringType(), doc="ACS estimate (count): Total > Male (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(283, "B27001_M002", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E002 estimate."),
+                NestedField(284, "B27001_E003", StringType(), doc="ACS estimate (count): Total > Male > Under 6 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(285, "B27001_M003", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E003 estimate."),
+                NestedField(286, "B27001_E004", StringType(), doc="ACS estimate (count): Total > Male > Under 6 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(287, "B27001_M004", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E004 estimate."),
+                NestedField(288, "B27001_E005", StringType(), doc="ACS estimate (count): Total > Male > Under 6 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(289, "B27001_M005", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E005 estimate."),
+                NestedField(290, "B27001_E006", StringType(), doc="ACS estimate (count): Total > Male > 6 to 18 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(291, "B27001_M006", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E006 estimate."),
+                NestedField(292, "B27001_E007", StringType(), doc="ACS estimate (count): Total > Male > 6 to 18 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(293, "B27001_M007", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E007 estimate."),
+                NestedField(294, "B27001_E008", StringType(), doc="ACS estimate (count): Total > Male > 6 to 18 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(295, "B27001_M008", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E008 estimate."),
+                NestedField(296, "B27001_E009", StringType(), doc="ACS estimate (count): Total > Male > 19 to 25 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(297, "B27001_M009", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E009 estimate."),
+                NestedField(298, "B27001_E010", StringType(), doc="ACS estimate (count): Total > Male > 19 to 25 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(299, "B27001_M010", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E010 estimate."),
+                NestedField(300, "B27001_E011", StringType(), doc="ACS estimate (count): Total > Male > 19 to 25 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(301, "B27001_M011", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E011 estimate."),
+                NestedField(302, "B27001_E012", StringType(), doc="ACS estimate (count): Total > Male > 26 to 34 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(303, "B27001_M012", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E012 estimate."),
+                NestedField(304, "B27001_E013", StringType(), doc="ACS estimate (count): Total > Male > 26 to 34 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(305, "B27001_M013", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E013 estimate."),
+                NestedField(306, "B27001_E014", StringType(), doc="ACS estimate (count): Total > Male > 26 to 34 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(307, "B27001_M014", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E014 estimate."),
+                NestedField(308, "B27001_E015", StringType(), doc="ACS estimate (count): Total > Male > 35 to 44 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(309, "B27001_M015", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E015 estimate."),
+                NestedField(310, "B27001_E016", StringType(), doc="ACS estimate (count): Total > Male > 35 to 44 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(311, "B27001_M016", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E016 estimate."),
+                NestedField(312, "B27001_E017", StringType(), doc="ACS estimate (count): Total > Male > 35 to 44 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(313, "B27001_M017", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E017 estimate."),
+                NestedField(314, "B27001_E018", StringType(), doc="ACS estimate (count): Total > Male > 45 to 54 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(315, "B27001_M018", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E018 estimate."),
+                NestedField(316, "B27001_E019", StringType(), doc="ACS estimate (count): Total > Male > 45 to 54 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(317, "B27001_M019", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E019 estimate."),
+                NestedField(318, "B27001_E020", StringType(), doc="ACS estimate (count): Total > Male > 45 to 54 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(319, "B27001_M020", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E020 estimate."),
+                NestedField(320, "B27001_E021", StringType(), doc="ACS estimate (count): Total > Male > 55 to 64 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(321, "B27001_M021", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E021 estimate."),
+                NestedField(322, "B27001_E022", StringType(), doc="ACS estimate (count): Total > Male > 55 to 64 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(323, "B27001_M022", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E022 estimate."),
+                NestedField(324, "B27001_E023", StringType(), doc="ACS estimate (count): Total > Male > 55 to 64 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(325, "B27001_M023", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E023 estimate."),
+                NestedField(326, "B27001_E024", StringType(), doc="ACS estimate (count): Total > Male > 65 to 74 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(327, "B27001_M024", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E024 estimate."),
+                NestedField(328, "B27001_E025", StringType(), doc="ACS estimate (count): Total > Male > 65 to 74 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(329, "B27001_M025", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E025 estimate."),
+                NestedField(330, "B27001_E026", StringType(), doc="ACS estimate (count): Total > Male > 65 to 74 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(331, "B27001_M026", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E026 estimate."),
+                NestedField(332, "B27001_E027", StringType(), doc="ACS estimate (count): Total > Male > 75 years and over (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(333, "B27001_M027", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E027 estimate."),
+                NestedField(334, "B27001_E028", StringType(), doc="ACS estimate (count): Total > Male > 75 years and over > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(335, "B27001_M028", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E028 estimate."),
+                NestedField(336, "B27001_E029", StringType(), doc="ACS estimate (count): Total > Male > 75 years and over > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(337, "B27001_M029", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E029 estimate."),
+                NestedField(338, "B27001_E030", StringType(), doc="ACS estimate (count): Total > Female (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(339, "B27001_M030", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E030 estimate."),
+                NestedField(340, "B27001_E031", StringType(), doc="ACS estimate (count): Total > Female > Under 6 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(341, "B27001_M031", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E031 estimate."),
+                NestedField(342, "B27001_E032", StringType(), doc="ACS estimate (count): Total > Female > Under 6 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(343, "B27001_M032", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E032 estimate."),
+                NestedField(344, "B27001_E033", StringType(), doc="ACS estimate (count): Total > Female > Under 6 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(345, "B27001_M033", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E033 estimate."),
+                NestedField(346, "B27001_E034", StringType(), doc="ACS estimate (count): Total > Female > 6 to 18 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(347, "B27001_M034", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E034 estimate."),
+                NestedField(348, "B27001_E035", StringType(), doc="ACS estimate (count): Total > Female > 6 to 18 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(349, "B27001_M035", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E035 estimate."),
+                NestedField(350, "B27001_E036", StringType(), doc="ACS estimate (count): Total > Female > 6 to 18 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(351, "B27001_M036", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E036 estimate."),
+                NestedField(352, "B27001_E037", StringType(), doc="ACS estimate (count): Total > Female > 19 to 25 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(353, "B27001_M037", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E037 estimate."),
+                NestedField(354, "B27001_E038", StringType(), doc="ACS estimate (count): Total > Female > 19 to 25 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(355, "B27001_M038", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E038 estimate."),
+                NestedField(356, "B27001_E039", StringType(), doc="ACS estimate (count): Total > Female > 19 to 25 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(357, "B27001_M039", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E039 estimate."),
+                NestedField(358, "B27001_E040", StringType(), doc="ACS estimate (count): Total > Female > 26 to 34 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(359, "B27001_M040", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E040 estimate."),
+                NestedField(360, "B27001_E041", StringType(), doc="ACS estimate (count): Total > Female > 26 to 34 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(361, "B27001_M041", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E041 estimate."),
+                NestedField(362, "B27001_E042", StringType(), doc="ACS estimate (count): Total > Female > 26 to 34 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(363, "B27001_M042", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E042 estimate."),
+                NestedField(364, "B27001_E043", StringType(), doc="ACS estimate (count): Total > Female > 35 to 44 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(365, "B27001_M043", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E043 estimate."),
+                NestedField(366, "B27001_E044", StringType(), doc="ACS estimate (count): Total > Female > 35 to 44 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(367, "B27001_M044", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E044 estimate."),
+                NestedField(368, "B27001_E045", StringType(), doc="ACS estimate (count): Total > Female > 35 to 44 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(369, "B27001_M045", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E045 estimate."),
+                NestedField(370, "B27001_E046", StringType(), doc="ACS estimate (count): Total > Female > 45 to 54 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(371, "B27001_M046", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E046 estimate."),
+                NestedField(372, "B27001_E047", StringType(), doc="ACS estimate (count): Total > Female > 45 to 54 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(373, "B27001_M047", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E047 estimate."),
+                NestedField(374, "B27001_E048", StringType(), doc="ACS estimate (count): Total > Female > 45 to 54 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(375, "B27001_M048", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E048 estimate."),
+                NestedField(376, "B27001_E049", StringType(), doc="ACS estimate (count): Total > Female > 55 to 64 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(377, "B27001_M049", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E049 estimate."),
+                NestedField(378, "B27001_E050", StringType(), doc="ACS estimate (count): Total > Female > 55 to 64 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(379, "B27001_M050", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E050 estimate."),
+                NestedField(380, "B27001_E051", StringType(), doc="ACS estimate (count): Total > Female > 55 to 64 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(381, "B27001_M051", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E051 estimate."),
+                NestedField(382, "B27001_E052", StringType(), doc="ACS estimate (count): Total > Female > 65 to 74 years (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(383, "B27001_M052", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E052 estimate."),
+                NestedField(384, "B27001_E053", StringType(), doc="ACS estimate (count): Total > Female > 65 to 74 years > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(385, "B27001_M053", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E053 estimate."),
+                NestedField(386, "B27001_E054", StringType(), doc="ACS estimate (count): Total > Female > 65 to 74 years > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(387, "B27001_M054", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E054 estimate."),
+                NestedField(388, "B27001_E055", StringType(), doc="ACS estimate (count): Total > Female > 75 years and over (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(389, "B27001_M055", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E055 estimate."),
+                NestedField(390, "B27001_E056", StringType(), doc="ACS estimate (count): Total > Female > 75 years and over > With health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(391, "B27001_M056", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E056 estimate."),
+                NestedField(392, "B27001_E057", StringType(), doc="ACS estimate (count): Total > Female > 75 years and over > No health insurance coverage (Health Insurance Coverage Status by Sex by Age)."),
+                NestedField(393, "B27001_M057", StringType(), doc="Margin of error (90% confidence) for the paired B27001_E057 estimate."),
+                NestedField(394, "C27007_E001", StringType(), doc="ACS estimate (count): Total (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(395, "C27007_M001", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E001 estimate."),
+                NestedField(396, "C27007_E002", StringType(), doc="ACS estimate (count): Total > Male (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(397, "C27007_M002", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E002 estimate."),
+                NestedField(398, "C27007_E003", StringType(), doc="ACS estimate (count): Total > Male > Under 19 years (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(399, "C27007_M003", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E003 estimate."),
+                NestedField(400, "C27007_E004", StringType(), doc="ACS estimate (count): Total > Male > Under 19 years > With Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(401, "C27007_M004", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E004 estimate."),
+                NestedField(402, "C27007_E005", StringType(), doc="ACS estimate (count): Total > Male > Under 19 years > No Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(403, "C27007_M005", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E005 estimate."),
+                NestedField(404, "C27007_E006", StringType(), doc="ACS estimate (count): Total > Male > 19 to 64 years (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(405, "C27007_M006", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E006 estimate."),
+                NestedField(406, "C27007_E007", StringType(), doc="ACS estimate (count): Total > Male > 19 to 64 years > With Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(407, "C27007_M007", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E007 estimate."),
+                NestedField(408, "C27007_E008", StringType(), doc="ACS estimate (count): Total > Male > 19 to 64 years > No Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(409, "C27007_M008", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E008 estimate."),
+                NestedField(410, "C27007_E009", StringType(), doc="ACS estimate (count): Total > Male > 65 years and over (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(411, "C27007_M009", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E009 estimate."),
+                NestedField(412, "C27007_E010", StringType(), doc="ACS estimate (count): Total > Male > 65 years and over > With Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(413, "C27007_M010", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E010 estimate."),
+                NestedField(414, "C27007_E011", StringType(), doc="ACS estimate (count): Total > Male > 65 years and over > No Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(415, "C27007_M011", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E011 estimate."),
+                NestedField(416, "C27007_E012", StringType(), doc="ACS estimate (count): Total > Female (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(417, "C27007_M012", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E012 estimate."),
+                NestedField(418, "C27007_E013", StringType(), doc="ACS estimate (count): Total > Female > Under 19 years (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(419, "C27007_M013", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E013 estimate."),
+                NestedField(420, "C27007_E014", StringType(), doc="ACS estimate (count): Total > Female > Under 19 years > With Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(421, "C27007_M014", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E014 estimate."),
+                NestedField(422, "C27007_E015", StringType(), doc="ACS estimate (count): Total > Female > Under 19 years > No Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(423, "C27007_M015", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E015 estimate."),
+                NestedField(424, "C27007_E016", StringType(), doc="ACS estimate (count): Total > Female > 19 to 64 years (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(425, "C27007_M016", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E016 estimate."),
+                NestedField(426, "C27007_E017", StringType(), doc="ACS estimate (count): Total > Female > 19 to 64 years > With Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(427, "C27007_M017", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E017 estimate."),
+                NestedField(428, "C27007_E018", StringType(), doc="ACS estimate (count): Total > Female > 19 to 64 years > No Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(429, "C27007_M018", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E018 estimate."),
+                NestedField(430, "C27007_E019", StringType(), doc="ACS estimate (count): Total > Female > 65 years and over (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(431, "C27007_M019", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E019 estimate."),
+                NestedField(432, "C27007_E020", StringType(), doc="ACS estimate (count): Total > Female > 65 years and over > With Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(433, "C27007_M020", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E020 estimate."),
+                NestedField(434, "C27007_E021", StringType(), doc="ACS estimate (count): Total > Female > 65 years and over > No Medicaid/means-tested public coverage (Medicaid/Means-Tested Public Coverage by Sex by Age)."),
+                NestedField(435, "C27007_M021", StringType(), doc="Margin of error (90% confidence) for the paired C27007_E021 estimate."),
             ),
             comment="US Census ACS 5-year Summary File detailed tables (B01003, B09001, B09020, "
                     "B03002, B15003, B19013, C17002, B23025, B25044, B25002, B25070, C16002, "
-                    "B19083), landed verbatim per (level, acs_year): every estimate and margin-of-"
-                    "error variable of each requested table, as the jam-value strings ACS "
-                    "publishes (see census_acs.py for the sentinel meanings and the CIF-indicator "
-                    "decision). Public domain (U.S. Government work, 17 U.S.C. Sec 105).",
+                    "B19083, B27001, C27007), landed verbatim per (level, acs_year): every "
+                    "estimate and margin-of-error variable of each requested table, as the "
+                    "jam-value strings ACS publishes (see census_acs.py for the sentinel "
+                    "meanings and the CIF-indicator decision). Public domain (U.S. Government "
+                    "work, 17 U.S.C. Sec 105).",
             sort_by=("acs_year", "geo_id"),
         )
         for _level in ("county", "tract")
@@ -3217,6 +4838,165 @@ TABLES = {
                 "(SPEC.md § Sources; #105). U.S. Government work; public domain per "
                 "CDC's site-wide content-usage policy (teenvaxview.py's module "
                 "docstring).",
+    ),
+
+    # --- raw: epa superfund npl ---
+    # EPA Superfund National Priorities List sites (#99); extends facility.site with
+    # kind='superfund'. epa_superfund.py.
+    "raw.superfund__npl_status": TableDef(
+        schema=Schema(
+            NestedField(1, "Site_Name", StringType(), doc="Site's own name; facility.site.name."),
+            NestedField(2, "Site_Score", DoubleType(),
+                        doc="Hazard Ranking System score; facility.site.attributes_json's "
+                            "'site_score' key."),
+            NestedField(3, "Site_EPA_ID", StringType(), required=True,
+                        doc="EPA's own per-site id (e.g. 'CTD009717604') -- verified unique "
+                            "across the whole live file (2026-09-18); joined against "
+                            "raw.superfund__npl_frs.PGM_SYS_ID and this is "
+                            "facility.site.facility_id's 'EPA_SUPERFUND:'+this."),
+            NestedField(4, "SEMS_ID", IntegerType(), doc="SEMS internal numeric site id."),
+            NestedField(5, "SITS_ID", IntegerType(), doc="Superfund Information Tracking System id."),
+            NestedField(6, "Region_ID", IntegerType(),
+                        doc="EPA region number (1-10); facility.site.attributes_json's "
+                            "'region_id' key."),
+            NestedField(7, "State", StringType(), doc="Full state/territory name, as published."),
+            NestedField(8, "City", StringType(), doc="City, as published."),
+            NestedField(9, "County", StringType(),
+                        doc="County name(s) as free text, not a FIPS code -- some sites span "
+                            "more than one (e.g. 'Limestone, Madison, Morgan'); see "
+                            "raw.superfund__npl_frs.FIPS_CODE for the single county FIPS this "
+                            "module derives geo_id from. facility.site.attributes_json's "
+                            "'county_name' key."),
+            NestedField(10, "Status", StringType(),
+                        doc="'NPL Site' | 'Proposed NPL Site' | 'Deleted NPL Site'. "
+                            "facility.site.attributes_json's 'status' key."),
+            NestedField(11, "Longitude", DoubleType(), doc="WGS84 longitude; facility.site.lon."),
+            NestedField(12, "Latitude", DoubleType(), doc="WGS84 latitude; facility.site.lat."),
+            NestedField(13, "Proposed_Date", StringType(),
+                        doc="Date proposed to the NPL, unparsed (M/D/YYYY as published). "
+                            "facility.site.attributes_json's 'proposed_date' key -- see module "
+                            "docstring on why this lands in attributes_json, not source_release "
+                            "(issue #19)."),
+            NestedField(14, "Listing_Date", StringType(),
+                        doc="Date finalized on the NPL, unparsed. attributes_json's "
+                            "'listing_date' key."),
+            NestedField(15, "Construction_Completion_Date", StringType(),
+                        doc="Date remedial construction was completed, unparsed, or NULL. "
+                            "attributes_json's 'construction_completion_date' key."),
+            NestedField(16, "Construction_Completion_Number", IntegerType(),
+                        doc="EPA's sequential Construction Completion List number, or NULL."),
+            NestedField(17, "NOID_Date", StringType(),
+                        doc="Notice of Intent to Delete date, unparsed, or NULL. "
+                            "attributes_json's 'noid_date' key."),
+            NestedField(18, "Deletion_Date", StringType(),
+                        doc="Date deleted from the NPL, unparsed, or NULL. attributes_json's "
+                            "'deletion_date' key."),
+            NestedField(19, "Site_Listing_Narrative", StringType(),
+                        doc="HTML link to the site's listing narrative PDF, as published."),
+            NestedField(20, "Site_Progress_Profile", StringType(),
+                        doc="HTML link to the site's EPA cleanup-progress page, as published."),
+            NestedField(21, "Notice_of_Data_Availability", StringType(),
+                        doc="HTML link to a Notice of Data Availability, or NULL."),
+            NestedField(22, "Proposed_FR_Notice", StringType(),
+                        doc="HTML link to the proposal's Federal Register notice, or NULL."),
+            NestedField(23, "Deletion_FR_Notice", StringType(),
+                        doc="HTML link to the deletion's Federal Register notice, or NULL."),
+            NestedField(24, "Final_FR_Notice", StringType(),
+                        doc="HTML link to the final-listing Federal Register notice, or NULL."),
+            NestedField(25, "NOID_FR_Notice", StringType(),
+                        doc="HTML link to the NOID's Federal Register notice, or NULL."),
+            NestedField(26, "Restoration_FR_Notice_Jumper_Page", StringType(),
+                        doc="HTML link to a restoration Federal Register notice, or NULL."),
+            NestedField(27, "Site_has_had_a_Partial_Deletion", StringType(),
+                        doc="'Yes' (as an HTML link) or 'No', as published. attributes_json's "
+                            "'partial_deletion' key."),
+            NestedField(28, "retrieved_on", StringType(), required=True,
+                        doc="ISO date this snapshot was retrieved -- SEMS publishes no edition "
+                            "label (module docstring); raw is replaced wholesale per value of "
+                            "this column."),
+            NestedField(29, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("retrieved_on", "Site_EPA_ID"),
+        comment="EPA Superfund National Priorities List sites with status (proposed / final / "
+                "deleted), landed verbatim and whole from the 'Superfund National Priorities "
+                "List (NPL) Sites with Status Information' ArcGIS Feature Service (EPA's own "
+                "'Where You Live' page dataset). Public domain; the service's own licenseInfo "
+                "states 'Access Constraints: None' (checked 2026-09-18). Joined against "
+                "raw.superfund__npl_frs for county FIPS -- see epa_superfund.py module docstring.",
+    ),
+
+    "raw.superfund__npl_frs": TableDef(
+        schema=Schema(
+            NestedField(1, "REGISTRY_ID", StringType(), required=True,
+                        doc="EPA Facility Registry Service's own cross-program facility id. "
+                            "facility.site.attributes_json's 'registry_id' key."),
+            NestedField(2, "PRIMARY_NAME", StringType(), doc="FRS's own facility name."),
+            NestedField(3, "LOCATION_ADDRESS", StringType(),
+                        doc="Street address; part of facility.site.address when this row "
+                            "matches a status-layer site."),
+            NestedField(4, "CITY_NAME", StringType(), doc="Part of facility.site.address."),
+            NestedField(5, "COUNTY_NAME", StringType(), doc="County name, as published."),
+            NestedField(6, "FIPS_CODE", StringType(),
+                        doc="County FIPS code, landed exactly as published -- NOT consistently "
+                            "zero-padded (e.g. '9003' vs '01013', verified 2026-09-18) and not "
+                            "always a real FIPS code at all (9 live rows carry a state postal "
+                            "abbreviation glued to a county code, e.g. 'NJ017', or garbage like "
+                            "'S', verified 2026-09-19 -- see epa_superfund.py module docstring). "
+                            "facility.site.geo_id is 'county:'+lpad(this, 5, '0') only after "
+                            "validating this matches [0-9]{1,5}; otherwise geo_id is NULL, not "
+                            "guessed. 2010-vintage geography (Connecticut rows carry its eight "
+                            "legacy counties, never the nine 2022 planning regions -- same marker "
+                            "epa_sdwis.py's ANSI reference uses for its own GEO_VINTAGE=2010)."),
+            NestedField(7, "STATE_CODE", StringType(),
+                        doc="USPS state/territory abbreviation; part of facility.site.address."),
+            NestedField(8, "POSTAL_CODE", StringType(), doc="ZIP code; part of facility.site.address."),
+            NestedField(9, "LATITUDE83", DoubleType(),
+                        doc="WGS84/NAD83 latitude -- landed for reference; facility.site.lat "
+                            "comes from raw.superfund__npl_status.Latitude instead (populated "
+                            "on every site, not only FRS-matched ones; see module docstring)."),
+            NestedField(10, "LONGITUDE83", DoubleType(), doc="WGS84/NAD83 longitude; see LATITUDE83's doc."),
+            NestedField(11, "HUC8_CODE", StringType(), doc="8-digit hydrologic unit code, or NULL."),
+            NestedField(12, "ACCURACY_VALUE", IntegerType(), doc="Geocoding accuracy value, or NULL."),
+            NestedField(13, "COLLECT_MTH_DESC", StringType(), doc="Coordinate collection method, or NULL."),
+            NestedField(14, "REF_POINT_DESC", StringType(), doc="Reference point description, or NULL."),
+            NestedField(15, "CREATE_DATE", StringType(),
+                        doc="FRS record creation timestamp (epoch milliseconds, unparsed text)."),
+            NestedField(16, "UPDATE_DATE", StringType(),
+                        doc="FRS record last-update timestamp (epoch milliseconds, unparsed text)."),
+            NestedField(17, "LAST_REPORTED_DATE", StringType(),
+                        doc="Last-reported timestamp (epoch milliseconds, unparsed text), or NULL."),
+            NestedField(18, "FAC_URL", StringType(), doc="Link to the facility's FRS detail page."),
+            NestedField(19, "PGM_SYS_ID", StringType(), required=True,
+                        doc="EPA's per-site id in this program system -- the same id as "
+                            "raw.superfund__npl_status.Site_EPA_ID; the join key."),
+            NestedField(20, "PGM_SYS_ACRNM", StringType(),
+                        doc="Program system acronym, constant 'SEMS' for this layer."),
+            NestedField(21, "INTEREST_TYPE", StringType(),
+                        doc="Constant 'SUPERFUND NPL' for this layer."),
+            NestedField(22, "PROGRAM_URL", StringType(), doc="Link to the Superfund program page."),
+            NestedField(23, "PGM_REPORT_URL", StringType(), doc="Program report link, or 'no data yet'."),
+            NestedField(24, "PUBLIC_IND", StringType(), doc="'Y' if publicly visible, as published."),
+            NestedField(25, "ACTIVE_STATUS", StringType(),
+                        doc="'CURRENTLY ON THE FINAL NPL' | 'PROPOSED FOR NPL' | 'DELETED FROM "
+                            "THE FINAL NPL' -- FRS's own status text, not derived from."),
+            NestedField(26, "FEDERAL_AGENCY_NAME", StringType(),
+                        doc="Responsible federal agency for a federal facility, or NULL."),
+            NestedField(27, "HUC_12", StringType(), doc="12-digit hydrologic unit code, or NULL."),
+            NestedField(28, "FEDERAL_LAND_IND", StringType(), doc="Federal-land indicator, or NULL."),
+            NestedField(29, "FED_FACILITY_CODE", StringType(), doc="Federal-facility code, or NULL."),
+            NestedField(30, "EPA_REGION_CODE", StringType(), doc="2-digit EPA region code."),
+            NestedField(31, "KEY_FIELD", StringType(), doc="FRS's own composite key, e.g. 'SEMSCTD009717604'."),
+            NestedField(32, "retrieved_on", StringType(), required=True,
+                        doc="ISO date this snapshot was retrieved; see raw.superfund__npl_status."),
+            NestedField(33, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("retrieved_on", "PGM_SYS_ID"),
+        comment="EPA Facility Registry Service's own NPL subset (FRS_INTERESTS_SEMS_NPL), "
+                "landed verbatim and whole -- the source of facility.site's county FIPS for "
+                "EPA_SUPERFUND, joined to raw.superfund__npl_status on the shared EPA site id "
+                "(epa_superfund.py module docstring). Public domain -- 17 U.S.C. § 105.",
     ),
 }
 

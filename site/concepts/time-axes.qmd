@@ -1,0 +1,79 @@
+---
+title: "Three time axes"
+jupyter: coi-docs
+---
+
+Every measure in the lake carries three distinct notions of "when," and
+conflating them is the characteristic error in this domain.
+
+| Axis | Column(s) | Meaning |
+| --- | --- | --- |
+| **Period** | `period_start`, `period_end` | the time the estimate *describes* |
+| **Source release** | `source_release` | the upstream edition that *published* it |
+| **Catalog validity** | `valid_from`, `valid_to` | when Catchment Lake first/last carried this version of the row |
+
+## A real example: PLACES 2024 vs. 2025
+
+```{python}
+#| echo: false
+import duckdb
+
+con = duckdb.connect()
+con.execute("INSTALL iceberg; LOAD iceberg; INSTALL httpfs; LOAD httpfs;")
+con.execute(
+    "ATTACH 'canceronice' AS coi (TYPE ICEBERG, "
+    "ENDPOINT 'https://icegate-canceronice.seandavi.workers.dev', "
+    "AUTHORIZATION_TYPE 'none');"
+)
+con.sql("""
+    SELECT source_release, period_start, period_end, value, valid_from, valid_to
+    FROM coi.measure.observation
+    WHERE source = 'PLACES' AND measure_id = 'PLACES:CANCER:age_adjusted'
+      AND geo_id = 'county:08031'
+    ORDER BY source_release
+""").df()
+```
+
+Two rows, same measure, same county (Denver County, CO). The **source
+release** is `'2024'` or `'2025'` — the PLACES edition. The **period** each
+release actually describes is one year *earlier*: the 2024 release models
+2022 BRFSS data, the 2025 release models 2023 data. A query that filters on
+`source_release = '2025'` expecting "2025 data" is filtering on the release
+label, not the period — the value it gets describes 2023.
+
+`valid_from` is `'2026.09'` on both rows and `valid_to` is `NULL` on both:
+this is a bootstrap catalog, so every row so far carries the same catalog
+release. The catalog-validity axis becomes visible starting at the next
+catalog release that changes or retires a row — at that point `valid_to`
+stops being `NULL` on the superseded version, and a query for "what the lake
+said as of release 2026.09" becomes a real, answerable filter rather than a
+trivial one.
+
+## A second example: an edition's own period moves
+
+SVI's `source_release` **is** the edition, and each edition's own period is
+a five-year ACS window that moves with it — never the edition year alone:
+
+```{python}
+#| echo: false
+con.sql("""
+    SELECT source_release AS edition, min(period_start) AS period_start, max(period_end) AS period_end
+    FROM coi.measure.observation
+    WHERE source = 'SVI'
+    GROUP BY 1 ORDER BY 1
+""").df()
+```
+
+The 2020 edition's period is `2016`–`2020`, not `'2020'` alone — treating an
+edition's release year as its period would be off by up to four years.
+
+## Why this matters for a catchment report
+
+The sentence a cancer center has to defend — *"in our catchment, as reported
+by source S in release R, the measure was X"* — names the release, not the
+period, on purpose: the release is what you can point back to when someone
+asks "where did this number come from." Reproducing a past analysis means
+filtering on `source_release`, not on `period_start`/`period_end` (a later
+release can restate an earlier period with revised numbers) and not on
+`valid_from`/`valid_to` (which tracks the lake's own history, not the
+source's).

@@ -14,6 +14,10 @@ Fixtures:
   City, CO" destination name (the Latin-1 encoding check) and a Connecticut
   tract showing both the legacy (TractFIPS20) and planning-region
   (TractFIPS23) codes for the same physical tract.
+- tests/tiny_ruca_2020_malformed.csv: synthetic, not a real excerpt -- ERS's
+  real file has never published a non-numeric, present PrimaryRUCA/
+  SecondaryRUCA value other than '99' (verified 2026-09-18). Built only to
+  exercise the present-but-non-numeric case (#148's bug class).
 """
 
 from pathlib import Path
@@ -27,6 +31,7 @@ from canceronice import ers_ruca, merge
 REL = "2026.08"
 XLSX_2010 = str(Path(__file__).parent / "tiny_ruca_2010.xlsx")
 CSV_2020 = str(Path(__file__).parent / "tiny_ruca_2020.csv")
+MALFORMED_2020 = str(Path(__file__).parent / "tiny_ruca_2020_malformed.csv")
 
 
 def rows(cat, identifier, **kw):
@@ -138,6 +143,22 @@ def test_derives_definitions_stratum_and_observations_2020(cat):
     notcoded_s = by_geo[("tract:01003990000", "RUCA:secondary")]
     assert notcoded_p["value"] is None and notcoded_p["value_status"] == "not_applicable"
     assert notcoded_s["value"] is None and notcoded_s["value_status"] == "not_applicable"
+
+
+def test_a_present_non_numeric_code_lands_not_available_not_reported(cat):
+    """A PrimaryRUCA/SecondaryRUCA cell that is present but neither '99' nor
+    numeric must not read as a numberless 'reported' row: value_status used to
+    be derived from the '99' check alone, independent of whether TRY_CAST
+    actually produced `value` -- the same class of bug #148 fixed generally in
+    merge.check_observations (a present-but-non-numeric cell has never been
+    published by ERS, verified 2026-09-18, but the derivation should not
+    silently mislabel one if it ever is)."""
+    ers_ruca.ingest(cat, REL, edition="2020", url=MALFORMED_2020)
+    obs = {o["measure_id"]: o for o in rows(cat, "measure.observation", row_filter="source = 'RUCA'")}
+    assert len(obs) == 2
+    for o in obs.values():
+        assert o["value"] is None
+        assert o["value_status"] == "not_available"
 
 
 def test_derives_observations_2010(cat):
