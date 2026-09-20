@@ -33,14 +33,17 @@ def edges(cat, **filters):
 def test_record_resolves_cte_union_and_case(cat):
     """sqlglot's own machinery handles the CTE and the UNION; the one thing
     `record()` does by hand is attach each branch's literal measure_id to
-    that branch's own edges (#140's `_leaf_edges`)."""
+    that branch's own edges (#140's `_leaf_edges`). Uses two real declared
+    raw tables (FIPS/LocationID are real columns of each) so the from_column
+    validation (against the source table's own declared schema) passes."""
     con = lineage.connect()
-    con.tables = {"raw1": "raw.one", "raw2": "raw.two"}
+    con.tables = {"raw1": "raw.ers__rucc", "raw2": "raw.places__county"}
     sql = """
         WITH src AS (
-            SELECT 'X' AS measure_id, TRY_CAST(a AS DOUBLE) AS value FROM raw1
+            SELECT 'X' AS measure_id, TRY_CAST(FIPS AS DOUBLE) AS value FROM raw1
             UNION ALL
-            SELECT 'Y' AS measure_id, CASE WHEN b > 0 THEN b ELSE NULL END AS value FROM raw2
+            SELECT 'Y' AS measure_id, CASE WHEN LocationID > '0' THEN 1 ELSE NULL END AS value
+            FROM raw2
         )
         SELECT measure_id, value FROM src
     """
@@ -49,8 +52,8 @@ def test_record_resolves_cte_union_and_case(cat):
     rows = {(r["from_table"], r["to_variable"], r["expression"])
             for r in edges(cat, to_table="measure.observation", to_column="value")}
     assert rows == {
-        ("raw.one", "X", "TRY_CAST(raw1.a AS DOUBLE)"),
-        ("raw.two", "Y", "CASE WHEN raw2.b > 0 THEN raw2.b ELSE NULL END"),
+        ("raw.ers__rucc", "X", "TRY_CAST(raw1.fips AS DOUBLE)"),
+        ("raw.places__county", "Y", "CASE WHEN raw2.locationid > '0' THEN 1 ELSE NULL END"),
     }
 
 
@@ -59,8 +62,8 @@ def test_unparseable_sql_is_unresolved_not_fatal(cat, capsys):
     the good output's edges are still written, and the bad one is counted,
     not raised."""
     con = lineage.connect()
-    con.tables = {"raw1": "raw.one"}
-    good = "SELECT 'X' AS measure_id, TRY_CAST(a AS DOUBLE) AS value FROM raw1"
+    con.tables = {"raw1": "raw.ers__rucc"}
+    good = "SELECT 'X' AS measure_id, TRY_CAST(FIPS AS DOUBLE) AS value FROM raw1"
     bad = "SELEC BROKEN((( FROM WHERE"
 
     lineage.record(cat, REL, "unit", con, {"measure.observation": good, "measure.definition": bad})
@@ -68,6 +71,20 @@ def test_unparseable_sql_is_unresolved_not_fatal(cat, capsys):
     assert "1 edge(s) unresolved" in capsys.readouterr().out
     rows = cat.load_table("provenance.lineage").scan().to_arrow().to_pylist()
     assert len(rows) == 1 and rows[0]["to_table"] == "measure.observation"
+
+
+def test_unresolvable_column_is_unresolved_not_written(cat, capsys):
+    """A leaf column that doesn't exist on the source table's own declared
+    schema (a stale or wrong reference) is counted as unresolved and not
+    written, rather than trusted unvalidated (#140 review)."""
+    con = lineage.connect()
+    con.tables = {"raw1": "raw.ers__rucc"}
+    sql = "SELECT 'X' AS measure_id, TRY_CAST(not_a_real_column AS DOUBLE) AS value FROM raw1"
+
+    lineage.record(cat, REL, "unit", con, {"measure.observation": sql})
+
+    assert "1 edge(s) unresolved" in capsys.readouterr().out
+    assert edges(cat, to_table="measure.observation", to_column="value") == []
 
 
 # --- ers_rucc.py: a plain SELECT, literal measure_id ---

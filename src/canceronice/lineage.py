@@ -103,10 +103,20 @@ def _ctas_sources(statements):
     return sources
 
 
-def _resolve(name, tables):
+def _resolve(name, tables, from_column=None):
     """A leaf reference's local name -> (catalog identifier, 'table'), or None
-    when it isn't one this connection registered."""
-    return (tables[name], "table") if name in tables else None
+    when it isn't one this connection registered, or when `from_column` isn't
+    really one of that table's declared columns -- sqlglot resolves a column
+    reference syntactically, with no real schema behind it, so a misspelled or
+    stale one would otherwise be written to provenance.lineage unvalidated."""
+    if name not in tables:
+        return None
+    identifier = tables[name]
+    if from_column is not None:
+        d = schemas.TABLES.get(identifier)
+        if d is None or from_column.lower() not in {f.name.lower() for f in d.schema.fields}:
+            return None
+    return identifier, "table"
 
 
 def _literal_key(select, key_col):
@@ -143,21 +153,37 @@ def _leaf_edges(node, key_col, variable=None, expr_sql=None):
         yield from _leaf_edges(child, key_col, variable, expr_sql)
 
 
+def _try_lineage(col, parsed, sources, trim_selects=True):
+    """`sqlglot.lineage.lineage`, wrapped: a target column absent from this
+    query's own output list is benign (sqlglot's own "Cannot find column"
+    check) -- most of a table's declared columns aren't produced by any one
+    output's SQL -- and resolves to no edges, not an unresolved count. Any
+    other failure (a real parse/resolution problem) is a genuine unresolved
+    edge, counted rather than silently dropped."""
+    try:
+        return _sqlglot_lineage(col, parsed, sources=sources, dialect=DIALECT,
+                                trim_selects=trim_selects), 0
+    except sqlglot.errors.SqlglotError as err:
+        return (None, 0) if "Cannot find column" in str(err) else (None, 1)
+    except Exception:
+        return None, 1
+
+
 def _column_edges(parsed, sources, tables, col, key_col):
     """Every (table, from_column, kind, expression, to_variable) `col` resolves
-    to, plus how many leaves didn't resolve to a known table."""
-    try:
-        node = _sqlglot_lineage(col, parsed, sources=sources, dialect=DIALECT, trim_selects=False)
-    except Exception:
-        return [], 0
-    edges, unresolved = [], 0
+    to, plus how many leaves didn't resolve to a known table and column."""
+    node, unresolved = _try_lineage(col, parsed, sources, trim_selects=False)
+    if node is None:
+        return [], unresolved
+    edges = []
     for leaf, variable, expr_sql in _leaf_edges(node, key_col):
-        found = _resolve(leaf.expression.name, tables)
+        from_col = leaf.name.rsplit(".", 1)[-1]
+        found = _resolve(leaf.expression.name, tables, from_col)
         if not found:
             unresolved += 1
             continue
         table, kind = found
-        edges.append((table, leaf.name.rsplit(".", 1)[-1], kind, expr_sql, variable))
+        edges.append((table, from_col, kind, expr_sql, variable))
     return edges, unresolved
 
 
@@ -173,9 +199,9 @@ def _table_edges(parsed, sources, tables, covered):
     table-level-only edge."""
     edges, unresolved = [], 0
     for name in parsed.named_selects:
-        try:
-            node = _sqlglot_lineage(name, parsed, sources=sources, dialect=DIALECT)
-        except Exception:
+        node, n = _try_lineage(name, parsed, sources)
+        unresolved += n
+        if node is None:
             continue
         for leaf in _leaves(node):
             found = _resolve(leaf.expression.name, tables)
