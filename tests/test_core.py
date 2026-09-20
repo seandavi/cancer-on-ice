@@ -71,6 +71,21 @@ def test_check_observations_rejects_suppressed_value_and_unknown_status():
         merge.check_observations(arrow)
 
 
+def test_check_observations_rejects_null_value_under_reported_status():
+    """The reverse direction: value_status='reported' promises a value, per
+    schemas.py's doc on the column. A source that derives value_status from
+    something other than its own value expression's nullness (e.g. a raw
+    cell's presence, checked separately from a TRY_CAST that can fail) can
+    produce this -- caught here rather than per source (#132/#135/#136/#141
+    all hit some form of this)."""
+    arrow = pa.Table.from_pylist([
+        observation("reported", 1.0),
+        observation("reported", None),          # promises a value, has none
+    ])
+    with pytest.raises(ValueError, match="1 row"):
+        merge.check_observations(arrow)
+
+
 def test_check_observations_accepts_valid_rows():
     arrow = pa.Table.from_pylist([
         observation("reported", 1.0),

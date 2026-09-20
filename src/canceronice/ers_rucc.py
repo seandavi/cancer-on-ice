@@ -169,7 +169,12 @@ def transform(cat, release, edition):
                NULL::DOUBLE AS lower, NULL::DOUBLE AS upper,
                NULL::DOUBLE AS interval_level, NULL::DOUBLE AS numerator,
                NULL::DOUBLE AS denominator,
-               CASE WHEN r.Value IS NOT NULL THEN 'reported' ELSE 'not_available' END AS value_status,
+               -- Status follows the CAST that actually produced `value`, not
+               -- the raw cell's presence -- a present-but-non-numeric cell
+               -- (never seen in the real file, verified 2026-09-18) must not
+               -- land as a numberless 'reported' row (merge.check_observations).
+               CASE WHEN TRY_CAST(r.Value AS DOUBLE) IS NOT NULL THEN 'reported'
+                    ELSE 'not_available' END AS value_status,
                NULL::VARCHAR AS reliability_flag, NULL::VARCHAR AS trend
         FROM (SELECT DISTINCT FIPS FROM raw) c
         LEFT JOIN raw r ON r.FIPS = c.FIPS AND r.Attribute = 'RUCC_{edition}'
