@@ -190,6 +190,13 @@ def main():
     bl.add_argument("--since", type=int,
                     help="derive years >= this (default: this year minus 10)")
 
+    # --- raw: epa radon zones ---
+    # EPA Map of Radon Zones, county (#101).
+    from . import epa_radon
+    rz = sub.add_parser("radon", help="land the EPA Map of Radon Zones (county), then derive")
+    rz.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    rz.add_argument("--url", help="an already-downloaded .xls file or alternate URL")
+
     args = p.parse_args()
 
     cat = catalog()
@@ -292,6 +299,10 @@ def main():
     elif args.cmd == "laus":
         _print(bls_laus.ingest(cat, args.release, args.county_url, args.area_url, args.series_url,
                                args.measure_url, args.footnote_url, args.vintage, args.since))
+
+    # --- raw: epa radon zones ---
+    elif args.cmd == "radon":
+        _print(epa_radon.ingest(cat, args.release, args.url))
 
     else:
         for ns in cat.list_namespaces():
