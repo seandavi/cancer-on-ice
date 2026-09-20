@@ -2154,8 +2154,9 @@ TABLES = {
                             "ingest; when cancerOnIce saw a given version of the row is "
                             "valid_from/valid_to, not source_release."),
             NestedField(4, "kind", StringType(), required=True,
-                        doc="'fqhc' | 'rhc' | 'mammography' | 'lung_screening' | 'provider' | 'hospital'. "
-                            "HRSA_HC rows are 'fqhc' for both true FQHCs and FQHC Look-Alikes."),
+                        doc="'fqhc' | 'rhc' | 'mammography' | 'lung_screening' | 'provider' | "
+                            "'hospital' | 'superfund'. HRSA_HC rows are 'fqhc' for both true "
+                            "FQHCs and FQHC Look-Alikes."),
             NestedField(5, "name", StringType(), doc="Site's own name."),
             NestedField(6, "address", StringType(), doc="Single-line street address, city, state, postal code."),
             NestedField(7, "lat", DoubleType(), doc="Latitude, WGS84, as published by the source."),
@@ -3315,6 +3316,165 @@ TABLES = {
                 "vintage -- the real, complete set of sentinel/reliability codes this source "
                 "publishes (bls_laus.py's FOOTNOTE_TEXT mirrors it and SystemExits on a code "
                 "not in this table).",
+    ),
+
+    # --- raw: epa superfund npl ---
+    # EPA Superfund National Priorities List sites (#99); extends facility.site with
+    # kind='superfund'. epa_superfund.py.
+    "raw.superfund__npl_status": TableDef(
+        schema=Schema(
+            NestedField(1, "Site_Name", StringType(), doc="Site's own name; facility.site.name."),
+            NestedField(2, "Site_Score", DoubleType(),
+                        doc="Hazard Ranking System score; facility.site.attributes_json's "
+                            "'site_score' key."),
+            NestedField(3, "Site_EPA_ID", StringType(), required=True,
+                        doc="EPA's own per-site id (e.g. 'CTD009717604') -- verified unique "
+                            "across the whole live file (2026-09-18); joined against "
+                            "raw.superfund__npl_frs.PGM_SYS_ID and this is "
+                            "facility.site.facility_id's 'EPA_SUPERFUND:'+this."),
+            NestedField(4, "SEMS_ID", IntegerType(), doc="SEMS internal numeric site id."),
+            NestedField(5, "SITS_ID", IntegerType(), doc="Superfund Information Tracking System id."),
+            NestedField(6, "Region_ID", IntegerType(),
+                        doc="EPA region number (1-10); facility.site.attributes_json's "
+                            "'region_id' key."),
+            NestedField(7, "State", StringType(), doc="Full state/territory name, as published."),
+            NestedField(8, "City", StringType(), doc="City, as published."),
+            NestedField(9, "County", StringType(),
+                        doc="County name(s) as free text, not a FIPS code -- some sites span "
+                            "more than one (e.g. 'Limestone, Madison, Morgan'); see "
+                            "raw.superfund__npl_frs.FIPS_CODE for the single county FIPS this "
+                            "module derives geo_id from. facility.site.attributes_json's "
+                            "'county_name' key."),
+            NestedField(10, "Status", StringType(),
+                        doc="'NPL Site' | 'Proposed NPL Site' | 'Deleted NPL Site'. "
+                            "facility.site.attributes_json's 'status' key."),
+            NestedField(11, "Longitude", DoubleType(), doc="WGS84 longitude; facility.site.lon."),
+            NestedField(12, "Latitude", DoubleType(), doc="WGS84 latitude; facility.site.lat."),
+            NestedField(13, "Proposed_Date", StringType(),
+                        doc="Date proposed to the NPL, unparsed (M/D/YYYY as published). "
+                            "facility.site.attributes_json's 'proposed_date' key -- see module "
+                            "docstring on why this lands in attributes_json, not source_release "
+                            "(issue #19)."),
+            NestedField(14, "Listing_Date", StringType(),
+                        doc="Date finalized on the NPL, unparsed. attributes_json's "
+                            "'listing_date' key."),
+            NestedField(15, "Construction_Completion_Date", StringType(),
+                        doc="Date remedial construction was completed, unparsed, or NULL. "
+                            "attributes_json's 'construction_completion_date' key."),
+            NestedField(16, "Construction_Completion_Number", IntegerType(),
+                        doc="EPA's sequential Construction Completion List number, or NULL."),
+            NestedField(17, "NOID_Date", StringType(),
+                        doc="Notice of Intent to Delete date, unparsed, or NULL. "
+                            "attributes_json's 'noid_date' key."),
+            NestedField(18, "Deletion_Date", StringType(),
+                        doc="Date deleted from the NPL, unparsed, or NULL. attributes_json's "
+                            "'deletion_date' key."),
+            NestedField(19, "Site_Listing_Narrative", StringType(),
+                        doc="HTML link to the site's listing narrative PDF, as published."),
+            NestedField(20, "Site_Progress_Profile", StringType(),
+                        doc="HTML link to the site's EPA cleanup-progress page, as published."),
+            NestedField(21, "Notice_of_Data_Availability", StringType(),
+                        doc="HTML link to a Notice of Data Availability, or NULL."),
+            NestedField(22, "Proposed_FR_Notice", StringType(),
+                        doc="HTML link to the proposal's Federal Register notice, or NULL."),
+            NestedField(23, "Deletion_FR_Notice", StringType(),
+                        doc="HTML link to the deletion's Federal Register notice, or NULL."),
+            NestedField(24, "Final_FR_Notice", StringType(),
+                        doc="HTML link to the final-listing Federal Register notice, or NULL."),
+            NestedField(25, "NOID_FR_Notice", StringType(),
+                        doc="HTML link to the NOID's Federal Register notice, or NULL."),
+            NestedField(26, "Restoration_FR_Notice_Jumper_Page", StringType(),
+                        doc="HTML link to a restoration Federal Register notice, or NULL."),
+            NestedField(27, "Site_has_had_a_Partial_Deletion", StringType(),
+                        doc="'Yes' (as an HTML link) or 'No', as published. attributes_json's "
+                            "'partial_deletion' key."),
+            NestedField(28, "retrieved_on", StringType(), required=True,
+                        doc="ISO date this snapshot was retrieved -- SEMS publishes no edition "
+                            "label (module docstring); raw is replaced wholesale per value of "
+                            "this column."),
+            NestedField(29, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("retrieved_on", "Site_EPA_ID"),
+        comment="EPA Superfund National Priorities List sites with status (proposed / final / "
+                "deleted), landed verbatim and whole from the 'Superfund National Priorities "
+                "List (NPL) Sites with Status Information' ArcGIS Feature Service (EPA's own "
+                "'Where You Live' page dataset). Public domain; the service's own licenseInfo "
+                "states 'Access Constraints: None' (checked 2026-09-18). Joined against "
+                "raw.superfund__npl_frs for county FIPS -- see epa_superfund.py module docstring.",
+    ),
+
+    "raw.superfund__npl_frs": TableDef(
+        schema=Schema(
+            NestedField(1, "REGISTRY_ID", StringType(), required=True,
+                        doc="EPA Facility Registry Service's own cross-program facility id. "
+                            "facility.site.attributes_json's 'registry_id' key."),
+            NestedField(2, "PRIMARY_NAME", StringType(), doc="FRS's own facility name."),
+            NestedField(3, "LOCATION_ADDRESS", StringType(),
+                        doc="Street address; part of facility.site.address when this row "
+                            "matches a status-layer site."),
+            NestedField(4, "CITY_NAME", StringType(), doc="Part of facility.site.address."),
+            NestedField(5, "COUNTY_NAME", StringType(), doc="County name, as published."),
+            NestedField(6, "FIPS_CODE", StringType(),
+                        doc="County FIPS code, landed exactly as published -- NOT consistently "
+                            "zero-padded (e.g. '9003' vs '01013', verified 2026-09-18) and not "
+                            "always a real FIPS code at all (9 live rows carry a state postal "
+                            "abbreviation glued to a county code, e.g. 'NJ017', or garbage like "
+                            "'S', verified 2026-09-19 -- see epa_superfund.py module docstring). "
+                            "facility.site.geo_id is 'county:'+lpad(this, 5, '0') only after "
+                            "validating this matches [0-9]{1,5}; otherwise geo_id is NULL, not "
+                            "guessed. 2010-vintage geography (Connecticut rows carry its eight "
+                            "legacy counties, never the nine 2022 planning regions -- same marker "
+                            "epa_sdwis.py's ANSI reference uses for its own GEO_VINTAGE=2010)."),
+            NestedField(7, "STATE_CODE", StringType(),
+                        doc="USPS state/territory abbreviation; part of facility.site.address."),
+            NestedField(8, "POSTAL_CODE", StringType(), doc="ZIP code; part of facility.site.address."),
+            NestedField(9, "LATITUDE83", DoubleType(),
+                        doc="WGS84/NAD83 latitude -- landed for reference; facility.site.lat "
+                            "comes from raw.superfund__npl_status.Latitude instead (populated "
+                            "on every site, not only FRS-matched ones; see module docstring)."),
+            NestedField(10, "LONGITUDE83", DoubleType(), doc="WGS84/NAD83 longitude; see LATITUDE83's doc."),
+            NestedField(11, "HUC8_CODE", StringType(), doc="8-digit hydrologic unit code, or NULL."),
+            NestedField(12, "ACCURACY_VALUE", IntegerType(), doc="Geocoding accuracy value, or NULL."),
+            NestedField(13, "COLLECT_MTH_DESC", StringType(), doc="Coordinate collection method, or NULL."),
+            NestedField(14, "REF_POINT_DESC", StringType(), doc="Reference point description, or NULL."),
+            NestedField(15, "CREATE_DATE", StringType(),
+                        doc="FRS record creation timestamp (epoch milliseconds, unparsed text)."),
+            NestedField(16, "UPDATE_DATE", StringType(),
+                        doc="FRS record last-update timestamp (epoch milliseconds, unparsed text)."),
+            NestedField(17, "LAST_REPORTED_DATE", StringType(),
+                        doc="Last-reported timestamp (epoch milliseconds, unparsed text), or NULL."),
+            NestedField(18, "FAC_URL", StringType(), doc="Link to the facility's FRS detail page."),
+            NestedField(19, "PGM_SYS_ID", StringType(), required=True,
+                        doc="EPA's per-site id in this program system -- the same id as "
+                            "raw.superfund__npl_status.Site_EPA_ID; the join key."),
+            NestedField(20, "PGM_SYS_ACRNM", StringType(),
+                        doc="Program system acronym, constant 'SEMS' for this layer."),
+            NestedField(21, "INTEREST_TYPE", StringType(),
+                        doc="Constant 'SUPERFUND NPL' for this layer."),
+            NestedField(22, "PROGRAM_URL", StringType(), doc="Link to the Superfund program page."),
+            NestedField(23, "PGM_REPORT_URL", StringType(), doc="Program report link, or 'no data yet'."),
+            NestedField(24, "PUBLIC_IND", StringType(), doc="'Y' if publicly visible, as published."),
+            NestedField(25, "ACTIVE_STATUS", StringType(),
+                        doc="'CURRENTLY ON THE FINAL NPL' | 'PROPOSED FOR NPL' | 'DELETED FROM "
+                            "THE FINAL NPL' -- FRS's own status text, not derived from."),
+            NestedField(26, "FEDERAL_AGENCY_NAME", StringType(),
+                        doc="Responsible federal agency for a federal facility, or NULL."),
+            NestedField(27, "HUC_12", StringType(), doc="12-digit hydrologic unit code, or NULL."),
+            NestedField(28, "FEDERAL_LAND_IND", StringType(), doc="Federal-land indicator, or NULL."),
+            NestedField(29, "FED_FACILITY_CODE", StringType(), doc="Federal-facility code, or NULL."),
+            NestedField(30, "EPA_REGION_CODE", StringType(), doc="2-digit EPA region code."),
+            NestedField(31, "KEY_FIELD", StringType(), doc="FRS's own composite key, e.g. 'SEMSCTD009717604'."),
+            NestedField(32, "retrieved_on", StringType(), required=True,
+                        doc="ISO date this snapshot was retrieved; see raw.superfund__npl_status."),
+            NestedField(33, "landed_in", StringType(), required=True,
+                        doc="The cancerOnIce release whose ingest landed these rows."),
+        ),
+        sort_by=("retrieved_on", "PGM_SYS_ID"),
+        comment="EPA Facility Registry Service's own NPL subset (FRS_INTERESTS_SEMS_NPL), "
+                "landed verbatim and whole -- the source of facility.site's county FIPS for "
+                "EPA_SUPERFUND, joined to raw.superfund__npl_status on the shared EPA site id "
+                "(epa_superfund.py module docstring). Public domain -- 17 U.S.C. § 105.",
     ),
 }
 

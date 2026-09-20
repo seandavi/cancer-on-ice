@@ -201,6 +201,19 @@ def main():
     bl.add_argument("--since", type=int,
                     help="derive years >= this (default: this year minus 10)")
 
+    # --- raw: epa superfund npl ---
+    # EPA Superfund National Priorities List sites (#99); extends facility.site with kind='superfund'.
+    from . import epa_superfund
+    sf = sub.add_parser("superfund", help="land EPA Superfund NPL site status + FRS FIPS "
+                        "lookup, then derive facility.site")
+    sf.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    sf.add_argument("--status-url", dest="status_url",
+                    help="an already-downloaded NPL status JSON file or alternate URL")
+    sf.add_argument("--frs-url", dest="frs_url",
+                    help="an already-downloaded FRS SEMS_NPL JSON file or alternate URL")
+    sf.add_argument("--retrieved-on", dest="retrieved_on",
+                    help="ISO date to record as the version (default: today)")
+
     args = p.parse_args()
 
     cat = catalog()
@@ -308,6 +321,11 @@ def main():
     elif args.cmd == "laus":
         _print(bls_laus.ingest(cat, args.release, args.county_url, args.area_url, args.series_url,
                                args.measure_url, args.footnote_url, args.vintage, args.since))
+
+    # --- raw: epa superfund npl ---
+    # EPA Superfund National Priorities List sites (#99); extends facility.site with kind='superfund'.
+    elif args.cmd == "superfund":
+        _print(epa_superfund.ingest(cat, args.release, args.status_url, args.frs_url, args.retrieved_on))
 
     else:
         for ns in cat.list_namespaces():
