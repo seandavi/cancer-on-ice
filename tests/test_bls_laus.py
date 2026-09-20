@@ -151,6 +151,26 @@ def test_derives_four_measures(cat):
     assert u_row["reliability_flag"] == "U"
 
 
+def test_a_present_non_numeric_value_lands_not_available_not_reported(cat):
+    """A cell that is present but doesn't parse as a number must not read as a
+    numberless 'reported' row: value_status used to be derived from the
+    footnote_codes flag alone while `value` went through a separate
+    TRY_CAST -- the same class of bug #148 found across several sources
+    (ers_rucc.py, ers_ruca.py, hrsa_ahrf.py, scp.py, places.py, and this
+    module) -- so a present-but-non-numeric cell with no N/U footnote used to
+    land as value_status='reported' with value NULL, which
+    merge.check_observations' reverse guard now catches for any source that
+    regresses to it."""
+    malformed = str(FIX / "tiny_bls_laus_county_malformed.txt")
+    bls_laus.land_raw(cat, REL, malformed, AREA, SERIES, MEASURE, FOOTNOTE, vintage="2026-09-18")
+    counts = bls_laus.transform(cat, REL, "2026-09-18", since=2000)
+    assert counts["measure.observation"]["written"] == 1
+    obs = rows(cat, "measure.observation", row_filter="source = 'BLS_LAUS'")
+    assert len(obs) == 1
+    assert obs[0]["value"] is None
+    assert obs[0]["value_status"] == "not_available"
+
+
 def test_since_filters_derived_history(cat):
     """Full history stays in raw; only years >= `since` are derived (module
     docstring's ponytail note)."""

@@ -1,0 +1,2 @@
+series_id                     	year	period	       value	footnote_codes
+LAUCN010010000000003          	2024	M02	         N/A	

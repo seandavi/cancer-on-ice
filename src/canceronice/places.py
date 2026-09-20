@@ -49,7 +49,13 @@ definitions.
 "Estimates suppressed for population less than 50" (0 rows in the 2024
 release, 66 in 2025) -> `value_status = 'suppressed_small_count'`.
 `FOOTNOTE_STATUS` enumerates it explicitly; any other footnote text raises
-`SystemExit` in `transform` rather than guessing.
+`SystemExit` in `transform` rather than guessing. `value_status` is derived
+from the same `TRY_CAST` that produces `value` (a genuinely empty cell looks
+up its footnote; a present-but-non-numeric one -- never seen in the real
+files, verified 2026-09-19 -- falls back to `not_available` rather than
+guessing "suppressed"), not from `Data_Value`'s raw presence: the two used to
+disagree, landing a present-but-malformed cell as a numberless 'reported' row
+(#148; `merge.check_observations`'s reverse guard now catches any regression).
 
 **No cervix/lung screening measure in county data.** The county file's 40
 measures include `COLON_SCREEN` (colorectal) and `MAMMOUSE` (mammography) but
@@ -160,7 +166,7 @@ import pyarrow as pa
 from pyiceberg.exceptions import NoSuchTableError
 from pyiceberg.expressions import And, EqualTo, In
 
-from . import merge
+from . import lineage, merge
 
 # data.cdc.gov dataset id for each "PLACES: Local Data for Better Health,
 # County Data <year> release" (long format; NOT "GIS Friendly Format", which
@@ -312,6 +318,7 @@ def land_raw(cat, release, places_release=None, level="county", url=None):
 
     merge.manifest(cat, release, "places" if level == "county" else "places_tract",
                    fetch_url, n, version=places_release, method="release_number")
+    lineage.record(cat, release, "places", None, {identifier: fetch_url})
     return places_release, n
 
 
@@ -353,12 +360,12 @@ def transform(cat, release, places_release):
     would retire the other level's rows landed earlier under the same release.
     """
     geo_vintage = GEO_VINTAGE[places_release]
-    con = duckdb.connect()
+    con = lineage.connect()
     selects = []
     for level in ("county", "tract"):
         try:
-            con.register(f"{level}_raw", cat.load_table(f"raw.places__{level}").scan(
-                row_filter=EqualTo("places_release", places_release)).to_arrow())
+            lineage.load(con, cat, f"{level}_raw", f"raw.places__{level}",
+                        row_filter=EqualTo("places_release", places_release))
         except NoSuchTableError:
             continue  # this level has never been landed at all yet
         selects.append(_level_select(level))
@@ -401,11 +408,12 @@ def transform(cat, release, places_release):
     # One measure.definition row per (MeasureId, Data_Value_Type) — the two
     # variants are different measures (crude vs. age-adjusted prevalence of
     # the same thing), not a stratification of one.
-    defs = con.sql(f"""
+    defs_sql = f"""
         SELECT DISTINCT MeasureId, {dvt_case} AS variant, Measure, Category,
                Data_Value_Unit, Short_Question_Text
         FROM raw
-    """).fetchall()
+    """
+    defs = con.sql(defs_sql).fetchall()
     definition_rows = [
         dict(measure_id=f"PLACES:{measure_id}:{variant}", source="PLACES",
              label=short_text, units=unit, universe=_universe(measure_text),
@@ -426,7 +434,7 @@ def transform(cat, release, places_release):
     stratum = pa.Table.from_pylist(stratum_rows)
 
     value_status = _case("Data_Value_Footnote", FOOTNOTE_STATUS)
-    observation = con.sql(f"""
+    observation_sql = f"""
         SELECT 'PLACES' AS source, '{places_release}' AS source_release,
                'PLACES:' || MeasureId || ':' || {dvt_case} AS measure_id,
                geo_id,
@@ -441,18 +449,29 @@ def transform(cat, release, places_release):
                -- TotalPopulation/TotalPop18plus are not this measure's
                -- denominator (see module docstring); they stay in raw only.
                NULL::DOUBLE AS denominator,
-               CASE WHEN Data_Value IS NOT NULL THEN 'reported' ELSE {value_status} END
-                   AS value_status,
+               -- Status follows the same TRY_CAST that produces `value`, not
+               -- the raw cell's presence -- a present-but-non-numeric
+               -- Data_Value (never seen in the real files, verified
+               -- 2026-09-19) must not land as a numberless 'reported' row
+               -- (merge.check_observations; #148). The footnote case only
+               -- ever runs for a genuinely empty cell (pre-checked above
+               -- against FOOTNOTE_STATUS); 'not_available' is the fallback
+               -- for the never-seen malformed-but-present case, matching
+               -- ers_rucc.py's fix for the same shape.
+               CASE WHEN TRY_CAST(Data_Value AS DOUBLE) IS NOT NULL THEN 'reported'
+                    WHEN Data_Value IS NULL THEN {value_status}
+                    ELSE 'not_available' END AS value_status,
                NULL::VARCHAR AS reliability_flag,
                NULL::VARCHAR AS trend
         FROM raw
-    """).to_arrow_table()
+    """
+    observation = con.sql(observation_sql).to_arrow_table()
     merge.check_observations(observation)
 
     # Overwrite only the ids this release asserts, not the whole `source =
     # 'PLACES'` scope — a wholesale replace deleted a live definition a live
     # observation still referenced (#76).
-    return {
+    result = {
         "measure.definition": merge.write(
             cat, "measure.definition", definition,
             And(EqualTo("source", "PLACES"),
@@ -465,6 +484,14 @@ def transform(cat, release, places_release):
             cat, "measure.observation", observation, release,
             And(EqualTo("source", "PLACES"), EqualTo("source_release", places_release))),
     }
+    # measure.stratum has no SQL behind it at all (stratum_rows is a hand-written
+    # Python literal, module docstring) -- no lineage to honestly claim for it.
+    lineage.record(cat, release, "places", con, {
+        "measure.definition": defs_sql,
+        "measure.stratum": None,
+        "measure.observation": observation_sql,
+    })
+    return result
 
 
 def ingest(cat, release, places_release=None, url=None, level="county"):

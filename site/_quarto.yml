@@ -1,0 +1,93 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "Catchment Lake"
+  site-url: https://canceronice-docs.seandavi.workers.dev
+  page-footer:
+    left: "Code: [MIT](https://github.com/seandavi/cancer-on-ice/blob/main/LICENSE). Data: each source keeps its own terms — see [Sources](/sources.qmd)."
+    # Bump this string by hand alongside catalog-release below whenever the
+    # site's build-time extracts (home map, dictionary, sources, recipes) are
+    # refreshed against a new catalog release — there is no automated check.
+    right: "Built against catalog release 2026.09."
+  navbar:
+    left:
+      - text: Home
+        href: index.qmd
+      - text: Start here
+        href: start/index.qmd
+      - text: Concepts
+        href: concepts/index.qmd
+      - text: Dictionary
+        href: dictionary/index.qmd
+      - text: Sources
+        href: sources.qmd
+      - text: Recipes
+        href: recipes/index.qmd
+    right:
+      - text: "Explorer ↗"
+        href: https://canceronice-explorer.seandavi.workers.dev
+        target: _blank
+      - icon: github
+        text: "GitHub ↗"
+        href: https://github.com/seandavi/cancer-on-ice
+        target: _blank
+  sidebar:
+    - title: "Start here"
+      contents:
+        - start/index.qmd
+        - start/python.qmd
+        - start/duckdb-cli.qmd
+        - start/r.qmd
+        - start/sas.qmd
+        - start/seerstat.qmd
+    - title: "Concepts"
+      contents:
+        - concepts/index.qmd
+        - concepts/time-axes.qmd
+        - concepts/suppression.qmd
+        - concepts/boundaries.qmd
+        - concepts/licence-gate.qmd
+        - concepts/cancer-infocus.qmd
+    - title: "Recipes"
+      contents:
+        - recipes/index.qmd
+        - recipes/screening-rurality.qmd
+        - recipes/places-diff.qmd
+        - recipes/suppressed-cells.qmd
+        - recipes/boundary-history.qmd
+        - recipes/scp-vintages.qmd
+        - recipes/catchment-report.qmd
+
+format:
+  html:
+    theme: cosmo
+    css: styles.css
+    toc: true
+    toc-depth: 2
+    link-external-icon: true
+    link-external-newwindow: true
+    include-in-header:
+      text: |
+        <!-- DuckDB-WASM's browser build imports the bare specifier "apache-arrow",
+             which only resolves via an import map (see explorer/public/index.html for
+             the same fix) — and an import map must be present before any module
+             script on the page runs, hence this lives in <head> via include-in-header
+             rather than in an {ojs} cell. See cancer-on-ice#119. -->
+        <script type="importmap">
+        { "imports": { "apache-arrow": "https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/+esm" } }
+        </script>
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+# freeze: auto means Quarto caches each .qmd's *rendered* code output (not the
+# .qmd source) under _freeze/ and commits it. A CI render with no network
+# access reuses the frozen output for any page whose source hasn't changed,
+# and only re-executes pages that did change (and only if the runner has
+# network + the venv/kernel available). Practical effect here: commit
+# _freeze/ alongside the source so `quarto render` in CI doesn't require
+# hitting the live catalog, while a local `quarto render --execute-daemon
+# restart` (or touching a .qmd with a code chunk) still re-runs the real
+# queries. See site/README.md for the local render setup.
+execute:
+  freeze: auto

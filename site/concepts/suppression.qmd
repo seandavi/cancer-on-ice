@@ -1,0 +1,81 @@
+---
+title: "Suppression is a status"
+jupyter: coi-docs
+---
+
+Surveillance sources hide small or unreliable numbers for good reasons —
+protecting privacy in a small population, avoiding an estimate too noisy to
+publish. But "hidden" is not the same fact as "missing," and a lot of
+downstream harm comes from collapsing the two into one blank cell.
+
+`value_status` is a closed, documented enum on every row of
+`measure.observation`:
+
+| `value_status` | Meaning |
+| --- | --- |
+| `reported` | value published |
+| `suppressed_small_count` | below the source's count threshold |
+| `suppressed_complementary` | suppressed to prevent back-calculation |
+| `suppressed_reliability` | suppressed because the estimate is unreliable |
+| `not_available` | source publishes no value for this unit |
+| `not_applicable` | combination is meaningless (e.g. cervix × male) |
+
+The invariant: **`value` is `NULL` whenever `value_status` is not
+`'reported'`, and never otherwise.** No reader has to parse a sentinel
+(`"*"`, `"3 or fewer"`, `-1`) to find out — and no reader can accidentally
+average a suppressed cell in as a zero, because there's no number there to
+average.
+
+## Verified against the live catalog
+
+```{python}
+#| echo: false
+import duckdb
+
+con = duckdb.connect()
+con.execute("INSTALL iceberg; LOAD iceberg; INSTALL httpfs; LOAD httpfs;")
+con.execute(
+    "ATTACH 'canceronice' AS coi (TYPE ICEBERG, "
+    "ENDPOINT 'https://icegate-canceronice.seandavi.workers.dev', "
+    "AUTHORIZATION_TYPE 'none');"
+)
+zero_leaks = con.sql("""
+    SELECT count(*) FROM coi.measure.observation
+    WHERE value_status != 'reported' AND value IS NOT NULL AND valid_to IS NULL
+""").fetchone()[0]
+print(f"Rows where value_status != 'reported' but value is not NULL: {zero_leaks}")
+```
+
+Real counts by source, as of this render:
+
+```{python}
+#| echo: false
+con.sql("""
+    SELECT source, value_status, count(*) AS n
+    FROM coi.measure.observation
+    WHERE valid_to IS NULL
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+""").df()
+```
+
+Two sources carry almost all of the suppression here. State Cancer
+Profiles' cancer counts are frequently small at the county level — its
+`suppressed_small_count` share dwarfs every other source's, exactly as
+expected for county-level cancer incidence and mortality. PLACES,
+model-based and published only above a minimum population threshold, has a
+much smaller suppressed slice. `not_available` on AHRF, FARA, RUCC and SVI
+is a blank source cell, not a suppression rule — the source simply didn't
+publish a value for that unit (see each source's page in
+[Sources](/sources.qmd) for its own missing-value convention). `not_applicable`
+on RUCA marks a zero-population, no-identifier tract — a real "this
+combination doesn't apply" case, not a hidden number.
+
+## What this means for a query
+
+Never filter on `value IS NOT NULL` as a stand-in for "give me the real
+data" without also checking what's *behind* the NULLs you dropped — a county
+missing from your result because it's `suppressed_small_count` is a
+different finding than one missing because the source never covered it at
+all (`not_available`). The [suppressed-cells recipe](/recipes/suppressed-cells.qmd)
+runs this page's own query live, in your browser.
