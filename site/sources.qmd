@@ -36,7 +36,7 @@ CLI_SUBCOMMAND = {
     "scp": "scp",
     "fda_mqsa": "mqsa",
     "epa_sdwis": "sdwis",
-    "bls_laus": "laus",
+    "census_acs": "acs",
 }
 
 SRC_DIR = Path("../src/canceronice")

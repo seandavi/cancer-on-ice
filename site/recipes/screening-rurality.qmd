@@ -3,7 +3,7 @@ title: "Screening in a state's counties, with rurality"
 ---
 
 This is the same measure/release query the [Home](/index.qmd) map's data
-was built from — run here **live**, against the real, 23-million-row
+was built from — run here **live**, against the real, 25-million-row
 `measure.observation` table, through DuckDB-WASM in your own browser.
 Scoped to one state rather than the whole country: PLACES's own PLACES
 partition is written as one very large Parquet file per release, and a
