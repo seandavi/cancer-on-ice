@@ -31,6 +31,17 @@ def main():
     gz.add_argument("--tract-url", help="an already-downloaded tracts zip/txt; skips download")
     gz.add_argument("--state-url", help="an already-downloaded state.txt; skips download")
 
+    # --- raw: census gazetteer districts ---
+    # Congressional and state legislative districts (#104).
+    gd = sub.add_parser("gazetteer-districts", help="land one gazetteer vintage's CD/SLDU/SLDL "
+                        "files, then derive geography.unit (a year with no known Congress number "
+                        "lands SLDU/SLDL only)")
+    gd.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    gd.add_argument("--year", required=True, type=int, help="gazetteer vintage year, e.g. 2024")
+    gd.add_argument("--cd-url", help="an already-downloaded CD zip/txt; skips download")
+    gd.add_argument("--sldu-url", help="an already-downloaded SLDU zip/txt; skips download")
+    gd.add_argument("--sldl-url", help="an already-downloaded SLDL zip/txt; skips download")
+
     # --- raw: cdc places ---
     from . import places
     pl = sub.add_parser("places", help="land a CDC PLACES county-data release, then derive")
@@ -212,6 +223,11 @@ def main():
     elif args.cmd == "gazetteer":
         _print(census_gazetteer.ingest(cat, args.release, args.year,
                                        args.county_url, args.tract_url, args.state_url))
+
+    # --- raw: census gazetteer districts ---
+    elif args.cmd == "gazetteer-districts":
+        _print(census_gazetteer.ingest_districts(cat, args.release, args.year,
+                                                  args.cd_url, args.sldu_url, args.sldl_url))
 
     # --- raw: cdc places ---
     elif args.cmd == "places":

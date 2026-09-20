@@ -185,7 +185,7 @@ vintage is an assembly name without a patch level.
 
 ```
 geo_id          -- canonical: '<level>:<fips>', e.g. 'county:08031'
-level           -- nation | state | county | tract | block_group | zcta | place | custom
+level           -- nation | state | county | tract | block_group | zcta | place | cd | sldu | sldl | custom
 fips            -- the bare code
 vintage         -- boundary vintage year, e.g. 2020
 name
