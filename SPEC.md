@@ -359,7 +359,7 @@ the mismatch, the same discipline #90 applies to the NCIt/MONDO bridge.
 
 ```
 facility_id, source, source_release
-kind                -- mammography | fqhc | rhc | lung_screening | provider | hospital | tri
+kind                -- mammography | fqhc | rhc | lung_screening | provider | hospital | tri | superfund
 name, address, lat, lon
 geo_id (tract), geo_vintage
 attributes_json     -- JSON string, keys documented per source
