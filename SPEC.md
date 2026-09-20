@@ -185,7 +185,7 @@ vintage is an assembly name without a patch level.
 
 ```
 geo_id          -- canonical: '<level>:<fips>', e.g. 'county:08031'
-level           -- nation | state | county | tract | block_group | zcta | place | custom
+level           -- nation | state | county | tract | block_group | zcta | place | cd | sldu | sldl | custom
 fips            -- the bare code
 vintage         -- boundary vintage year, e.g. 2020
 name
@@ -360,6 +360,22 @@ CIF downloads): what exists, its licence, its
 geography/time coverage, and where to fetch it. Same shape as biocOnIce's
 `resource` namespace; inherits whatever biocOnIce decides in its #30.
 
+## Provenance
+
+### provenance.lineage
+
+Table- and column-level lineage DAG, captured at ingest with sqlglot (#140):
+what fed each derived column's values, down to the raw table and — where the
+module's own SQL states it directly — the raw column and the expression that
+produced it. One row per edge; `to_column` NULL is a table-level-only edge
+(the source is known, the column isn't), `from_kind='url'` roots a raw table
+at the upstream URL it was landed from. Captured from the SQL a module
+already writes, never inferred from read/write order. Rebuildable, so
+`merge.write` scopes it on `(release, job, to_table)` — no Type 2 history, same as
+`provenance.release`. Full column contract in `schemas.py`; capture API in
+`canceronice.lineage`. Wired module by module — see AGENTS.md / the module's
+own docstring for whether a given source calls it yet.
+
 ---
 
 # Licence gate
@@ -406,7 +422,7 @@ ingest, as in biocOnIce.
 | **Census TIGER/Line + relationship files** | the spine | boundary vintage | public domain; geometry → GeoParquet/PMTiles pointer |
 | **State Cancer Profiles** | county incidence, mortality, screening, risk, demographics | vintage | land from scraper releases / cdsci-lake (ADR-0012); existing Zenodo vintages backfill history |
 | **SEER county & tract population** | denominators matching the rates | release | freely downloadable, no DUA |
-| **ACS 5-year** (curated table subset) | demographics, poverty, vehicle access | release year | public domain; MOE → `interval_level = 0.90`; insurance/Medicaid not landed (#29 — the Census Data API now demands a key even for tiny requests, and the keyless bulk Summary File only ships detailed tables, whose insurance equivalents are 230+ columns for one overall rate) |
+| **ACS 5-year** (curated table subset) | demographics, poverty, vehicle access, insurance/Medicaid | release year | public domain; MOE → `interval_level = 0.90`; releases before 2017–2021 not landed (#125 — the keyless bulk Summary File only ships the sequence-based format before "2021", a different enough parser to be out of scope; CIF parity does not need it) |
 | **CDC PLACES** | model-based tract/county screening & behaviors | annual release | public domain; `method = model_based` |
 | **CDC/ATSDR SVI** | area-level context index | edition (2000–2022) | land every published edition |
 | **USDA ERS RUCC / RUCA; Food Access Atlas** | rurality, food access | edition | public domain |

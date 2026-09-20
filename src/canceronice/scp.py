@@ -89,7 +89,11 @@ mortality and risk files -- zero unmapped, zero counter-examples of a non-NULL
 No `"3 or fewer"`, `"¶"` or `"§§"` sentinel forms exist anywhere in the real V1/V2/V3
 bytes checked -- the brief's list of examples doesn't match this source; only the
 two strings above are coded, and an unmapped third would raise `SystemExit` rather
-than guess.
+than guess. `value_status` is derived from the same `TRY_CAST` that produces
+`value`, not from `suppression_reason`'s presence alone (#148): a present rate
+cell with no known `suppression_reason` that still fails to parse -- never
+observed in the real files, but not ruled out by the schema -- lands
+`not_available` rather than a numberless `reported` row.
 
 **A real duplicate-row artifact, found only at full scale (Acceptance A).** SCP's
 "By County" and "By State" comparison-report modes BOTH capture the national
@@ -586,7 +590,15 @@ def _topic_frames(cat, release, vintage, topic):
                0.95 AS interval_level,
                TRY_CAST(average_annual_count AS DOUBLE) AS numerator,
                NULL::DOUBLE AS denominator,
-               CASE WHEN suppression_reason IS NULL THEN 'reported' ELSE {status_case} END
+               -- Status follows the same TRY_CAST that produces `value`, not just
+               -- suppression_reason's presence -- a present-but-non-numeric rate
+               -- cell with no known suppression_reason (never seen in the real
+               -- V1/V2/V3 files, verified 2026-09-18) must not land as a
+               -- numberless 'reported' row (#148, merge.check_observations).
+               CASE WHEN suppression_reason IS NOT NULL THEN {status_case}
+                    WHEN TRY_CAST(age_adjusted_rate_per_100_000 AS DOUBLE) IS NOT NULL
+                        THEN 'reported'
+                    ELSE 'not_available' END
                    AS value_status,
                NULL::VARCHAR AS reliability_flag,
                CASE WHEN recent_trend IN ('*', '[P1 note]') THEN NULL ELSE recent_trend END

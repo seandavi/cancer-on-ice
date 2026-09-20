@@ -79,6 +79,26 @@ export CANCERONICE_TOKEN=$(gcloud secrets versions access latest --secret cancer
 uv run canceronice init
 ```
 
+## Scheduled snapshot landers (#107)
+
+FDA MQSA and HRSA sites/HPSA have no upstream archive, so they run weekly on
+onclappc02 as a systemd `--user` timer with an ntfy failure alert — the platform
+convention in `monode/infrastructure/SCHEDULING.md`, which also explains why units
+are copied, not symlinked. The shared `ntfy-notify@.service` is already installed
+there by cdsci-lake. Each run writes under a dated label (`2026.09.19`), which
+sorts between the monthly labels `2026.09` and `2026.10`.
+
+```sh
+cp systemd/canceronice-snapshots.{service,timer} ~/.config/systemd/user/   # re-copy on change
+systemctl --user daemon-reload
+systemctl --user enable --now canceronice-snapshots.timer
+systemctl --user start canceronice-snapshots.service    # once by hand, then:
+journalctl --user -u canceronice-snapshots -n 50
+```
+
+Not scheduled yet: the monthly "is there a new edition?" check for release-axis
+sources, and BLS LAUS / SDWIS refreshes (#94, #53).
+
 ## Table layout (#120)
 
 Every table declares a `sort_by` (`schemas.TableDef`), and `merge.overwrite`

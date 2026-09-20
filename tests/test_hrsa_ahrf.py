@@ -11,6 +11,9 @@ for-byte from the actual files:
   its current census-area successor (02063, Chugach).
 - tests/tiny_hrsa_ahrf_techdoc.xlsx: the same rows of the real technical
   documentation's per-field SOURCE dictionary, verbatim.
+- tests/tiny_hrsa_ahrf_malformed.csv: synthetic (see #148) -- AHRF's real
+  file has never published a non-numeric, present value in any curated
+  column (verified 2026-09-18); built only to exercise that case.
 """
 
 from pathlib import Path
@@ -23,6 +26,7 @@ from canceronice import hrsa_ahrf, merge
 REL = "2026.08"
 CSV = str(Path(__file__).parent / "tiny_hrsa_ahrf.csv")
 TECHDOC = str(Path(__file__).parent / "tiny_hrsa_ahrf_techdoc.xlsx")
+MALFORMED_CSV = str(Path(__file__).parent / "tiny_hrsa_ahrf_malformed.csv")
 
 
 def rows(cat, identifier, **kw):
@@ -200,6 +204,30 @@ def test_derives_curated_measures_with_correct_period_and_geo_vintage(cat):
     zero = by_key[("AHRF:FQHC", "county:02063", "2024")]
     assert zero["value"] == 0.0
     assert zero["value_status"] == "reported"
+
+
+def test_a_present_non_numeric_value_lands_not_available_not_reported(cat):
+    """A cell that is present but doesn't parse as a number must not read as
+    a numberless 'reported' row: value_status used to be derived from the
+    sentinel-restored raw cell's presence (`r.value IS NOT NULL`) while
+    `value` went through a separate `TRY_CAST`, so a present-but-non-numeric
+    cell would have landed as value_status='reported' with value NULL --
+    issue #148's finding in this module, and what
+    merge.check_observations' reverse guard now catches for any source that
+    regresses to it."""
+    hrsa_ahrf.ingest(cat, REL, csv_url=MALFORMED_CSV, techdoc_url=TECHDOC)
+    obs = rows(cat, "measure.observation",
+              row_filter="source = 'AHRF' AND measure_id = 'AHRF:FQHC' "
+                         "AND geo_id = 'county:01001' AND period_start = '2024'")
+    assert len(obs) == 1
+    assert obs[0]["value"] is None
+    assert obs[0]["value_status"] == "not_available"
+    # the OTHER period for the same county/measure, a real number, is untouched
+    still_reported = rows(cat, "measure.observation",
+                          row_filter="source = 'AHRF' AND measure_id = 'AHRF:FQHC' "
+                                     "AND geo_id = 'county:01001' AND period_start = '2023'")
+    assert still_reported[0]["value"] == 2.0
+    assert still_reported[0]["value_status"] == "reported"
 
 
 def test_rerun_is_idempotent(cat):

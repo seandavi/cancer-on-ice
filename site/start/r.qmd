@@ -1,0 +1,5 @@
+---
+title: "R"
+---
+
+{{< include _r-content.qmd >}}
