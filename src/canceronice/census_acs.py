@@ -402,9 +402,26 @@ def _build_resolved(con):
     variable, resolved from its jam values exactly once (module docstring's
     sentinel table). Also passes through geo_id and B19013_M001's raw string
     (needed unresolved for the median-in-open-interval special case in
-    `transform`)."""
-    cols = ['geo_id', '"B19013_M001" AS "raw_B19013_M001"']
+    `transform`).
+
+    Built as one materialized TABLE per source table, joined into the final
+    `resolved` TABLE, rather than a single CREATE TABLE with all ~650
+    columns' CASE expressions at once -- CI (a much smaller box than this
+    was developed on) ran the single-statement version out of memory
+    (`Out of Memory Error ... 12.4 GiB/12.4 GiB used`) planning ONE query
+    with the whole table set's nested CASE/IN expressions simultaneously, on
+    fixture data of a few rows -- a planning-time cost, not a data-volume
+    one. Splitting per table bounds any one CREATE TABLE's expression count
+    to that table's own variable count (at most B27001's 57 -- ~171 output
+    columns -- instead of all ~216 variables' ~650 at once); the final join
+    only copies already-resolved columns, no CASE trees left to plan. Also
+    faster where it didn't OOM: a single transform() call dropped from 138s
+    (VIEW) to 21s (one wide TABLE) to 1.8s (this per-table-then-join form)."""
+    per_table = ['resolved_base']
+    con.execute('CREATE OR REPLACE TEMP TABLE resolved_base AS '
+               'SELECT geo_id, "B19013_M001" AS "raw_B19013_M001" FROM raw')
     for table_id, n in TABLE_VARS.items():
+        cols = ["geo_id"]
         for i in range(1, n + 1):
             e_col = f"{table_id}_E{i:03d}"
             m_col = f"{table_id}_M{i:03d}"
@@ -415,7 +432,14 @@ def _build_resolved(con):
             cols.append(f'CASE WHEN "{e_col}" IN {("-666666666", "-999999999")} '
                        f"THEN 'suppressed_small_count' WHEN \"{e_col}\" = '-888888888' "
                        f"THEN 'not_applicable' ELSE 'reported' END AS \"status_{e_col}\"")
-    con.execute(f"CREATE OR REPLACE TEMP TABLE resolved AS SELECT {', '.join(cols)} FROM raw")
+        tbl = f"resolved_{table_id}"
+        con.execute(f"CREATE OR REPLACE TEMP TABLE {tbl} AS SELECT {', '.join(cols)} FROM raw")
+        per_table.append(tbl)
+
+    join_sql = " JOIN ".join(f"{t} USING (geo_id)" if i else t for i, t in enumerate(per_table))
+    con.execute(f"CREATE OR REPLACE TEMP TABLE resolved AS SELECT * FROM {join_sql}")
+    for t in per_table:
+        con.execute(f"DROP TABLE {t}")
 
 
 def _leaf(e_col, m_col):
