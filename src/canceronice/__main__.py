@@ -223,6 +223,19 @@ def main():
     bl.add_argument("--since", type=int,
                     help="derive years >= this (default: this year minus 10)")
 
+    # --- raw: epa airtoxscreen ---
+    # EPA AirToxScreen tract-level modeled cancer risk (#98).
+    from . import epa_airtoxscreen
+    at = sub.add_parser("airtoxscreen", help="land one AirToxScreen assessment year's "
+                        "source-group and pollutant files, then derive")
+    at.add_argument("--release", required=True, help="cancerOnIce release, e.g. 2026.09")
+    at.add_argument("--year", choices=sorted(epa_airtoxscreen.YEARS, key=int),
+                    help="assessment year (default: latest known)")
+    at.add_argument("--srcgrp-url", dest="srcgrp_url",
+                    help="an already-downloaded source-group xlsx file or alternate URL")
+    at.add_argument("--pollutant-url", dest="pollutant_url",
+                    help="an already-downloaded pollutant xlsx file or alternate URL")
+
     # --- raw: epa tri ---
     # EPA Toxics Release Inventory Basic Data Files (#100).
     from . import epa_tri
@@ -371,6 +384,12 @@ def main():
     elif args.cmd == "laus":
         _print(bls_laus.ingest(cat, args.release, args.county_url, args.area_url, args.series_url,
                                args.measure_url, args.footnote_url, args.vintage, args.since))
+
+    # --- raw: epa airtoxscreen ---
+    # EPA AirToxScreen tract-level modeled cancer risk (#98).
+    elif args.cmd == "airtoxscreen":
+        _print(epa_airtoxscreen.ingest(cat, args.release, args.year, args.srcgrp_url,
+                                       args.pollutant_url))
 
     # --- raw: epa tri ---
     # EPA Toxics Release Inventory Basic Data Files (#100).
