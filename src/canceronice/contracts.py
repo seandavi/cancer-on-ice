@@ -8,8 +8,9 @@ can: the temporal model by name, FK namespaces, closed enums, and what a NULL
 means (SPEC.md § Suppression is a value, not a NULL).
 
 Lives beside `schemas.py` rather than inside it so the base package keeps
-importing without cdsci-lake installed (a dev-group path dependency, see
-pyproject.toml); nothing in the ingest path imports this module.
+importing without cdsci-lake installed (not declared in pyproject.toml at all
+until it publishes: `uv pip install -e ../cdsci-lake`, README § Develop);
+nothing in the ingest path imports this module.
 
 **Temporal model.** Both tables are `scd2_release` (issue #160's working
 assumption). SPEC.md § Versioning model carries biocOnIce's row-history model
@@ -33,6 +34,7 @@ from cdsci.lake.contracts import (
     TableContract,
     TemporalModel,
 )
+from cdsci.lake.history import CompleteScope
 from pyiceberg.types import (
     BooleanType,
     DoubleType,
@@ -42,7 +44,7 @@ from pyiceberg.types import (
     StringType,
 )
 
-from . import schemas
+from . import places, schemas
 
 # Iceberg primitive -> cdsci-lake's canonical Arrow type string.
 _ARROW = {StringType: "string", IntegerType: "int32", LongType: "int64",
@@ -99,17 +101,19 @@ def _columns(fields, overrides):
     )
 
 
-def _validity():
-    """`valid_from`/`valid_to` for a TableDef that has none (see module docstring)."""
-    return (NestedField(-1, "valid_from", StringType(), required=True, doc=schemas.VALID_FROM),
-            NestedField(-2, "valid_to", StringType(), doc=schemas.VALID_TO))
+def _validity(fields):
+    """`valid_from`/`valid_to` for a TableDef that has none (see module docstring),
+    numbered after the TableDef's own ids."""
+    nxt = max(f.field_id for f in fields) + 1
+    return (NestedField(nxt, "valid_from", StringType(), required=True, doc=schemas.VALID_FROM),
+            NestedField(nxt + 1, "valid_to", StringType(), doc=schemas.VALID_TO))
 
 
 def _table(identifier, overrides, grain, description):
     d = schemas.TABLES[identifier]
     fields = tuple(d.schema.fields)
     if not any(f.name == "valid_from" for f in fields):
-        fields += _validity()
+        fields += _validity(fields)
     return TableContract(
         name=identifier,
         description=description,
@@ -129,7 +133,9 @@ def _table(identifier, overrides, grain, description):
 OBSERVATION = _table(
     "measure.observation", _OBSERVATION,
     grain="one row per (source, source_release, measure_id, geo_id, geo_vintage, period_start, "
-          "period_end, stratum_id) and cancerOnIce validity interval",
+          "period_end, stratum_id) and cancerOnIce validity interval; source_release is in "
+          "the key, so a later PLACES edition's revised estimate arrives as a new key, never "
+          "as a change to an earlier edition's row",
     description="Every PLACES-published number, one stacked long table (SPEC.md § Measures). "
                 "Three distinct time axes: period_start/period_end (what the estimate "
                 "describes), source_release (the PLACES edition that published it), "
@@ -147,11 +153,23 @@ DEFINITION = _table(
 PLACES = DatasetContract(
     id="canceronice-places",
     title="Catchment Lake, built on the cancerOnIce catalog: CDC PLACES slice",
-    description="CDC PLACES county/tract model-based estimates as measure.observation plus "
-                "their measure.definition rows, every landed PLACES release kept.",
+    description="CDC PLACES county/tract model-based estimates as measure.observation, every "
+                "landed PLACES release kept there, plus their measure.definition rows.",
     publisher="cancer-on-ice",
     tables={"measure.observation": OBSERVATION, "measure.definition": DEFINITION},
+    # Parquet is the format-neutral release itself. "ducklake" joins this set in
+    # #160 step 2, once cdsci-lake's M2 Frozen DuckLake adapter (mid-review) lands.
+    required_artifacts=frozenset({"parquet"}),
 )
+
+
+def observation_scope(source_release):
+    """The measure.observation writer scope, SPEC.md § Measures: `(source, source_release)`,
+    so one PLACES edition's complete state never retires another edition's rows.
+    Mirrors `places.transform`'s merge filter; `places.RELEASES` is the allowlist."""
+    if source_release not in places.RELEASES:
+        raise ValueError(f"unknown PLACES release {source_release!r}")
+    return CompleteScope(f"source = 'PLACES' AND source_release = '{source_release}'")
 
 
 def release_key(release):

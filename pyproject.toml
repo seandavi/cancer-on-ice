@@ -14,12 +14,12 @@ dependencies = [
 canceronice = "canceronice.__main__:main"
 
 [dependency-groups]
-dev = [
-    # ponytail: path dep until cdsci-lake publishes -- the shared release
-    # contract (canceronice.contracts, #160); base install needs no cdsci.
-    "cdsci-lake",
-    "pytest>=8",
-]
+dev = ["pytest>=8"]
+# cdsci-lake (canceronice.contracts, #160) is deliberately NOT declared here: an
+# editable ../cdsci-lake path source breaks every worktree without the sibling
+# checkout at lock time, whatever group it sits in. Until cdsci-lake publishes,
+# `uv pip install -e ../cdsci-lake` (README § Develop); the release tests skip
+# without it.
 
 [tool.pytest.ini_options]
 markers = ["slow: hits the live icegate endpoint over the network; deselected by default, run with -m slow"]
@@ -31,6 +31,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/canceronice"]
-
-[tool.uv.sources]
-cdsci-lake = { path = "../cdsci-lake", editable = true }
