@@ -14,7 +14,12 @@ dependencies = [
 canceronice = "canceronice.__main__:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    # ponytail: path dep until cdsci-lake publishes -- the shared release
+    # contract (canceronice.contracts, #160); base install needs no cdsci.
+    "cdsci-lake",
+    "pytest>=8",
+]
 
 [tool.pytest.ini_options]
 markers = ["slow: hits the live icegate endpoint over the network; deselected by default, run with -m slow"]
@@ -26,3 +31,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/canceronice"]
+
+[tool.uv.sources]
+cdsci-lake = { path = "../cdsci-lake", editable = true }
