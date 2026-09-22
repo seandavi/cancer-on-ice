@@ -69,6 +69,10 @@ Work is sequenced by milestone tracking issues — see the
 uv run pytest          # offline; uses a local sqlite warehouse
 ```
 
+The shared-release-contract tests (`tests/test_places_release.py`) need a
+sibling `../cdsci-lake` checkout installed into the venv by hand until
+cdsci-lake publishes: `uv pip install -e ../cdsci-lake`. They skip otherwise.
+
 ## Licence
 
 Code: [MIT](LICENSE). Data: each source keeps its own terms, recorded per

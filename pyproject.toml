@@ -15,6 +15,11 @@ canceronice = "canceronice.__main__:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]
+# cdsci-lake (canceronice.contracts, #160) is deliberately NOT declared here: an
+# editable ../cdsci-lake path source breaks every worktree without the sibling
+# checkout at lock time, whatever group it sits in. Until cdsci-lake publishes,
+# `uv pip install -e ../cdsci-lake` (README § Develop); the release tests skip
+# without it.
 
 [tool.pytest.ini_options]
 markers = ["slow: hits the live icegate endpoint over the network; deselected by default, run with -m slow"]
