@@ -66,7 +66,8 @@ Work is sequenced by milestone tracking issues — see the
 ## Develop
 
 ```sh
-uv run pytest          # offline; uses a local sqlite warehouse
+uv run pytest          # no live services; uses a local sqlite warehouse. The release tests need
+                       # DuckDB's ducklake extension (INSTALL ducklake on first run, then cached)
 ```
 
 ## Licence
