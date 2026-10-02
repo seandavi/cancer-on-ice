@@ -135,9 +135,13 @@ Identical in shape to biocOnIce:
 
 # Versioning model
 
-biocOnIce's model carries over unchanged: a catalog release is a point-in-time
-claim, expressed in rows by `first_seen` / `retired_in`, not by Iceberg time
-travel.
+cancerOnIce publishes **dataset releases** (biocOnIce ADR-0013, cdsci-lake
+ADR-0025): each dataset is an immutable full snapshot with a release id
+(`YYYY-MM-DD`, or `YYYY-MM-DD.N` for a second release the same day) and a
+release date, on the dataset's own cadence and retention (`keep_last`, default
+keep every release; pinned releases are never pruned). Rows carry no validity
+interval. The row history already in the Iceberg tables is a frozen archive
+and receives no further writes once its source moves to dataset releases.
 
 One addition matters more here than in biocOnIce. Every measure has **three
 time axes**, and conflating them is the characteristic error in this domain:
@@ -146,7 +150,7 @@ time axes**, and conflating them is the characteristic error in this domain:
 | --- | --- | --- |
 | `period_start` / `period_end` | the time the estimate describes | 2018–2022 (a five-year pooled rate) |
 | `source_release` | the upstream edition that published it | SCP vintage V3; PLACES 2025 release; ACS 2019–2023 |
-| `first_seen` / `retired_in` | when cancerOnIce first/last served it | catalog release 2026.10 |
+| release id (`YYYY-MM-DD[.N]`) | the dataset release that served it | 2026-10-02 |
 
 `source_release` for sources that publish no version label follows the
 **vintage** definition already used for the SCP Zenodo deposits: a vintage is
